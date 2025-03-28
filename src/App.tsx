@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome, FiDollarSign, FiGlobe } from 'react-icons/fi'
+import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome, FiDollarSign, FiGlobe, FiLoader } from 'react-icons/fi'
 import { applyPluginsToWebview, Plugin } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import { storeService } from './services/storeService'
@@ -536,152 +536,165 @@ export default function App() {
     }
   }
 
-  const setupWebviewEvents = useCallback((webview: Electron.WebviewTag, tabId: string) => {
-    webview.addEventListener('dom-ready', async () => {
-      console.log('WebView DOM ready for tab:', tabId)
-      
-      setTabs(tabs => tabs.map(tab => 
-        tab.id === tabId ? { ...tab, isReady: true } : tab
-      ))
-      
-      if (!initialLoadCompleted.current.has(tabId)) {
-        initialLoadCompleted.current.add(tabId)
-        
-        // Wait for the page to be fully loaded
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        try {
-          // Apply plugins
-          await applyPluginsToTab(tabId)
-          
-          // Apply erased elements CSS
-          const tab = tabs.find(t => t.id === tabId);
-          if (tab) {
-            applyErasedElementsCSS(webview, tab.url);
-          }
-        } catch (error) {
-          console.error('Failed to apply page modifications:', error)
-        }
-      }
-    })
-    
-    webview.addEventListener('did-finish-load', async () => {
-      handleWebviewLoad(tabId)
-      
-      // Also apply erased elements CSS here to ensure they persist after navigation
-      try {
-        const tab = tabs.find(t => t.id === tabId);
-        if (tab && tab.isReady) {
-          await applyErasedElementsCSS(webview, tab.url);
-        }
-      } catch (error) {
-        console.error('Failed to apply erased elements CSS:', error)
-      }
-    })
-    
-    webview.addEventListener('did-fail-load', (event: any) => {
-      console.error(`Failed to load: ${event.errorDescription}`)
-      setTabs(tabs => tabs.map(tab =>
-        tab.id === tabId ? { ...tab, title: 'Error Loading Page' } : tab
-      ))
-    })
-    
-    webview.addEventListener('page-title-updated', (event: any) => {
-      const title = event.title
-      setTabs(tabs => tabs.map(tab =>
-        tab.id === tabId ? { ...tab, title } : tab
-      ))
-    })
-    
-    webview.addEventListener('did-navigate', async () => {
-      handleWebviewLoad(tabId)
-      
-      // Re-apply erased elements after navigation
-      try {
-        const tab = tabs.find(t => t.id === tabId);
-        if (tab && tab.isReady) {
-          // Add a small delay to ensure the DOM is ready
-          setTimeout(async () => {
-            await applyErasedElementsCSS(webview, webview.getURL());
-          }, 500);
-        }
-      } catch (error) {
-        console.error('Failed to apply erased elements CSS after navigation:', error)
-      }
-    })
-    
-    webview.addEventListener('did-navigate-in-page', async () => {
-      handleWebviewLoad(tabId)
-      
-      // Re-apply for in-page navigation (hash changes, etc.)
-      try {
-        const tab = tabs.find(t => t.id === tabId);
-        if (tab && tab.isReady) {
-          await applyErasedElementsCSS(webview, webview.getURL());
-        }
-      } catch (error) {
-        console.error('Failed to apply erased elements CSS after in-page navigation:', error)
-      }
-    })
-  }, [applyErasedElementsCSS, tabs])
-
-  const handleWebviewLoad = (tabId: string) => {
-    const webview = webviewRefs.current[tabId]
-    const tab = tabs.find(t => t.id === tabId)
-    
-    if (!webview || !tab || !tab.isReady) return
-    
-    try {
-      const title = webview.getTitle() || 'Web Page'
-      const url = webview.getURL()
-      
-      if (tabId === activeTabId) {
-        setUrlInput(url)
-      }
-      
-      let domain = ''
-      try {
-        domain = new URL(url).hostname
-      } catch (e) {
-        domain = url
-      }
-      
-      setTabs(tabs => tabs.map(tab =>
-        tab.id === tabId ? { 
-          ...tab, 
-          title, 
-          url,
-          favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
-        } : tab
-      ))
-    } catch (error) {
-      console.error('Error handling webview load:', error)
-    }
-  }
-
-  const applyPluginsToTab = useCallback(async (tabId: string) => {
+  // Add state for tracking loading status
+  const [loadingTabs, setLoadingTabs] = useState<Set<string>>(new Set());
+  
+  // Apply plugins to a specific tab
+  const applyPluginsToTab = async (tabId: string) => {
     const webview = webviewRefs.current[tabId];
-    if (webview && !webview.isLoading()) {
-      try {
-        await applyPluginsToWebview(webview);
-      } catch (error) {
-        console.error('Failed to apply plugins to tab:', error);
-      }
-    }
-  }, []);
-
-  const handleWebviewRef = useCallback((webview: Electron.WebviewTag | null, tabId: string) => {
     if (!webview) return;
     
-    webviewRefs.current[tabId] = webview;
-    setupWebviewEvents(webview, tabId);
-  }, [setupWebviewEvents]);
+    try {
+      // Set loading state
+      setLoadingTabs(prev => new Set([...prev, tabId]));
+      
+      console.log(`Applying plugins to tab ${tabId}`);
+      
+      // Apply global erased elements
+      for (const element of erasedElements) {
+        await webview.executeJavaScript(`
+          (function() {
+            try {
+              const elementsToHide = document.querySelectorAll('${element.selector}');
+              elementsToHide.forEach(el => {
+                el.style.display = 'none';
+              });
+            } catch (e) {
+              console.error('Failed to hide element:', e);
+            }
+          })();
+        `);
+      }
+      
+      // Apply plugins from plugin manager
+      const plugins = pluginManager.getPlugins().filter(p => p.enabled);
+      
+      // Apply all plugins at once instead of individually
+      await applyPluginsToWebview(webview);
+      
+      // Clear loading state after a short delay to ensure everything is rendered
+      setTimeout(() => {
+        setLoadingTabs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(tabId);
+          return newSet;
+        });
+      }, 500);
+      
+    } catch (error) {
+      console.error(`Error applying plugins to tab ${tabId}:`, error);
+      // Clear loading state on error
+      setLoadingTabs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tabId);
+        return newSet;
+      });
+    }
+  };
 
-  useEffect(() => {
-    Object.keys(webviewRefs.current).forEach(tabId => {
-      applyPluginsToTab(tabId);
-    });
-  }, [applyPluginsToTab]);
+  // Update handleWebviewRef to track loading state and enhance it
+  const handleWebviewRef = (webview: Electron.WebviewTag | null, tabId: string) => {
+    if (!webview) return;
+    
+    // Store reference to webview element
+    webviewRefs.current[tabId] = webview;
+    
+    // Check if we've already set up event listeners for this tab
+    if (initialLoadCompleted.current.has(tabId)) return;
+    
+    // Mark initialization to prevent duplicate setup
+    initialLoadCompleted.current.add(tabId);
+    
+    // Use a setTimeout to break the React render cycle
+    setTimeout(() => {
+      // Set loading state when webview is attached
+      setLoadingTabs(prev => new Set([...prev, tabId]));
+      
+      // Set up event listeners for this webview
+      webview.addEventListener('dom-ready', async () => {
+        console.log(`Webview DOM ready for tab ${tabId}`);
+        
+        // Apply plugins when DOM is ready
+        try {
+          await applyPluginsToTab(tabId);
+        } catch (error) {
+          console.error(`Error setting up webview for tab ${tabId}:`, error);
+        }
+      });
+      
+      webview.addEventListener('did-start-loading', () => {
+        // Set tab to loading state
+        setLoadingTabs(prev => new Set([...prev, tabId]));
+        
+        // Update tab title to show loading
+        setTabs(prevTabs => 
+          prevTabs.map(tab => 
+            tab.id === tabId 
+              ? { ...tab, title: 'Loading...', isReady: false } 
+              : tab
+          )
+        );
+      });
+      
+      webview.addEventListener('did-stop-loading', async () => {
+        try {
+          // Get the current page title
+          const title = await webview.executeJavaScript('document.title');
+          const url = await webview.executeJavaScript('window.location.href');
+          const favicon = await webview.executeJavaScript(`
+            (function() {
+              const favicon = document.querySelector('link[rel="shortcut icon"]') ||
+                             document.querySelector('link[rel="icon"]');
+              return favicon ? favicon.href : '';
+            })()
+          `);
+          
+          // Update tab information
+          setTabs(prevTabs => 
+            prevTabs.map(tab => 
+              tab.id === tabId 
+                ? { ...tab, title: title || url, url, favicon, isReady: true } 
+                : tab
+            )
+          );
+          
+          // Apply plugins again after the page is fully loaded
+          await applyPluginsToTab(tabId);
+          
+        } catch (error) {
+          console.error(`Error updating tab ${tabId} after loading:`, error);
+          
+          // Clear loading state on error
+          setLoadingTabs(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(tabId);
+            return newSet;
+          });
+        }
+      });
+      
+      // Handle errors in the webview
+      webview.addEventListener('did-fail-load', (event) => {
+        console.error(`Failed to load content in tab ${tabId}:`, event);
+        
+        // Clear loading state on error
+        setLoadingTabs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(tabId);
+          return newSet;
+        });
+        
+        // Update tab title to show error
+        setTabs(prevTabs => 
+          prevTabs.map(tab => 
+            tab.id === tabId 
+              ? { ...tab, title: 'Error Loading Page', isReady: true } 
+              : tab
+          )
+        );
+      });
+    }, 0);
+  };
 
   const handleUrlKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -738,7 +751,32 @@ export default function App() {
     }
   }, [activeTabId, tabs])
 
-  // Function to render the layout based on currentLayout
+  // Update the renderLayout functions to include the loading spinner
+  const renderWebviewWithLoader = (tabId: string, url: string) => {
+    const isLoading = loadingTabs.has(tabId);
+    
+    return (
+      <div className="relative h-full w-full">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 z-10">
+            <div className="text-center">
+              <FiLoader className="animate-spin text-blue-500 w-10 h-10 mx-auto mb-4" />
+              <p className="text-white">Loading page...</p>
+            </div>
+          </div>
+        )}
+        <webview
+          ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabId)}
+          src={url}
+          style={{ width: '100%', height: '100%' }}
+          webpreferences="contextIsolation=false,nodeIntegration=true"
+          allowpopups="true"
+        />
+      </div>
+    );
+  };
+
+  // Function to render the layout based on currentLayout - update all instances of webview with renderWebviewWithLoader
   const renderLayout = () => {
     switch (currentLayout) {
       case LayoutType.SINGLE:
@@ -750,13 +788,7 @@ export default function App() {
                 style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%' }}
                 className="rounded-md overflow-hidden shadow-lg"
               >
-                <webview
-                  ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tab.id)}
-                  src={tab.url}
-                  style={{ width: '100%', height: '100%' }}
-                  webpreferences="contextIsolation=false,nodeIntegration=true"
-                  allowpopups="true"
-                />
+                {renderWebviewWithLoader(tab.id, tab.url)}
               </div>
             ))}
           </main>
@@ -769,26 +801,14 @@ export default function App() {
             <div className="w-1/2 pr-1 h-full">
               {tabs.length > 0 && (
                 <div className="h-full rounded-md overflow-hidden shadow-lg">
-                  <webview
-                    ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabs[0].id)}
-                    src={tabs[0].url}
-                    style={{ width: '100%', height: '100%' }}
-                    webpreferences="contextIsolation=false,nodeIntegration=true"
-                    allowpopups="true"
-                  />
+                  {renderWebviewWithLoader(tabs[0].id, tabs[0].url)}
                 </div>
               )}
             </div>
             <div className="w-1/2 pl-1 h-full">
               {tabs.length > 1 ? (
                 <div className="h-full rounded-md overflow-hidden shadow-lg">
-                  <webview
-                    ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabs[1].id)}
-                    src={tabs[1].url}
-                    style={{ width: '100%', height: '100%' }}
-                    webpreferences="contextIsolation=false,nodeIntegration=true"
-                    allowpopups="true"
-                  />
+                  {renderWebviewWithLoader(tabs[1].id, tabs[1].url)}
                 </div>
               ) : (
                 <div className="h-full rounded-md overflow-hidden shadow-lg flex items-center justify-center bg-gray-800 text-gray-400">
@@ -807,26 +827,14 @@ export default function App() {
               <div className="w-1/2 pr-1 h-full">
                 {tabs.length > 0 && (
                   <div className="h-full rounded-md overflow-hidden shadow-lg">
-                    <webview
-                      ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabs[0].id)}
-                      src={tabs[0].url}
-                      style={{ width: '100%', height: '100%' }}
-                      webpreferences="contextIsolation=false,nodeIntegration=true"
-                      allowpopups="true"
-                    />
+                    {renderWebviewWithLoader(tabs[0].id, tabs[0].url)}
                   </div>
                 )}
               </div>
               <div className="w-1/2 pl-1 h-full">
                 {tabs.length > 1 ? (
                   <div className="h-full rounded-md overflow-hidden shadow-lg">
-                    <webview
-                      ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabs[1].id)}
-                      src={tabs[1].url}
-                      style={{ width: '100%', height: '100%' }}
-                      webpreferences="contextIsolation=false,nodeIntegration=true"
-                      allowpopups="true"
-                    />
+                    {renderWebviewWithLoader(tabs[1].id, tabs[1].url)}
                   </div>
                 ) : (
                   <div className="h-full rounded-md overflow-hidden shadow-lg flex items-center justify-center bg-gray-800 text-gray-400">
@@ -838,13 +846,7 @@ export default function App() {
             <div className="h-1/2 pt-1">
               {tabs.length > 2 ? (
                 <div className="h-full rounded-md overflow-hidden shadow-lg">
-                  <webview
-                    ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabs[2].id)}
-                    src={tabs[2].url}
-                    style={{ width: '100%', height: '100%' }}
-                    webpreferences="contextIsolation=false,nodeIntegration=true"
-                    allowpopups="true"
-                  />
+                  {renderWebviewWithLoader(tabs[2].id, tabs[2].url)}
                 </div>
               ) : (
                 <div className="h-full rounded-md overflow-hidden shadow-lg flex items-center justify-center bg-gray-800 text-gray-400">
