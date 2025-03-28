@@ -56,27 +56,6 @@ export default function App() {
     localStorage.setItem('erased_elements', JSON.stringify(erasedElements));
   }, [erasedElements]);
 
-  // Apply erased elements CSS when a page loads
-  const applyErasedElementsCSS = useCallback((webview: Electron.WebviewTag, url: string) => {
-    const elementsForUrl = erasedElements.filter(element => 
-      new URL(element.url).hostname === new URL(url).hostname
-    );
-    
-    if (elementsForUrl.length > 0) {
-      const selectors = elementsForUrl.map(element => element.selector).join(', ');
-      const css = `${selectors} { display: none !important; }`;
-      
-      webview.executeJavaScript(`
-        (function() {
-          const style = document.createElement('style');
-          style.id = 'eraser-styles';
-          style.textContent = ${JSON.stringify(css)};
-          document.head.appendChild(style);
-        })();
-      `);
-    }
-  }, [erasedElements]);
-
   // Toggle eraser mode and inject eraser script when activated
   const toggleEraserMode = async () => {
     const newEraserMode = !eraserMode;
@@ -112,42 +91,56 @@ export default function App() {
             e.stopPropagation();
           }
           
+          // Generate a more specific CSS selector
+          function generateSelector(element) {
+            if (!element) return '';
+            
+            if (element.id) {
+              return '#' + element.id;
+            }
+            
+            let selector = element.tagName.toLowerCase();
+            
+            // Add classes (limited to first 2 to avoid overly specific selectors)
+            // Exclude our eraser-highlight class
+            if (element.classList && element.classList.length) {
+              const classNames = Array.from(element.classList)
+                .filter(c => c !== 'eraser-highlight')
+                .slice(0, 2);
+              selector += classNames.map(c => '.' + c).join('');
+            }
+            
+            // Add position among siblings for more specificity
+            let sameTagSiblings = Array.from(element.parentNode.children)
+              .filter(child => child.tagName === element.tagName);
+              
+            if (sameTagSiblings.length > 1) {
+              let index = sameTagSiblings.indexOf(element) + 1;
+              selector += ':nth-of-type(' + index + ')';
+            }
+            
+            return selector;
+          }
+          
           // Click handler
           function handleClick(e) {
             if (currentElement) {
-              // Generate unique selector for the element
-              let path = [];
-              let element = e.target;
-              
-              while (element && element.nodeType === Node.ELEMENT_NODE) {
-                let selector = element.nodeName.toLowerCase();
-                if (element.id) {
-                  selector += '#' + element.id;
-                  path.unshift(selector);
-                  break;
-                } else {
-                  let sibling = element;
-                  let nth = 1;
-                  while (sibling = sibling.previousElementSibling) {
-                    if (sibling.nodeName.toLowerCase() === selector) nth++;
-                  }
-                  if (nth !== 1) selector += ":nth-of-type(" + nth + ")";
-                }
-                
-                path.unshift(selector);
-                element = element.parentNode;
-              }
-              
-              const uniqueSelector = path.join(' > ');
+              // Generate a specific but not too complex selector for the element
+              const selector = generateSelector(currentElement);
               
               // Hide the element
               currentElement.style.display = 'none';
               
-              // Send selector back to the main app
-              window.postMessage({
-                type: 'eraser-element-selected',
-                selector: uniqueSelector
-              }, '*');
+              // Use the Electron IPC system to communicate back to the main process
+              if (window.electron) {
+                window.electron.send('eraser-element-selected', selector);
+              } else {
+                // Fallback for when electron is not available - use a custom event
+                const event = new CustomEvent('eraser-element-selected', {
+                  detail: { selector }
+                });
+                document.dispatchEvent(event);
+              }
               
               e.preventDefault();
               e.stopPropagation();
@@ -157,6 +150,12 @@ export default function App() {
           // Add event listeners
           document.addEventListener('mouseover', handleMouseOver, true);
           document.addEventListener('click', handleClick, true);
+          
+          // Listen for the custom event and forward it via console.log with a special prefix
+          // This allows us to capture it from the webview console output
+          document.addEventListener('eraser-element-selected', (e) => {
+            console.log('ERASER_ELEMENT_SELECTED:' + JSON.stringify(e.detail));
+          });
           
           // Create a flag to indicate eraser is active
           window.eraserActive = true;
@@ -169,8 +168,8 @@ export default function App() {
         })();
       `);
       
-      // Listen for messages from the webview
-      webview.addEventListener('ipc-message', handleEraserMessage);
+      // Listen to console.log messages from the webview
+      webview.addEventListener('console-message', handleConsoleMessage);
     } else {
       // Remove eraser script
       await webview.executeJavaScript(`
@@ -192,26 +191,111 @@ export default function App() {
         })();
       `);
       
-      webview.removeEventListener('ipc-message', handleEraserMessage);
+      // Remove console message listener
+      webview.removeEventListener('console-message', handleConsoleMessage);
     }
   };
 
-  // Handle messages from eraser script
-  const handleEraserMessage = (event: any) => {
-    if (event.channel === 'eraser-element-selected') {
-      const { selector } = event.args[0];
-      const activeTab = tabs.find(tab => tab.id === activeTabId);
-      
-      if (activeTab) {
-        const newErasedElement: ErasedElement = {
-          url: activeTab.url,
-          selector
-        };
+  // Handle console messages from the webview
+  const handleConsoleMessage = (event: any) => {
+    const message = event.message;
+    if (message.startsWith('ERASER_ELEMENT_SELECTED:')) {
+      try {
+        const data = JSON.parse(message.substring('ERASER_ELEMENT_SELECTED:'.length));
+        const activeTab = tabs.find(tab => tab.id === activeTabId);
         
-        setErasedElements(prev => [...prev, newErasedElement]);
+        if (activeTab && data.selector) {
+          const newErasedElement: ErasedElement = {
+            url: activeTab.url,
+            selector: data.selector
+          };
+          
+          // Add to erased elements
+          setErasedElements(prev => {
+            // Check for duplicates
+            const exists = prev.some(el => 
+              el.url === newErasedElement.url && 
+              el.selector === newErasedElement.selector
+            );
+            
+            if (!exists) {
+              console.log('Adding new erased element:', newErasedElement);
+              return [...prev, newErasedElement];
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing eraser message:', error);
       }
     }
   };
+
+  // Apply erased elements CSS when a page loads
+  const applyErasedElementsCSS = useCallback(async (webview: Electron.WebviewTag, url: string) => {
+    try {
+      // Match by hostname to apply eraser rules across pages on the same site
+      const hostname = new URL(url).hostname;
+      
+      // Filter elements by hostname
+      const elementsForUrl = erasedElements.filter(element => {
+        try {
+          return new URL(element.url).hostname === hostname;
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      if (elementsForUrl.length > 0) {
+        console.log(`Applying ${elementsForUrl.length} erased elements for ${hostname}`);
+        
+        // Generate CSS
+        const selectors = elementsForUrl.map(element => element.selector).join(', ');
+        const css = `${selectors} { display: none !important; opacity: 0 !important; visibility: hidden !important; }`;
+        
+        // Apply CSS with retry mechanism
+        const applyCSS = async (retryCount = 0) => {
+          try {
+            await webview.executeJavaScript(`
+              (function() {
+                // First remove any existing eraser styles
+                const existingStyle = document.getElementById('eraser-styles');
+                if (existingStyle) existingStyle.remove();
+                
+                // Create a new style element
+                const style = document.createElement('style');
+                style.id = 'eraser-styles';
+                style.textContent = ${JSON.stringify(css)};
+                
+                // Append to head if it exists, otherwise to document
+                if (document.head) {
+                  document.head.appendChild(style);
+                } else if (document.documentElement) {
+                  document.documentElement.appendChild(style);
+                }
+                
+                console.log('Applied eraser CSS: ${elementsForUrl.length} selectors');
+                return true;
+              })();
+            `);
+            console.log('Successfully applied eraser CSS');
+          } catch (error) {
+            console.error('Error applying eraser CSS:', error);
+            
+            // Retry up to 3 times with increasing delay
+            if (retryCount < 3) {
+              console.log(`Retrying CSS application (${retryCount + 1}/3) in ${(retryCount + 1) * 300}ms`);
+              setTimeout(() => applyCSS(retryCount + 1), (retryCount + 1) * 300);
+            }
+          }
+        };
+        
+        await applyCSS();
+      }
+    } catch (error) {
+      console.error('Error in applyErasedElementsCSS:', error);
+    }
+  }, [erasedElements]);
 
   const addTab = () => {
     const newTab = {
@@ -274,8 +358,18 @@ export default function App() {
       }
     })
     
-    webview.addEventListener('did-finish-load', () => {
+    webview.addEventListener('did-finish-load', async () => {
       handleWebviewLoad(tabId)
+      
+      // Also apply erased elements CSS here to ensure they persist after navigation
+      try {
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab && tab.isReady) {
+          await applyErasedElementsCSS(webview, tab.url);
+        }
+      } catch (error) {
+        console.error('Failed to apply erased elements CSS:', error)
+      }
     })
     
     webview.addEventListener('did-fail-load', (event: any) => {
@@ -292,12 +386,35 @@ export default function App() {
       ))
     })
     
-    webview.addEventListener('did-navigate', () => {
+    webview.addEventListener('did-navigate', async () => {
       handleWebviewLoad(tabId)
+      
+      // Re-apply erased elements after navigation
+      try {
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab && tab.isReady) {
+          // Add a small delay to ensure the DOM is ready
+          setTimeout(async () => {
+            await applyErasedElementsCSS(webview, webview.getURL());
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Failed to apply erased elements CSS after navigation:', error)
+      }
     })
     
-    webview.addEventListener('did-navigate-in-page', () => {
+    webview.addEventListener('did-navigate-in-page', async () => {
       handleWebviewLoad(tabId)
+      
+      // Re-apply for in-page navigation (hash changes, etc.)
+      try {
+        const tab = tabs.find(t => t.id === tabId);
+        if (tab && tab.isReady) {
+          await applyErasedElementsCSS(webview, webview.getURL());
+        }
+      } catch (error) {
+        console.error('Failed to apply erased elements CSS after in-page navigation:', error)
+      }
     })
   }, [applyErasedElementsCSS, tabs])
 
@@ -540,20 +657,49 @@ export default function App() {
           {tabs.map(tab => (
             <div
               key={tab.id}
-              onClick={() => {
-                setActiveTabId(tab.id)
-                setShowSettings(false)
-              }}
-              className={`px-4 py-2 cursor-pointer flex items-center space-x-2 ${
+              className={`px-4 py-2 cursor-pointer flex items-center justify-between group ${
                 activeTabId === tab.id ? 'bg-gray-700' : 'hover:bg-gray-700'
               }`}
             >
-              {tab.favicon ? (
-                <img src={tab.favicon} className="w-4 h-4" />
-              ) : (
-                <FiChrome className="w-4 h-4" />
-              )}
-              <span className="truncate">{tab.title}</span>
+              <div 
+                className="flex items-center space-x-2 overflow-hidden flex-1"
+                onClick={() => {
+                  setActiveTabId(tab.id)
+                  setShowSettings(false)
+                }}
+              >
+                {tab.favicon ? (
+                  <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <FiChrome className="w-4 h-4 flex-shrink-0" />
+                )}
+                <span className="truncate">{tab.title}</span>
+              </div>
+              <button
+                className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Don't close the tab if it's the only one
+                  if (tabs.length <= 1) return
+                  
+                  // If closing the active tab, activate another tab first
+                  if (tab.id === activeTabId) {
+                    const tabIndex = tabs.findIndex(t => t.id === tab.id)
+                    const newActiveTab = tabs[tabIndex === 0 ? 1 : tabIndex - 1]
+                    setActiveTabId(newActiveTab.id)
+                  }
+                  
+                  // Remove the tab from webviewRefs
+                  const newWebviewRefs = { ...webviewRefs.current }
+                  delete newWebviewRefs[tab.id]
+                  webviewRefs.current = newWebviewRefs
+                  
+                  // Remove the tab from tabs state
+                  setTabs(tabs.filter(t => t.id !== tab.id))
+                }}
+              >
+                &times;
+              </button>
             </div>
           ))}
         </div>
