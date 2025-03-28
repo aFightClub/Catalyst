@@ -90,7 +90,23 @@ const Settings: React.FC = () => {
     systemPrompt: 'You are a helpful assistant.',
     profileImage: ''
   });
+  
+  // Data Backup page state
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importOptions, setImportOptions] = useState({
+    overwrite: false,
+    importWorkspaces: true,
+    importWorkflows: true,
+    importTasks: true,
+    importSubscriptions: true,
+    importErasedElements: true,
+    importAssistants: true,
+    importWebsites: true
+  });
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputBackupRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setPlugins(pluginManager.getPlugins());
@@ -336,6 +352,145 @@ const Settings: React.FC = () => {
       ...selectedPlugin,
       type
     });
+  };
+
+  // Handle file input change (for browser-based file selection)
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      setImportStatus("Reading file...");
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const content = e.target?.result as string;
+          if (!content) {
+            setImportStatus("Error: File is empty");
+            return;
+          }
+          
+          setImportStatus("Importing data...");
+          const result = await storeService.importFromJSON(content, importOptions);
+          
+          if (result.success) {
+            setImportStatus("Data imported successfully! Refreshing...");
+            
+            // Reload the page after a short delay to apply changes
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          } else {
+            setImportStatus(`Import failed: ${result.message}`);
+          }
+        } catch (error) {
+          console.error("Error importing data:", error);
+          setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      };
+      
+      reader.readAsText(file);
+    } catch (error) {
+      console.error("Error reading file:", error);
+      setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Handle import button click
+  const handleImportClick = async () => {
+    // Check if we're in Electron environment
+    if (window.electron?.invoke) {
+      try {
+        setImportStatus("Choosing file to import...");
+        
+        // Use native Electron open dialog
+        const result = await window.electron.invoke('import-data-from-file');
+        
+        if (result.success) {
+          setImportStatus("Reading file...");
+          const content = result.content;
+          
+          // Import the data
+          const importResult = await storeService.importFromJSON(content, importOptions);
+          
+          if (importResult.success) {
+            setImportStatus("Data imported successfully! Refreshing...");
+            
+            // Reload the page after a short delay to apply changes
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          } else {
+            setImportStatus(`Import failed: ${importResult.message}`);
+          }
+        } else {
+          setImportStatus(`Import canceled: ${result.message}`);
+        }
+      } catch (error) {
+        console.error("Error importing data:", error);
+        setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    } else {
+      // Browser environment fallback
+      fileInputBackupRef.current?.click();
+    }
+  };
+
+  // Toggle import options
+  const toggleOption = (option: keyof typeof importOptions) => {
+    setImportOptions(prev => ({
+      ...prev,
+      [option]: !prev[option]
+    }));
+  };
+
+  // Handle exporting data
+  const handleExportData = async () => {
+    try {
+      setExportStatus("Exporting data...");
+      const jsonData = await storeService.exportAllData();
+      
+      // Check if we're in Electron environment
+      if (window.electron?.invoke) {
+        // Use native Electron save dialog
+        setExportStatus("Choosing save location...");
+        const defaultPath = `browser-backup-${new Date().toISOString().split('T')[0]}.json`;
+        const result = await window.electron.invoke('export-data-to-file', { 
+          content: jsonData,
+          defaultPath
+        });
+        
+        if (result.success) {
+          setExportStatus(`Data saved to ${result.path}`);
+        } else {
+          setExportStatus(`Export canceled: ${result.message}`);
+        }
+      } else {
+        // Browser environment fallback
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        // Create a link and trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `browser-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        setExportStatus("Data exported successfully!");
+      }
+      
+      // Clear status after a few seconds
+      setTimeout(() => setExportStatus(null), 3000);
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      setExportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const renderNavigation = () => (
@@ -1007,156 +1162,6 @@ const Settings: React.FC = () => {
   );
 
   const renderDataBackupPage = () => {
-    const [exportStatus, setExportStatus] = useState<string | null>(null);
-    const [importStatus, setImportStatus] = useState<string | null>(null);
-    const [importOptions, setImportOptions] = useState({
-      overwrite: false,
-      importWorkspaces: true,
-      importWorkflows: true,
-      importTasks: true,
-      importSubscriptions: true,
-      importErasedElements: true,
-      importAssistants: true,
-      importWebsites: true
-    });
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    
-    const handleExportData = async () => {
-      try {
-        setExportStatus("Exporting data...");
-        const jsonData = await storeService.exportAllData();
-        
-        // Check if we're in Electron environment
-        if (window.electron?.invoke) {
-          // Use native Electron save dialog
-          setExportStatus("Choosing save location...");
-          const defaultPath = `browser-backup-${new Date().toISOString().split('T')[0]}.json`;
-          const result = await window.electron.invoke('export-data-to-file', { 
-            content: jsonData,
-            defaultPath
-          });
-          
-          if (result.success) {
-            setExportStatus(`Data saved to ${result.path}`);
-          } else {
-            setExportStatus(`Export canceled: ${result.message}`);
-          }
-        } else {
-          // Browser environment fallback
-          const blob = new Blob([jsonData], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          
-          // Create a link and trigger download
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `browser-backup-${new Date().toISOString().split('T')[0]}.json`;
-          document.body.appendChild(a);
-          a.click();
-          
-          // Clean up
-          URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          
-          setExportStatus("Data exported successfully!");
-        }
-        
-        // Clear status after a few seconds
-        setTimeout(() => setExportStatus(null), 3000);
-      } catch (error) {
-        console.error("Error exporting data:", error);
-        setExportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    };
-    
-    const handleImportClick = async () => {
-      // Check if we're in Electron environment
-      if (window.electron?.invoke) {
-        try {
-          setImportStatus("Choosing file to import...");
-          
-          // Use native Electron open dialog
-          const result = await window.electron.invoke('import-data-from-file');
-          
-          if (result.success) {
-            setImportStatus("Reading file...");
-            const content = result.content;
-            
-            // Import the data
-            const importResult = await storeService.importFromJSON(content, importOptions);
-            
-            if (importResult.success) {
-              setImportStatus("Data imported successfully! Refreshing...");
-              
-              // Reload the page after a short delay to apply changes
-              setTimeout(() => {
-                window.location.reload();
-              }, 1500);
-            } else {
-              setImportStatus(`Import failed: ${importResult.message}`);
-            }
-          } else {
-            setImportStatus(`Import canceled: ${result.message}`);
-          }
-        } catch (error) {
-          console.error("Error importing data:", error);
-          setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      } else {
-        // Browser environment fallback
-        fileInputRef.current?.click();
-      }
-    };
-    
-    // Handle file input change (for browser-based file selection)
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      
-      try {
-        setImportStatus("Reading file...");
-        
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          try {
-            const content = e.target?.result as string;
-            if (!content) {
-              setImportStatus("Error: File is empty");
-              return;
-            }
-            
-            setImportStatus("Importing data...");
-            const result = await storeService.importFromJSON(content, importOptions);
-            
-            if (result.success) {
-              setImportStatus("Data imported successfully! Refreshing...");
-              
-              // Reload the page after a short delay to apply changes
-              setTimeout(() => {
-                window.location.reload();
-              }, 1500);
-            } else {
-              setImportStatus(`Import failed: ${result.message}`);
-            }
-          } catch (error) {
-            console.error("Error importing data:", error);
-            setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          }
-        };
-        
-        reader.readAsText(file);
-      } catch (error) {
-        console.error("Error reading file:", error);
-        setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    };
-    
-    const toggleOption = (option: keyof typeof importOptions) => {
-      setImportOptions(prev => ({
-        ...prev,
-        [option]: !prev[option]
-      }));
-    };
-    
     return (
       <div className="p-6 bg-gray-900 text-white">
         <h3 className="text-xl font-bold mb-6">Data Backup & Restore</h3>
@@ -1280,7 +1285,7 @@ const Settings: React.FC = () => {
             </div>
             
             <input
-              ref={fileInputRef}
+              ref={fileInputBackupRef}
               type="file"
               accept=".json"
               onChange={handleFileChange}
