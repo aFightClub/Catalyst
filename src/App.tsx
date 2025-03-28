@@ -46,24 +46,52 @@ interface Workflow {
 }
 
 interface Tab {
-  id: string
-  title: string
-  url: string
-  favicon?: string
-  isReady?: boolean
+  id: string;
+  title: string;
+  url: string;
+  favicon?: string;
+  isReady: boolean;
 }
 
 interface Workspace {
-  id: string
-  name: string
-  tabs: Tab[]
-  createdAt: string
+  id: string;
+  name: string;
+  tabs: Tab[];
+  createdAt: string;
 }
 
 interface ErasedElement {
-  url: string;
-  selector: string;
+  url: string;  // Original URL for backwards compatibility
+  domain: string; // Domain where this rule applies
+  selector: string; // CSS selector to hide
 }
+
+// Convert legacy erased elements to new format during migration
+const migrateErasedElements = (elements: any[]): ErasedElement[] => {
+  return elements.map(element => {
+    // Check if it's already in the new format
+    if (element.domain) {
+      return element;
+    }
+    
+    // Convert from old format to new format
+    try {
+      const url = new URL(element.url);
+      return {
+        url: element.url,
+        domain: url.hostname.replace('www.', ''),
+        selector: element.selector
+      };
+    } catch (error) {
+      // Fallback if URL parsing fails
+      return {
+        url: element.url,
+        domain: element.url.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0],
+        selector: element.selector
+      };
+    }
+  });
+};
 
 export default function App() {
   // Initialize store and migrate data from localStorage on first render
@@ -173,7 +201,7 @@ export default function App() {
       try {
         const storedElements = await storeService.getErasedElements();
         if (storedElements && Array.isArray(storedElements) && storedElements.length > 0) {
-          setErasedElements(storedElements);
+          setErasedElements(migrateErasedElements(storedElements));
         }
       } catch (error) {
         console.error('Failed to load erased elements:', error);
@@ -218,41 +246,59 @@ export default function App() {
     loadWorkspaces();
   }, []);
 
-  // Save workspaces to storage
+  // Save workspaces debounce timer
+  const saveWorkspacesTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Save workspaces to storage with debounce
   const saveWorkspaces = useCallback(async (workspacesToSave = workspaces) => {
-    try {
-      console.log(`Saving ${workspacesToSave.length} workspaces...`);
-      await storeService.saveWorkspaces(workspacesToSave);
-      
-      // Save active workspace and tab to localStorage for quicker retrieval
-      localStorage.setItem('lastActiveWorkspace', activeWorkspaceId);
-      localStorage.setItem('lastActiveTab', activeTabId);
-      
-      console.log(`Workspaces saved successfully. Active workspace: ${activeWorkspaceId}`);
-    } catch (error) {
-      console.error('Failed to save workspaces:', error);
+    // Clear any pending save operation
+    if (saveWorkspacesTimerRef.current) {
+      clearTimeout(saveWorkspacesTimerRef.current);
     }
+    
+    // Schedule a new save operation with debounce
+    saveWorkspacesTimerRef.current = setTimeout(async () => {
+      try {
+        console.log(`Saving ${workspacesToSave.length} workspaces...`);
+        await storeService.saveWorkspaces(workspacesToSave);
+        
+        // Save active workspace and tab to localStorage for quicker retrieval
+        localStorage.setItem('lastActiveWorkspace', activeWorkspaceId);
+        localStorage.setItem('lastActiveTab', activeTabId);
+        
+        console.log(`Workspaces saved successfully. Active workspace: ${activeWorkspaceId}`);
+      } catch (error) {
+        console.error('Failed to save workspaces:', error);
+      }
+    }, 500); // Debounce for 500ms
   }, [workspaces, activeWorkspaceId, activeTabId]);
 
   // Save workspaces to store whenever they change
   useEffect(() => {
     // Don't save if we're just initializing
     if (isInitialized.current) {
-      saveWorkspaces();
+      saveWorkspaces(workspaces);
     }
-  }, [workspaces, saveWorkspaces]);
+  }, [saveWorkspaces, workspaces]);
+
+  // Save erased elements
+  const saveErasedElements = useCallback(async () => {
+    try {
+      if (erasedElements.length > 0) {
+        await storeService.saveErasedElements(erasedElements);
+        console.log(`Saved ${erasedElements.length} erased elements`);
+      }
+    } catch (error) {
+      console.error('Failed to save erased elements:', error);
+    }
+  }, [erasedElements]);
 
   // Save erased elements to store whenever they change
   useEffect(() => {
-    const saveElements = async () => {
-      try {
-        await storeService.saveErasedElements(erasedElements);
-      } catch (error) {
-        console.error('Failed to save erased elements:', error);
-      }
-    };
-    saveElements();
-  }, [erasedElements]);
+    if (isInitialized.current && erasedElements.length > 0) {
+      saveErasedElements();
+    }
+  }, [erasedElements, saveErasedElements]);
 
   // Load workflows from store
   useEffect(() => {
@@ -510,6 +556,7 @@ export default function App() {
         if (activeTab && data.selector) {
           const newErasedElement: ErasedElement = {
             url: activeTab.url,
+            domain: activeTab.url.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0],
             selector: data.selector
           };
           
@@ -518,6 +565,7 @@ export default function App() {
             // Check for duplicates
             const exists = prev.some(el => 
               el.url === newErasedElement.url && 
+              el.domain === newErasedElement.domain && 
               el.selector === newErasedElement.selector
             );
             
@@ -534,71 +582,62 @@ export default function App() {
     }
   };
 
-  // Apply erased elements CSS when a page loads
-  const applyErasedElementsCSS = useCallback(async (webview: Electron.WebviewTag, url: string) => {
+  // Apply erased elements CSS to a webview based on URL
+  const applyErasedElementsCSS = async (webview: Electron.WebviewTag, url: string) => {
     try {
-      // Match by hostname to apply eraser rules across pages on the same site
-      const hostname = new URL(url).hostname;
+      // Skip if webview is not valid
+      if (!webview || !url) return;
       
-      // Filter elements by hostname
-      const elementsForUrl = erasedElements.filter(element => {
-        try {
-          return new URL(element.url).hostname === hostname;
-        } catch (e) {
-          return false;
-        }
-      });
+      // Extract domain from URL for erased elements lookup
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace('www.', '');
       
-      if (elementsForUrl.length > 0) {
-        console.log(`Applying ${elementsForUrl.length} erased elements for ${hostname}`);
-        
-        // Generate CSS
-        const selectors = elementsForUrl.map(element => element.selector).join(', ');
-        const css = `${selectors} { display: none !important; opacity: 0 !important; visibility: hidden !important; }`;
-        
-        // Apply CSS with retry mechanism
-        const applyCSS = async (retryCount = 0) => {
-          try {
-            await webview.executeJavaScript(`
-              (function() {
-                // First remove any existing eraser styles
-                const existingStyle = document.getElementById('eraser-styles');
-                if (existingStyle) existingStyle.remove();
-                
-                // Create a new style element
-                const style = document.createElement('style');
-                style.id = 'eraser-styles';
-                style.textContent = ${JSON.stringify(css)};
-                
-                // Append to head if it exists, otherwise to document
-                if (document.head) {
-                  document.head.appendChild(style);
-                } else if (document.documentElement) {
-                  document.documentElement.appendChild(style);
-                }
-                
-                console.log('Applied eraser CSS: ${elementsForUrl.length} selectors');
-                return true;
-              })();
-            `);
-            console.log('Successfully applied eraser CSS');
-          } catch (error) {
-            console.error('Error applying eraser CSS:', error);
-            
-            // Retry up to 3 times with increasing delay
-            if (retryCount < 3) {
-              console.log(`Retrying CSS application (${retryCount + 1}/3) in ${(retryCount + 1) * 300}ms`);
-              setTimeout(() => applyCSS(retryCount + 1), (retryCount + 1) * 300);
-            }
-          }
-        };
-        
-        await applyCSS();
+      // Find applicable erased elements for this domain
+      const erasedElementsForDomain = erasedElements.filter(
+        element => element.domain === domain || element.domain === urlObj.hostname
+      );
+      
+      console.log(`Applying ${erasedElementsForDomain.length} erased elements for ${urlObj.hostname}`);
+      
+      if (erasedElementsForDomain.length === 0) {
+        return; // No elements to erase
       }
+
+      // Generate CSS to hide erased elements
+      const css = erasedElementsForDomain
+        .map(element => `${element.selector} { display: none !important; }`)
+        .join('\n');
+      
+      // Apply CSS to webview using executeJavaScript
+      await webview.executeJavaScript(`
+        (function() {
+          try {
+            // Check if our eraser style element already exists
+            let eraserStyle = document.getElementById('element-eraser-style');
+            
+            // Create if it doesn't exist
+            if (!eraserStyle) {
+              eraserStyle = document.createElement('style');
+              eraserStyle.id = 'element-eraser-style';
+              document.head.appendChild(eraserStyle);
+            }
+            
+            // Update the CSS content
+            eraserStyle.textContent = \`${css}\`;
+            console.log('Successfully applied erased elements CSS');
+            return true;
+          } catch (error) {
+            console.error('Error applying erased elements CSS:', error);
+            return false;
+          }
+        })()
+      `);
+
+      console.log('Successfully applied eraser CSS');
     } catch (error) {
-      console.error('Error in applyErasedElementsCSS:', error);
+      console.error('Error applying erased elements CSS:', error);
     }
-  }, [erasedElements]);
+  };
 
   // Add a tab to the current workspace
   const addTab = () => {
@@ -703,11 +742,11 @@ export default function App() {
     // Mark initialization to prevent duplicate setup
     initialLoadCompleted.current.add(tabId);
     
+    // Set loading state when webview is attached
+    setLoadingTabs(prev => new Set([...prev, tabId]));
+    
     // Use a setTimeout to break the React render cycle
     setTimeout(() => {
-      // Set loading state when webview is attached
-      setLoadingTabs(prev => new Set([...prev, tabId]));
-      
       // Track if the page is loading to avoid duplicate processing
       let isLoading = true;
       
