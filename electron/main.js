@@ -15,6 +15,7 @@ function createWindow() {
     titleBarStyle: "hiddenInset",
     vibrancy: "under-window",
     visualEffectState: "active",
+    icon: path.join(__dirname, "../src/images/icon.png"),
   });
 
   if (!app.isPackaged) {
@@ -88,6 +89,21 @@ ipcMain.on("run-workflow-in-new-tab", async (event, data) => {
     console.error("Failed to open workflow in new tab:", error);
   }
 });
+
+// Set app icon for Linux and Windows (macOS uses icns file in build config)
+if (process.platform === "linux" || process.platform === "win32") {
+  app.on("ready", () => {
+    app.whenReady().then(() => {
+      try {
+        const iconPath = path.join(__dirname, "../src/images/icon.png");
+        console.log("Setting application icon:", iconPath);
+        app.setAppUserModelId(app.name); // Set app ID for Windows
+      } catch (err) {
+        console.error("Failed to set app icon:", err);
+      }
+    });
+  });
+}
 
 app.whenReady().then(createWindow);
 
