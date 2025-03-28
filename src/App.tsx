@@ -763,18 +763,45 @@ export default function App() {
       
       webview.addEventListener('did-stop-loading', async () => {
         try {
-          // Get the current page title
-          const title = await webview.executeJavaScript('document.title');
+          // Clear loading state immediately
+          setLoadingTabs(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(tabId);
+            return newSet;
+          });
+          
+          // Get the current page title and URL
+          const title = await webview.executeJavaScript('document.title || window.location.hostname');
           const url = await webview.executeJavaScript('window.location.href');
+          
+          // More reliable way to get favicon
           const favicon = await webview.executeJavaScript(`
             (function() {
-              const favicon = document.querySelector('link[rel="shortcut icon"]') ||
-                             document.querySelector('link[rel="icon"]');
-              return favicon ? favicon.href : '';
+              // Try different favicon options
+              const selectors = [
+                'link[rel="shortcut icon"]',
+                'link[rel="icon"]',
+                'link[rel="apple-touch-icon"]',
+                'link[sizes="32x32"]',
+                'link[sizes="192x192"]'
+              ];
+              
+              for (const selector of selectors) {
+                const link = document.querySelector(selector);
+                if (link && link.href) {
+                  return link.href;
+                }
+              }
+              
+              // Default to favicon.ico at root if no icon is found
+              const domain = window.location.origin;
+              return domain + '/favicon.ico';
             })()
           `);
           
-          // Update tab information
+          console.log(`Page loaded: "${title}" at ${url} with favicon: ${favicon}`);
+          
+          // Update tab information - ensure title fallback to URL if empty
           setWorkspaces(prevWorkspaces => 
             prevWorkspaces.map(workspace => {
               const tabExists = workspace.tabs.some(tab => tab.id === tabId);
@@ -783,7 +810,13 @@ export default function App() {
                   ...workspace,
                   tabs: workspace.tabs.map(tab => 
                     tab.id === tabId 
-                      ? { ...tab, title: title || url, url, favicon, isReady: true } 
+                      ? { 
+                          ...tab, 
+                          title: title || url.replace(/^https?:\/\//, '').split('/')[0],
+                          url, 
+                          favicon, 
+                          isReady: true 
+                        } 
                       : tab
                   )
                 };
@@ -792,18 +825,90 @@ export default function App() {
             })
           );
           
+          // Update URL input if this is the active tab
+          if (tabId === activeTabId) {
+            setUrlInput(url);
+          }
+          
           // Apply plugins again after the page is fully loaded
           await applyPluginsToTab(tabId);
           
         } catch (error) {
           console.error(`Error updating tab ${tabId} after loading:`, error);
           
-          // Clear loading state on error
+          // Make sure we clear loading state on error too
           setLoadingTabs(prev => {
             const newSet = new Set(prev);
             newSet.delete(tabId);
             return newSet;
           });
+          
+          // Still mark tab as ready even on error
+          setWorkspaces(prevWorkspaces => 
+            prevWorkspaces.map(workspace => {
+              const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+              if (tabExists) {
+                return {
+                  ...workspace,
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === tabId 
+                      ? { ...tab, isReady: true } 
+                      : tab
+                  )
+                };
+              }
+              return workspace;
+            })
+          );
+        }
+      });
+      
+      // Also handle page title updates
+      webview.addEventListener('page-title-updated', (event: any) => {
+        const newTitle = event.title;
+        if (newTitle) {
+          // Update title in workspace state
+          setWorkspaces(prevWorkspaces => 
+            prevWorkspaces.map(workspace => {
+              const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+              if (tabExists) {
+                return {
+                  ...workspace,
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === tabId 
+                      ? { ...tab, title: newTitle } 
+                      : tab
+                  )
+                };
+              }
+              return workspace;
+            })
+          );
+        }
+      });
+      
+      // Handle favicon updates
+      webview.addEventListener('page-favicon-updated', (event: any) => {
+        const favicons = event.favicons;
+        if (favicons && favicons.length > 0) {
+          const newFavicon = favicons[0];
+          // Update favicon in workspace state
+          setWorkspaces(prevWorkspaces => 
+            prevWorkspaces.map(workspace => {
+              const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+              if (tabExists) {
+                return {
+                  ...workspace,
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === tabId 
+                      ? { ...tab, favicon: newFavicon } 
+                      : tab
+                  )
+                };
+              }
+              return workspace;
+            })
+          );
         }
       });
       
