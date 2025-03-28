@@ -37,6 +37,12 @@ const DEFAULT_PROJECTS: Project[] = [
   }
 ];
 
+// Storage keys for localStorage
+const STORAGE_KEYS = {
+  TASKS: 'tasks_list',
+  PROJECTS: 'tasks_projects'
+};
+
 const COLORS = [
   '#3B82F6', // blue-500
   '#EF4444', // red-500
@@ -64,36 +70,66 @@ const Tasks: React.FC = () => {
 
   // Load tasks and projects from localStorage on component mount
   useEffect(() => {
-    const savedTasks = localStorage.getItem('tasks_list');
+    console.log("Loading tasks and projects from localStorage");
+    
+    // Load tasks
+    const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
     if (savedTasks) {
       try {
-        setTasks(JSON.parse(savedTasks));
+        const parsedTasks = JSON.parse(savedTasks);
+        console.log("Found saved tasks:", parsedTasks.length);
+        setTasks(parsedTasks);
       } catch (e) {
         console.error('Failed to parse saved tasks:', e);
-      }
-    }
-
-    const savedProjects = localStorage.getItem('tasks_projects');
-    if (savedProjects) {
-      try {
-        setProjects(JSON.parse(savedProjects));
-      } catch (e) {
-        console.error('Failed to parse saved projects:', e);
-        setProjects(DEFAULT_PROJECTS);
+        // Initialize with empty array if parsing fails
+        setTasks([]);
+        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
       }
     } else {
+      // Initialize with empty array if no tasks found
+      console.log("No saved tasks found, initializing empty array");
+      setTasks([]);
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
+    }
+
+    // Load projects
+    const savedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+    if (savedProjects) {
+      try {
+        const parsedProjects = JSON.parse(savedProjects);
+        console.log("Found saved projects:", parsedProjects.length);
+        if (Array.isArray(parsedProjects) && parsedProjects.length > 0) {
+          setProjects(parsedProjects);
+        } else {
+          // Initialize with default projects if empty array
+          console.log("Saved projects array is empty, using defaults");
+          setProjects(DEFAULT_PROJECTS);
+          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
+        }
+      } catch (e) {
+        console.error('Failed to parse saved projects:', e);
+        // Initialize with defaults if parsing fails
+        setProjects(DEFAULT_PROJECTS);
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
+      }
+    } else {
+      // Initialize with defaults if no projects found
+      console.log("No saved projects found, using defaults");
       setProjects(DEFAULT_PROJECTS);
+      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
     }
   }, []);
 
   // Save tasks to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('tasks_list', JSON.stringify(tasks));
+    console.log("Saving tasks to localStorage:", tasks.length);
+    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
   }, [tasks]);
 
   // Save projects to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('tasks_projects', JSON.stringify(projects));
+    console.log("Saving projects to localStorage:", projects.length);
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
   }, [projects]);
 
   const addTask = () => {
