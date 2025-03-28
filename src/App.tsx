@@ -23,7 +23,9 @@ enum ActionType {
   TYPE = 'type',
   NAVIGATE = 'navigate',
   WAIT = 'wait',
-  HOVER = 'hover'
+  HOVER = 'hover',
+  KEYPRESS = 'keypress',
+  SUBMIT = 'submit'
 }
 
 interface WorkflowAction {
@@ -745,8 +747,7 @@ export default function App() {
   const startRecording = () => {
     setIsRecording(true);
     setCurrentRecording([]);
-    setShowWorkflowModal(true);
-    setWorkflowModalMode('create');
+    setShowWorkflowModal(false); // Close the modal when starting recording
     
     const webview = webviewRefs.current[activeTabId];
     if (webview) {
@@ -816,52 +817,18 @@ export default function App() {
             }));
           }, true);
           
-          // Track typing
-          document.addEventListener('input', (e) => {
-            if (!window.workflowRecording || !e.target || !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) return;
-            
-            const element = e.target;
-            let selector = '';
-            
-            if (element.id) {
-              selector = '#' + element.id;
-            } else {
-              selector = element.tagName.toLowerCase();
-              
-              if (element.classList && element.classList.length) {
-                const classes = Array.from(element.classList).slice(0, 2);
-                selector += classes.map(c => '.' + c).join('');
-              }
-              
-              if (element.name) {
-                selector += '[name="' + element.name + '"]';
-              }
-            }
-            
-            // Log the typing action
-            console.log('WORKFLOW_ACTION:' + JSON.stringify({
-              type: 'type',
-              data: {
-                selector,
-                value: element.value,
-                placeholder: element.placeholder
-              },
-              timestamp: Date.now()
-            }));
-          }, true);
+          // Track input values (consolidated approach)
+          const inputElements = new WeakMap();
           
-          // Track hover
-          document.addEventListener('mouseover', (e) => {
-            if (!window.workflowRecording) return;
+          // Track input and change events
+          const trackInput = (e) => {
+            if (!window.workflowRecording || !e.target || 
+                !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) return;
             
-            // Only log hovers on elements with handlers (links, buttons, etc.)
             const element = e.target;
-            if (element instanceof HTMLAnchorElement || 
-                element instanceof HTMLButtonElement || 
-                element.onclick || 
-                element.onmouseover ||
-                element.role === 'button') {
-              
+            
+            // Create a selector for the element if we haven't tracked it yet
+            if (!inputElements.has(element)) {
               let selector = '';
               if (element.id) {
                 selector = '#' + element.id;
@@ -872,19 +839,152 @@ export default function App() {
                   const classes = Array.from(element.classList).slice(0, 2);
                   selector += classes.map(c => '.' + c).join('');
                 }
+                
+                if (element.name) {
+                  selector += '[name="' + element.name + '"]';
+                }
               }
               
-              // Log the hover action (throttled to avoid too many events)
-              if (!element.hasAttribute('data-last-hover') || 
-                  Date.now() - parseInt(element.getAttribute('data-last-hover') || '0') > 1000) {
-                
-                element.setAttribute('data-last-hover', Date.now().toString());
-                
+              // Initial setup - track the element
+              inputElements.set(element, { 
+                selector: selector,
+                value: element.value,
+                lastValue: '',
+                lastLogged: 0
+              });
+              
+              // Add event listeners for capturing final value
+              element.addEventListener('blur', () => {
+                captureInputValue(element);
+              });
+              
+              // Handle form submissions
+              if (element.form) {
+                element.form.addEventListener('submit', () => {
+                  captureInputValue(element);
+                });
+              }
+              
+              // Handle Enter key press
+              element.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && element instanceof HTMLInputElement) {
+                  captureInputValue(element);
+                  
+                  // Also log the Enter key press
+                  console.log('WORKFLOW_ACTION:' + JSON.stringify({
+                    type: 'keypress',
+                    data: {
+                      key: 'Enter',
+                      selector: inputElements.get(element).selector
+                    },
+                    timestamp: Date.now()
+                  }));
+                }
+              });
+            }
+            
+            // Always update the current value
+            const data = inputElements.get(element);
+            data.value = element.value;
+            inputElements.set(element, data);
+          };
+          
+          // Function to capture and log input value changes
+          const captureInputValue = (element) => {
+            if (!inputElements.has(element)) return;
+            
+            const data = inputElements.get(element);
+            const currentValue = element.value;
+            
+            // Only log if the value has changed and is not empty
+            if (currentValue && 
+                currentValue.trim() && 
+                currentValue !== data.lastValue) {
+              
+              console.log('WORKFLOW_ACTION:' + JSON.stringify({
+                type: 'type',
+                data: {
+                  selector: data.selector,
+                  value: currentValue,
+                  placeholder: element.placeholder || ''
+                },
+                timestamp: Date.now()
+              }));
+              
+              // Update last value
+              data.lastValue = currentValue;
+              inputElements.set(element, data);
+            }
+          };
+          
+          // Check inputs periodically to capture ongoing typing
+          const checkInputsInterval = setInterval(() => {
+            if (!window.workflowRecording) {
+              clearInterval(checkInputsInterval);
+              return;
+            }
+            
+            // Check all active input elements
+            document.querySelectorAll('input:focus, textarea:focus').forEach(element => {
+              if ((element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) && 
+                  inputElements.has(element)) {
+                captureInputValue(element);
+              }
+            });
+          }, 2000);  // Check every 2 seconds
+          
+          // Attach input tracking
+          document.addEventListener('input', trackInput, true);
+          document.addEventListener('change', trackInput, true);
+          
+          // Track any existing input fields that might already have content
+          document.querySelectorAll('input, textarea').forEach(element => {
+            if ((element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) && 
+                element.value && element.value.trim()) {
+              element.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          });
+          
+          // Track forms for submission
+          document.addEventListener('submit', (e) => {
+            if (!window.workflowRecording) return;
+            
+            const form = e.target;
+            if (form instanceof HTMLFormElement) {
+              // Log the form submission
+              const formSelector = form.id ? "#" + form.id : "form";
+              
+              console.log('WORKFLOW_ACTION:' + JSON.stringify({
+                type: 'submit',
+                data: {
+                  selector: formSelector,
+                  action: form.action || window.location.href
+                },
+                timestamp: Date.now()
+              }));
+            }
+          }, true);
+          
+          // Track keyboard events for Enter key
+          document.addEventListener('keydown', (e) => {
+            if (!window.workflowRecording) return;
+            
+            // Only capture Enter key to avoid noise
+            if (e.key === 'Enter') {
+              // Avoid duplicating Enter on inputs (already handled above)
+              if (!(e.target instanceof HTMLInputElement)) {
+                const targetSelector = e.target 
+                  ? e.target.tagName.toLowerCase() 
+                  : 'document';
+                  
                 console.log('WORKFLOW_ACTION:' + JSON.stringify({
-                  type: 'hover',
+                  type: 'keypress',
                   data: {
-                    selector,
-                    text: element.textContent?.trim()
+                    key: 'Enter',
+                    selector: targetSelector,
+                    ctrlKey: e.ctrlKey,
+                    altKey: e.altKey,
+                    shiftKey: e.shiftKey
                   },
                   timestamp: Date.now()
                 }));
@@ -1042,6 +1142,7 @@ export default function App() {
                 if (element && (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
                   element.value = ${JSON.stringify(textValue)};
                   element.dispatchEvent(new Event('input', { bubbles: true }));
+                  element.focus();
                   return true;
                 }
                 return false;
@@ -1053,6 +1154,50 @@ export default function App() {
           `);
           break;
         
+        case ActionType.KEYPRESS:
+          // Handle key press events like Enter
+          if (action.data.key === 'Enter') {
+            await webview.executeJavaScript(`
+              (function() {
+                try {
+                  const element = document.querySelector('${action.data.selector}');
+                  if (element) {
+                    // Focus the element first
+                    element.focus();
+                    
+                    // Create and dispatch an Enter keydown event
+                    const keyEvent = new KeyboardEvent('keydown', {
+                      key: 'Enter',
+                      code: 'Enter',
+                      keyCode: 13,
+                      which: 13,
+                      bubbles: true,
+                      cancelable: true
+                    });
+                    element.dispatchEvent(keyEvent);
+                    
+                    return true;
+                  } else {
+                    // If no specific element, dispatch on the document
+                    document.dispatchEvent(new KeyboardEvent('keydown', {
+                      key: 'Enter',
+                      code: 'Enter',
+                      keyCode: 13,
+                      which: 13,
+                      bubbles: true,
+                      cancelable: true
+                    }));
+                    return true;
+                  }
+                } catch (e) {
+                  console.error('Failed to send key event:', e);
+                  return false;
+                }
+              })();
+            `);
+          }
+          break;
+        
         case ActionType.NAVIGATE:
           try {
             await webview.loadURL(action.data.url);
@@ -1061,28 +1206,24 @@ export default function App() {
           }
           break;
         
-        case ActionType.HOVER:
+        case ActionType.SUBMIT:
           await webview.executeJavaScript(`
             (function() {
               try {
-                const element = document.querySelector('${action.data.selector}');
-                if (element) {
-                  element.dispatchEvent(new MouseEvent('mouseover', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true
-                  }));
+                const form = document.querySelector('${action.data.selector}');
+                if (form && form instanceof HTMLFormElement) {
+                  form.submit();
                   return true;
                 }
                 return false;
               } catch (e) {
-                console.error('Failed to hover over element:', e);
+                console.error('Failed to submit form:', e);
                 return false;
               }
             })();
           `);
           break;
-        
+          
         case ActionType.WAIT:
           await new Promise(resolve => setTimeout(resolve, action.data.duration || 1000));
           break;
@@ -1163,7 +1304,7 @@ export default function App() {
                                   Typed: 
                                   <input
                                     type="text"
-                                    className="ml-2 bg-gray-700 px-2 py-1 rounded text-white"
+                                    className="ml-2 bg-gray-700 px-2 py-1 rounded text-white w-4/5"
                                     defaultValue={action.data.value}
                                     placeholder={action.data.placeholder}
                                     onChange={(e) => {
@@ -1183,9 +1324,14 @@ export default function App() {
                                   Navigated to: {action.data.url}
                                 </div>
                               )}
-                              {action.type === ActionType.HOVER && (
+                              {action.type === ActionType.KEYPRESS && (
                                 <div className="text-gray-300 text-sm">
-                                  Hovered: {action.data.text || action.data.selector}
+                                  Key pressed: {action.data.key}
+                                </div>
+                              )}
+                              {action.type === ActionType.SUBMIT && (
+                                <div className="text-gray-300 text-sm">
+                                  Form submitted: {action.data.selector}
                                 </div>
                               )}
                             </div>
@@ -1736,6 +1882,26 @@ export default function App() {
       
       {/* Workflow Modal */}
       {renderWorkflowModal()}
+
+      {/* Floating Recording Controls */}
+      {isRecording && (
+        <div className="fixed bottom-4 right-4 flex items-center space-x-2 z-50">
+          <div className="bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center">
+            <span className="inline-block w-3 h-3 bg-white rounded-full mr-2 animate-pulse"></span>
+            Recording Workflow
+          </div>
+          <button
+            onClick={() => {
+              stopRecording();
+              setShowWorkflowModal(true); // Show modal after stopping
+              setWorkflowModalMode('create');
+            }}
+            className="bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-gray-700"
+          >
+            Stop Recording
+          </button>
+        </div>
+      )}
     </div>
   )
 } 
