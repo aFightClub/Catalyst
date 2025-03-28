@@ -39,6 +39,7 @@ interface Workflow {
   name: string;
   actions: WorkflowAction[];
   variables: string[];
+  startUrl?: string; // The URL where the workflow should start
 }
 
 interface Tab {
@@ -61,7 +62,46 @@ export default function App() {
       await storeService.migrateFromLocalStorage();
     };
     initializeStore();
+    
+    // Expose the workflow runner function to the window object for Settings component
+    (window as any).runWorkflowInAppTab = (workflowId: string, variables: {[key: string]: string} = {}) => {
+      runWorkflowInNewTab(workflowId, variables);
+    };
   }, []);
+
+  // Check for workflow to run on startup
+  useEffect(() => {
+    const checkForWorkflowToRun = async () => {
+      try {
+        // Get the workflow ID from the URL query params
+        const urlParams = new URLSearchParams(window.location.search);
+        const workflowId = urlParams.get('runWorkflow');
+        
+        if (workflowId) {
+          // Load workflows from store
+          const storedWorkflows = await storeService.getWorkflows();
+          if (storedWorkflows && Array.isArray(storedWorkflows)) {
+            // Find the workflow with the matching ID
+            const workflowToRun = storedWorkflows.find(w => w.id === workflowId);
+            
+            if (workflowToRun) {
+              console.log(`Auto-running workflow: ${workflowToRun.name}`);
+              
+              // Small delay to ensure the app is fully loaded
+              setTimeout(() => {
+                // Run the workflow
+                playWorkflow(workflowToRun, {});
+              }, 2000);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to auto-run workflow:', error);
+      }
+    };
+    
+    checkForWorkflowToRun();
+  }, []); // Run once on component mount
 
   const [tabs, setTabs] = useState<Tab[]>([
     { id: '1', title: 'Google', url: 'https://google.com', isReady: false }
@@ -148,6 +188,76 @@ export default function App() {
     };
     saveWorkflows();
   }, [workflows]);
+
+  // Listen for custom workflow run events from settings
+  useEffect(() => {
+    const handleRunWorkflow = (event: any) => {
+      const { workflowId, variables } = event.detail;
+      runWorkflowInNewTab(workflowId, variables || {});
+    };
+
+    // Add event listener for DOM events
+    window.addEventListener('run-workflow', handleRunWorkflow);
+
+    // Clean up
+    return () => {
+      window.removeEventListener('run-workflow', handleRunWorkflow);
+    };
+  }, []);
+
+  // Function to run a workflow in a new tab within the current window
+  const runWorkflowInNewTab = (workflowId: string, variables: {[key: string]: string} = {}) => {
+    // Find the workflow by ID
+    const workflowToRun = workflows.find(w => w.id === workflowId);
+    if (!workflowToRun) {
+      console.error('Workflow not found:', workflowId);
+      return;
+    }
+
+    // Create a new tab
+    const newTabId = Date.now().toString();
+    const initialUrl = workflowToRun.startUrl || 'about:blank';
+    
+    const newTab = {
+      id: newTabId,
+      title: `Running: ${workflowToRun.name}`,
+      url: initialUrl,
+      isReady: false
+    };
+    
+    // Add the new tab and make it active
+    setTabs(prevTabs => [...prevTabs, newTab]);
+    setActiveTabId(newTabId);
+    
+    // Hide settings
+    setShowSettings(false);
+    
+    // We'll run the workflow after the tab has been created and loaded
+    // The webview's dom-ready event will trigger this
+    
+    // We need to store this workflow to run it when the tab is ready
+    const pendingWorkflowRun = {
+      tabId: newTabId,
+      workflow: workflowToRun,
+      variables: variables
+    };
+    setPendingWorkflowRun(pendingWorkflowRun);
+  };
+  
+  // Track pending workflow runs
+  const [pendingWorkflowRun, setPendingWorkflowRun] = useState<{tabId: string, workflow: Workflow, variables: {[key: string]: string}} | null>(null);
+  
+  // Check if we need to run a workflow when a tab becomes ready
+  useEffect(() => {
+    if (pendingWorkflowRun && tabs.some(tab => tab.id === pendingWorkflowRun.tabId && tab.isReady)) {
+      // Tab is ready, run the workflow
+      const { workflow, variables } = pendingWorkflowRun;
+      setTimeout(() => {
+        playWorkflow(workflow, variables);
+        setPendingWorkflowRun(null);
+      }, 1000); // Small delay to ensure the page is fully loaded
+    }
+  }, [tabs, pendingWorkflowRun]);
 
   // Toggle eraser mode and inject eraser script when activated
   const toggleEraserMode = async () => {
@@ -750,7 +860,21 @@ export default function App() {
     setShowWorkflowModal(false); // Close the modal when starting recording
     
     const webview = webviewRefs.current[activeTabId];
-    if (webview) {
+    const currentTab = tabs.find(tab => tab.id === activeTabId);
+    
+    if (webview && currentTab) {
+      // Store the initial URL for this workflow
+      const initialUrl = currentTab.url;
+      
+      // Record initial navigation action
+      setCurrentRecording([{
+        type: ActionType.NAVIGATE,
+        data: {
+          url: initialUrl
+        },
+        timestamp: Date.now()
+      }]);
+      
       // Inject recording script
       webview.executeJavaScript(`
         (function() {
@@ -1089,11 +1213,16 @@ export default function App() {
     // Extract variables
     const variables = Object.keys(workflowVariables);
     
+    // Get the starting URL from the first navigation action
+    const firstNavAction = currentRecording.find(action => action.type === ActionType.NAVIGATE);
+    const startUrl = firstNavAction ? firstNavAction.data.url : '';
+    
     const newWorkflow: Workflow = {
       id: Date.now().toString(),
       name: newWorkflowName.trim(),
       actions: currentRecording,
-      variables
+      variables,
+      startUrl
     };
     
     setWorkflows(prev => [...prev, newWorkflow]);
@@ -1108,129 +1237,155 @@ export default function App() {
     const webview = webviewRefs.current[activeTabId];
     if (!webview || !tabs.find(tab => tab.id === activeTabId)?.isReady) return;
     
-    for (const action of workflow.actions) {
-      switch (action.type) {
-        case ActionType.CLICK:
-          await webview.executeJavaScript(`
-            (function() {
-              try {
-                const element = document.querySelector('${action.data.selector}');
-                if (element) {
-                  element.click();
-                  return true;
-                }
-                return false;
-              } catch (e) {
-                console.error('Failed to click element:', e);
-                return false;
-              }
-            })();
-          `);
-          break;
+    try {
+      // First navigate to the starting URL if it exists
+      if (workflow.startUrl) {
+        // Update the tab URL
+        const updatedTabs = tabs.map(tab => 
+          tab.id === activeTabId ? { ...tab, url: workflow.startUrl || tab.url, title: 'Loading...' } : tab
+        );
+        setTabs(updatedTabs);
+        setUrlInput(workflow.startUrl);
         
-        case ActionType.TYPE:
-          // Use variable value if available
-          let textValue = action.data.value;
-          if (action.data.variableName && variables[action.data.variableName]) {
-            textValue = variables[action.data.variableName];
-          }
-          
-          await webview.executeJavaScript(`
-            (function() {
-              try {
-                const element = document.querySelector('${action.data.selector}');
-                if (element && (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
-                  element.value = ${JSON.stringify(textValue)};
-                  element.dispatchEvent(new Event('input', { bubbles: true }));
-                  element.focus();
-                  return true;
-                }
-                return false;
-              } catch (e) {
-                console.error('Failed to type in element:', e);
-                return false;
-              }
-            })();
-          `);
-          break;
+        // Navigate to the URL
+        await webview.loadURL(workflow.startUrl);
         
-        case ActionType.KEYPRESS:
-          // Handle key press events like Enter
-          if (action.data.key === 'Enter') {
+        // Wait for the page to load
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      // Now play the rest of the workflow actions
+      for (const action of workflow.actions) {
+        // Skip the initial navigation action since we already handled it
+        if (action.type === ActionType.NAVIGATE && action.data.url === workflow.startUrl) {
+          continue;
+        }
+        
+        switch (action.type) {
+          case ActionType.CLICK:
             await webview.executeJavaScript(`
               (function() {
                 try {
                   const element = document.querySelector('${action.data.selector}');
                   if (element) {
-                    // Focus the element first
-                    element.focus();
-                    
-                    // Create and dispatch an Enter keydown event
-                    const keyEvent = new KeyboardEvent('keydown', {
-                      key: 'Enter',
-                      code: 'Enter',
-                      keyCode: 13,
-                      which: 13,
-                      bubbles: true,
-                      cancelable: true
-                    });
-                    element.dispatchEvent(keyEvent);
-                    
-                    return true;
-                  } else {
-                    // If no specific element, dispatch on the document
-                    document.dispatchEvent(new KeyboardEvent('keydown', {
-                      key: 'Enter',
-                      code: 'Enter',
-                      keyCode: 13,
-                      which: 13,
-                      bubbles: true,
-                      cancelable: true
-                    }));
+                    element.click();
                     return true;
                   }
+                  return false;
                 } catch (e) {
-                  console.error('Failed to send key event:', e);
+                  console.error('Failed to click element:', e);
                   return false;
                 }
               })();
             `);
-          }
-          break;
-        
-        case ActionType.NAVIGATE:
-          try {
-            await webview.loadURL(action.data.url);
-          } catch (e) {
-            console.error('Failed to navigate:', e);
-          }
-          break;
-        
-        case ActionType.SUBMIT:
-          await webview.executeJavaScript(`
-            (function() {
-              try {
-                const form = document.querySelector('${action.data.selector}');
-                if (form && form instanceof HTMLFormElement) {
-                  form.submit();
-                  return true;
-                }
-                return false;
-              } catch (e) {
-                console.error('Failed to submit form:', e);
-                return false;
-              }
-            })();
-          `);
-          break;
+            break;
           
-        case ActionType.WAIT:
-          await new Promise(resolve => setTimeout(resolve, action.data.duration || 1000));
-          break;
+          case ActionType.TYPE:
+            // Use variable value if available
+            let textValue = action.data.value;
+            if (action.data.variableName && variables[action.data.variableName]) {
+              textValue = variables[action.data.variableName];
+            }
+            
+            await webview.executeJavaScript(`
+              (function() {
+                try {
+                  const element = document.querySelector('${action.data.selector}');
+                  if (element && (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+                    element.value = ${JSON.stringify(textValue)};
+                    element.dispatchEvent(new Event('input', { bubbles: true }));
+                    element.focus();
+                    return true;
+                  }
+                  return false;
+                } catch (e) {
+                  console.error('Failed to type in element:', e);
+                  return false;
+                }
+              })();
+            `);
+            break;
+          
+          case ActionType.KEYPRESS:
+            // Handle key press events like Enter
+            if (action.data.key === 'Enter') {
+              await webview.executeJavaScript(`
+                (function() {
+                  try {
+                    const element = document.querySelector('${action.data.selector}');
+                    if (element) {
+                      // Focus the element first
+                      element.focus();
+                      
+                      // Create and dispatch an Enter keydown event
+                      const keyEvent = new KeyboardEvent('keydown', {
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true,
+                        cancelable: true
+                      });
+                      element.dispatchEvent(keyEvent);
+                      
+                      return true;
+                    } else {
+                      // If no specific element, dispatch on the document
+                      document.dispatchEvent(new KeyboardEvent('keydown', {
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true,
+                        cancelable: true
+                      }));
+                      return true;
+                    }
+                  } catch (e) {
+                    console.error('Failed to send key event:', e);
+                    return false;
+                  }
+                })();
+              `);
+            }
+            break;
+          
+          case ActionType.NAVIGATE:
+            try {
+              await webview.loadURL(action.data.url);
+            } catch (e) {
+              console.error('Failed to navigate:', e);
+            }
+            break;
+          
+          case ActionType.SUBMIT:
+            await webview.executeJavaScript(`
+              (function() {
+                try {
+                  const form = document.querySelector('${action.data.selector}');
+                  if (form && form instanceof HTMLFormElement) {
+                    form.submit();
+                    return true;
+                  }
+                  return false;
+                } catch (e) {
+                  console.error('Failed to submit form:', e);
+                  return false;
+                }
+              })();
+            `);
+            break;
+          
+          case ActionType.WAIT:
+            await new Promise(resolve => setTimeout(resolve, action.data.duration || 1000));
+            break;
+        }
+        
+        // Small delay between actions
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
-      
-      // Small delay between actions
-      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Failed to play back workflow:', error);
     }
   };
 
@@ -1418,6 +1573,11 @@ export default function App() {
                           <div className="text-gray-400 text-sm">
                             {workflow.actions.length} actions
                             {workflow.variables.length > 0 && ` • ${workflow.variables.length} variables`}
+                            {workflow.startUrl && (
+                              <div className="mt-1 truncate">
+                                <span className="text-gray-500">URL:</span> {workflow.startUrl}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1759,7 +1919,8 @@ export default function App() {
                   {showWorkflowDropdown && (
                     <div className="absolute top-full right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-10 w-40">
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setShowWorkflowDropdown(false);
                           setShowWorkflowModal(true);
                           setWorkflowModalMode('create');
@@ -1770,7 +1931,8 @@ export default function App() {
                         Create New
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setShowWorkflowDropdown(false);
                           setShowWorkflowModal(true);
                           setWorkflowModalMode('list');

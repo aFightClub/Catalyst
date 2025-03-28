@@ -3,7 +3,22 @@ import CodeEditor from '../CodeEditor/index';
 import { StoredPlugin } from '../../types/plugin';
 import { pluginManager } from '../../services/pluginManager';
 import { storeService } from '../../services/storeService';
-import { FiKey, FiPackage, FiActivity, FiClock } from 'react-icons/fi';
+import { FiKey, FiPackage, FiActivity, FiClock, FiPlay, FiEdit, FiTrash2, FiExternalLink } from 'react-icons/fi';
+
+// Define Workflow and ActionType interfaces since we can't import from App
+interface WorkflowAction {
+  type: string;
+  data: any;
+  timestamp: number;
+}
+
+interface Workflow {
+  id: string;
+  name: string;
+  actions: WorkflowAction[];
+  variables: string[];
+  startUrl?: string;
+}
 
 // Settings pages
 enum SettingsPage {
@@ -19,12 +34,24 @@ interface ApiKeys {
   openai?: string;
 }
 
+// Add type definition for window.electron
+declare global {
+  interface Window {
+    electron?: {
+      send: (channel: string, data: any) => void;
+    };
+  }
+}
+
 const Settings: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<SettingsPage>(SettingsPage.API_KEYS);
   const [plugins, setPlugins] = useState<StoredPlugin[]>([]);
   const [selectedPlugin, setSelectedPlugin] = useState<StoredPlugin | null>(null);
   const [editorLanguage, setEditorLanguage] = useState<'javascript' | 'css' | 'jsx'>('javascript');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [workflowVariables, setWorkflowVariables] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     setPlugins(pluginManager.getPlugins());
@@ -39,8 +66,55 @@ const Settings: React.FC = () => {
       }
     };
     
+    // Load workflows from store
+    const loadWorkflows = async () => {
+      try {
+        const storedWorkflows = await storeService.getWorkflows();
+        if (storedWorkflows && Array.isArray(storedWorkflows) && storedWorkflows.length > 0) {
+          setWorkflows(storedWorkflows);
+        }
+      } catch (error) {
+        console.error('Failed to load workflows:', error);
+      }
+    };
+    
     loadApiKeys();
+    loadWorkflows();
   }, []);
+
+  // Function to run a workflow in a new tab
+  const runWorkflowInNewTab = (workflow: Workflow) => {
+    // Check if the window object has the runWorkflowFunction (set by App.tsx)
+    if (typeof (window as any).runWorkflowInAppTab === 'function') {
+      // Pass both the workflowId and the current variables
+      (window as any).runWorkflowInAppTab(workflow.id, workflowVariables);
+    } else {
+      // Fallback to custom event dispatch with variables included
+      const event = new CustomEvent('run-workflow', {
+        detail: { 
+          workflowId: workflow.id,
+          variables: workflowVariables
+        }
+      });
+      window.dispatchEvent(event);
+    }
+  };
+
+  // Function to delete a workflow
+  const deleteWorkflow = async (id: string) => {
+    const updatedWorkflows = workflows.filter(workflow => workflow.id !== id);
+    setWorkflows(updatedWorkflows);
+    
+    try {
+      await storeService.saveWorkflows(updatedWorkflows);
+    } catch (error) {
+      console.error('Failed to save workflows after deletion:', error);
+    }
+    
+    if (selectedWorkflow?.id === id) {
+      setSelectedWorkflow(null);
+    }
+  };
 
   const saveApiKeys = (keys: ApiKeys) => {
     setApiKeys(keys);
@@ -234,17 +308,167 @@ const Settings: React.FC = () => {
   );
 
   const renderWorkflowsPage = () => (
-    <div className="flex-1 p-6 bg-gray-900 text-white">
-      <h3 className="text-xl font-bold mb-6">Workflows</h3>
-      <div className="bg-gray-800 rounded-lg p-6 flex flex-col items-center justify-center text-center">
-        <FiActivity className="w-12 h-12 mb-4 text-gray-500" />
-        <h4 className="text-lg font-medium mb-2">Create Custom Workflows</h4>
-        <p className="text-gray-400 mb-4">
-          Automate your browsing experience by creating custom workflows that chain together multiple actions.
-        </p>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-          Create Workflow
-        </button>
+    <div className="flex-1 flex">
+      <div className="w-64 border-r border-gray-700 p-4 bg-gray-800">
+        <h3 className="text-lg font-bold mb-4 text-white">Saved Workflows</h3>
+        <div className="space-y-2 max-h-[calc(100vh-160px)] overflow-y-auto">
+          {workflows.length > 0 ? (
+            workflows.map(workflow => (
+              <div
+                key={workflow.id}
+                className={`p-2 rounded cursor-pointer ${
+                  selectedWorkflow?.id === workflow.id ? 'bg-gray-600' : 'hover:bg-gray-700'
+                }`}
+                onClick={() => setSelectedWorkflow(workflow)}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-white font-medium">{workflow.name}</span>
+                </div>
+                {workflow.startUrl && (
+                  <div className="text-gray-400 text-xs mt-1 truncate">
+                    {workflow.startUrl}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="text-gray-400 text-center py-4">
+              No workflows found
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="flex-1 p-4 bg-gray-900">
+        {selectedWorkflow ? (
+          <div className="h-full flex flex-col">
+            <div className="mb-4">
+              <h3 className="text-white text-xl font-bold">{selectedWorkflow.name}</h3>
+              
+              {selectedWorkflow.startUrl && (
+                <div className="text-gray-400 mt-1">
+                  URL: <a href={selectedWorkflow.startUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{selectedWorkflow.startUrl}</a>
+                </div>
+              )}
+              
+              <div className="flex mt-4 space-x-2">
+                <button
+                  onClick={() => runWorkflowInNewTab(selectedWorkflow)}
+                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  <FiPlay className="mr-2" />
+                  Run in New Tab
+                </button>
+                <button
+                  onClick={() => deleteWorkflow(selectedWorkflow.id)}
+                  className="flex items-center px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  <FiTrash2 className="mr-2" />
+                  Delete
+                </button>
+              </div>
+            </div>
+            
+            <div className="bg-gray-800 rounded p-4 flex-1 overflow-y-auto">
+              <h4 className="text-white font-medium mb-2">Workflow Steps</h4>
+              <div className="space-y-2">
+                {selectedWorkflow.actions.map((action: WorkflowAction, index: number) => (
+                  <div key={index} className="bg-gray-700 p-2 rounded">
+                    <div className="flex justify-between">
+                      <span className="text-blue-400 font-medium">
+                        {action.type.toUpperCase()}
+                      </span>
+                      <span className="text-gray-400 text-sm">
+                        {new Date(action.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    
+                    {action.type === 'click' && (
+                      <div className="text-gray-300 text-sm">
+                        Clicked: {action.data.text || action.data.selector}
+                      </div>
+                    )}
+                    {action.type === 'type' && (
+                      <div className="text-gray-300 text-sm flex items-center">
+                        <span className="mr-2">Typed:</span>
+                        <span className="bg-gray-600 px-2 py-1 rounded text-white flex-1">
+                          {action.data.value}
+                        </span>
+                      </div>
+                    )}
+                    {action.type === 'navigate' && (
+                      <div className="text-gray-300 text-sm">
+                        Navigated to: <span className="text-blue-300">{action.data.url}</span>
+                      </div>
+                    )}
+                    {action.type === 'keypress' && (
+                      <div className="text-gray-300 text-sm">
+                        Key pressed: <span className="bg-gray-600 px-2 py-0.5 rounded">{action.data.key}</span>
+                      </div>
+                    )}
+                    {action.type === 'submit' && (
+                      <div className="text-gray-300 text-sm">
+                        Form submitted: {action.data.selector}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {selectedWorkflow.variables && selectedWorkflow.variables.length > 0 && (
+                <div className="mt-4 border-t border-gray-700 pt-4">
+                  <h3 className="text-white font-medium mb-3">
+                    Run Workflow: {selectedWorkflow.name}
+                  </h3>
+                  
+                  <div className="space-y-3 mb-4">
+                    {selectedWorkflow.variables.map((varName: string) => (
+                      <div key={varName} className="flex items-center">
+                        <span className="text-gray-400 mr-2">{varName}:</span>
+                        <input
+                          type="text"
+                          className="bg-gray-700 px-2 py-1 rounded text-white flex-1"
+                          defaultValue={
+                            selectedWorkflow.actions
+                              .find((a: WorkflowAction) => a.type === 'type' && a.data.variableName === varName)
+                              ?.data.value || ''
+                          }
+                          onChange={(e) => {
+                            setWorkflowVariables(prev => ({
+                              ...prev,
+                              [varName]: e.target.value
+                            }));
+                          }}
+                        />
+                      </div>
+                    ))}
+                    
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          runWorkflowInNewTab(selectedWorkflow);
+                          setSelectedWorkflow(null);
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                      >
+                        Run Workflow
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-gray-500">
+            <FiActivity className="w-12 h-12 mb-4" />
+            <h4 className="text-lg font-medium mb-2 text-white">Select a workflow</h4>
+            <p className="text-gray-400 text-center mb-4 max-w-md">
+              You can view details and run your saved workflows from here.
+              To create new workflows, use the workflow button in the browser toolbar.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

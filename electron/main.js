@@ -48,6 +48,47 @@ app.on("web-contents-created", (e, contents) => {
   }
 });
 
+// Handle IPC events from the renderer process
+ipcMain.on("run-workflow-in-current-window", (event, data) => {
+  // Just relay the message back to the sender so App.tsx can handle it
+  event.sender.send("run-workflow-in-current-window", data);
+});
+
+ipcMain.on("run-workflow-in-new-tab", async (event, data) => {
+  const { workflowId, startUrl } = data;
+  try {
+    // Create a new browser window/tab
+    const newWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        webviewTag: true,
+      },
+    });
+
+    const isDevelopment = !app.isPackaged;
+
+    // Load the app with a special query parameter to indicate which workflow to run
+    await newWindow.loadURL(
+      isDevelopment
+        ? `http://localhost:${
+            process.env.PORT || 3000
+          }?runWorkflow=${workflowId}`
+        : `file://${path.join(
+            __dirname,
+            "../dist/index.html"
+          )}?runWorkflow=${workflowId}`
+    );
+
+    // Focus the new window
+    newWindow.focus();
+  } catch (error) {
+    console.error("Failed to open workflow in new tab:", error);
+  }
+});
+
 app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => {

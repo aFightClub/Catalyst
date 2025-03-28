@@ -51,13 +51,17 @@ contextBridge.exposeInMainWorld("electron", {
   // Add other IPC methods as needed
   send: (channel, data) => {
     // whitelist channels
-    let validChannels = ["eraser-element-selected", "save-data"];
+    const validChannels = [
+      "eraser-element-selected",
+      "run-workflow-in-current-window",
+      "run-workflow-in-new-tab",
+    ];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     }
   },
   receive: (channel, func) => {
-    let validChannels = ["data-saved", "operation-error"];
+    const validChannels = ["run-workflow-in-current-window"];
     if (validChannels.includes(channel)) {
       // Deliberately strip event as it includes `sender`
       ipcRenderer.on(channel, (event, ...args) => func(...args));
