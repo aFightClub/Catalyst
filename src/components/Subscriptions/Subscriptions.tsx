@@ -119,9 +119,19 @@ const Subscriptions: React.FC = () => {
     });
     
     return {
-      monthlyCost: monthlyCost.toFixed(2),
-      yearlyCost: yearlyCost.toFixed(2)
+      monthlyCost: formatCurrency(monthlyCost),
+      yearlyCost: formatCurrency(yearlyCost)
     };
+  };
+
+  // Format currency values
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -297,7 +307,7 @@ const Subscriptions: React.FC = () => {
             <FiDollarSign className="mr-2 text-green-500" />
             <h2 className="text-xl font-semibold">Monthly Cost</h2>
           </div>
-          <p className="text-3xl font-bold">${monthlyCost}</p>
+          <p className="text-3xl font-bold">{monthlyCost}</p>
           <p className="text-sm text-gray-400 mt-2">across {subscriptions.length} subscriptions</p>
         </div>
         
@@ -306,7 +316,7 @@ const Subscriptions: React.FC = () => {
             <FiCalendar className="mr-2 text-blue-500" />
             <h2 className="text-xl font-semibold">Yearly Cost</h2>
           </div>
-          <p className="text-3xl font-bold">${yearlyCost}</p>
+          <p className="text-3xl font-bold">{yearlyCost}</p>
           <p className="text-sm text-gray-400 mt-2">annual total</p>
         </div>
       </div>
@@ -338,12 +348,15 @@ const Subscriptions: React.FC = () => {
       
       {/* Add new subscription button */}
       {!isAddingNew && (
-        <button
-          onClick={() => setIsAddingNew(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded flex items-center mb-6 hover:bg-blue-700"
-        >
-          <FiPlus className="mr-2" /> Add Subscription
-        </button>
+        <div className="mb-6">
+          <button
+            onClick={() => setIsAddingNew(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700"
+          >
+            <FiPlus className="mr-2" />
+            Add Subscription
+          </button>
+        </div>
       )}
       
       {/* Add new subscription form */}

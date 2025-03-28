@@ -870,7 +870,7 @@ const Settings: React.FC = () => {
         </div>
       </div>
       
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4 overflow-y-auto">
         {selectedWorkflow ? (
           <div className="h-full flex flex-col">
             <div className="mb-4">
@@ -991,11 +991,12 @@ const Settings: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
-            <FiActivity className="w-12 h-12 mb-4" />
+          <div className="h-full flex flex-col items-center justify-center text-center">
+            <FiActivity className="w-12 h-12 text-gray-500 mb-4" />
             <h4 className="text-lg font-medium mb-2 text-white">Select a workflow</h4>
             <p className="text-gray-400 text-center mb-4 max-w-md">
               You can view details and run your saved workflows from here.
+              <br />
               To create new workflows, use the workflow button in the browser toolbar.
             </p>
           </div>

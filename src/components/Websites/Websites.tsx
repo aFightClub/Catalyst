@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiEdit, FiGlobe, FiSave, FiX, FiLink, FiExternalLink } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiEdit, FiGlobe, FiSave, FiX, FiLink, FiLayers, FiArchive } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 
 interface Website {
@@ -9,6 +9,7 @@ interface Website {
   category: string;
   description?: string;
   createdAt: string;
+  status: 'active' | 'idea' | 'archived';
 }
 
 const DEFAULT_CATEGORIES = [
@@ -22,6 +23,12 @@ const DEFAULT_CATEGORIES = [
   'Other'
 ];
 
+const STATUS_LABELS = {
+  active: 'Active Websites',
+  idea: 'Side Ideas',
+  archived: 'Graveyard'
+};
+
 const Websites: React.FC = () => {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [newWebsite, setNewWebsite] = useState<Website>({
@@ -30,12 +37,14 @@ const Websites: React.FC = () => {
     url: '',
     category: 'Other',
     description: '',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    status: 'active'
   });
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingWebsiteId, setEditingWebsiteId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<'active' | 'idea' | 'archived' | null>('active');
 
   // Load websites from store
   useEffect(() => {
@@ -44,7 +53,14 @@ const Websites: React.FC = () => {
       try {
         const storedWebsites = await storeService.getWebsites();
         if (Array.isArray(storedWebsites)) {
-          setWebsites(storedWebsites);
+          // Add status field to existing websites if missing
+          const updatedWebsites = storedWebsites.map(website => {
+            if (!website.status) {
+              return { ...website, status: 'active' };
+            }
+            return website;
+          });
+          setWebsites(updatedWebsites);
         } else {
           console.warn("Websites data is not an array, using empty array", storedWebsites);
           setWebsites([]);
@@ -107,7 +123,8 @@ const Websites: React.FC = () => {
       ...newWebsite,
       url,
       id: Date.now().toString(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      status: 'active'
     };
     
     setWebsites([...websites, website]);
@@ -117,7 +134,8 @@ const Websites: React.FC = () => {
       url: '',
       category: 'Other',
       description: '',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      status: 'active'
     });
     setIsAddingNew(false);
   };
@@ -145,10 +163,33 @@ const Websites: React.FC = () => {
     return Array.from(allCategories);
   };
 
-  // Filter websites by category
-  const filteredWebsites = selectedCategory 
-    ? websites.filter(site => site.category === selectedCategory) 
-    : websites;
+  // Filter websites by category and status
+  const filteredWebsites = websites.filter(website => {
+    const matchesCategory = selectedCategory ? website.category === selectedCategory : true;
+    const matchesStatus = selectedStatus ? website.status === selectedStatus : true;
+    return matchesCategory && matchesStatus;
+  });
+  
+  // Get counts for each status
+  const getStatusCounts = () => {
+    const counts = {
+      active: websites.filter(site => site.status === 'active').length,
+      idea: websites.filter(site => site.status === 'idea').length,
+      archived: websites.filter(site => site.status === 'archived').length
+    };
+    return counts;
+  };
+  
+  // Change website status
+  const changeWebsiteStatus = (websiteId: string, newStatus: 'active' | 'idea' | 'archived') => {
+    setWebsites(sites => 
+      sites.map(site => 
+        site.id === websiteId 
+          ? { ...site, status: newStatus } 
+          : site
+      )
+    );
+  };
 
   // Open website in the default system browser or a new browser tab as fallback
   const openWebsite = (url: string) => {
@@ -187,17 +228,85 @@ const Websites: React.FC = () => {
       <h1 className="text-2xl font-bold mb-6">My Websites</h1>
       
       {/* Stats overview */}
-      <div className="bg-gray-800 p-6 rounded-lg mb-8">
-        <div className="flex items-center mb-2">
-          <FiGlobe className="mr-2 text-blue-500" />
-          <h2 className="text-xl font-semibold">Website Overview</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div 
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'active' ? 'ring-2 ring-blue-500' : ''}`}
+          onClick={() => setSelectedStatus(selectedStatus === 'active' ? null : 'active')}
+        >
+          <div className="flex items-center mb-2">
+            <FiGlobe className="mr-2 text-blue-500" />
+            <h2 className="text-xl font-semibold">Active Websites</h2>
+          </div>
+          <p className="text-3xl font-bold">{getStatusCounts().active}</p>
+          <p className="text-sm text-gray-400 mt-2">websites in use</p>
         </div>
-        <p className="text-3xl font-bold">{websites.length}</p>
-        <p className="text-sm text-gray-400 mt-2">websites registered</p>
+        
+        <div 
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'idea' ? 'ring-2 ring-blue-500' : ''}`}
+          onClick={() => setSelectedStatus(selectedStatus === 'idea' ? null : 'idea')}
+        >
+          <div className="flex items-center mb-2">
+            <FiLayers className="mr-2 text-yellow-500" />
+            <h2 className="text-xl font-semibold">Side Ideas</h2>
+          </div>
+          <p className="text-3xl font-bold">{getStatusCounts().idea}</p>
+          <p className="text-sm text-gray-400 mt-2">future projects</p>
+        </div>
+        
+        <div 
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'archived' ? 'ring-2 ring-blue-500' : ''}`}
+          onClick={() => setSelectedStatus(selectedStatus === 'archived' ? null : 'archived')}
+        >
+          <div className="flex items-center mb-2">
+            <FiArchive className="mr-2 text-gray-500" />
+            <h2 className="text-xl font-semibold">Graveyard</h2>
+          </div>
+          <p className="text-3xl font-bold">{getStatusCounts().archived}</p>
+          <p className="text-sm text-gray-400 mt-2">archived websites</p>
+        </div>
+      </div>
+      
+      {/* Status filter pills */}
+      <div className="mb-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedStatus(null)}
+            className={`px-3 py-1 rounded-full text-sm ${
+              selectedStatus === null ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            All Statuses
+          </button>
+          <button
+            onClick={() => setSelectedStatus('active')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              selectedStatus === 'active' ? 'bg-blue-600' : 'bg-blue-800 bg-opacity-50 hover:bg-blue-700'
+            }`}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setSelectedStatus('idea')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              selectedStatus === 'idea' ? 'bg-yellow-600' : 'bg-yellow-800 bg-opacity-50 hover:bg-yellow-700'
+            }`}
+          >
+            Side Ideas
+          </button>
+          <button
+            onClick={() => setSelectedStatus('archived')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              selectedStatus === 'archived' ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            Graveyard
+          </button>
+        </div>
       </div>
       
       {/* Category filter */}
       <div className="mb-6">
+        <h3 className="text-sm text-gray-400 mb-2">Filter by Category</h3>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setSelectedCategory(null)}
@@ -223,13 +332,15 @@ const Websites: React.FC = () => {
       
       {/* Add new website button */}
       {!isAddingNew && (
-        <button
-          onClick={() => setIsAddingNew(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded flex items-center mb-6 hover:bg-blue-700"
-        >
-          <FiPlus className="mr-2" />
-          Add Website
-        </button>
+        <div className="mb-6">
+          <button
+            onClick={() => setIsAddingNew(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700"
+          >
+            <FiPlus className="mr-2" />
+            Add Website
+          </button>
+        </div>
       )}
       
       {/* Add new website form */}
@@ -273,6 +384,19 @@ const Websites: React.FC = () => {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Status</label>
+              <select
+                name="status"
+                value={newWebsite.status}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="active">Active Website</option>
+                <option value="idea">Side Idea</option>
+                <option value="archived">Archived (Graveyard)</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-400 mb-1">Description (optional)</label>
               <input
                 type="text"
@@ -306,12 +430,23 @@ const Websites: React.FC = () => {
         </div>
       )}
       
+      {/* Section title based on selected status */}
+      {selectedStatus && (
+        <h2 className="text-xl font-semibold mb-4">{STATUS_LABELS[selectedStatus]}</h2>
+      )}
+      
       {/* Websites list */}
       {filteredWebsites.length === 0 ? (
         <div className="bg-gray-800 p-8 rounded-lg text-center">
           <FiGlobe className="w-12 h-12 mx-auto mb-4 text-gray-500" />
-          <h3 className="text-xl font-semibold mb-2">No websites yet</h3>
-          <p className="text-gray-400 mb-4">Add your first website to get started</p>
+          <h3 className="text-xl font-semibold mb-2">No websites found</h3>
+          <p className="text-gray-400 mb-4">
+            {selectedStatus 
+              ? `No ${STATUS_LABELS[selectedStatus].toLowerCase()} found${selectedCategory ? ` in category "${selectedCategory}"` : ''}.` 
+              : selectedCategory 
+              ? `No websites found in category "${selectedCategory}".` 
+              : 'Add your first website to get started'}
+          </p>
           {!isAddingNew && (
             <button
               onClick={() => setIsAddingNew(true)}
@@ -363,6 +498,19 @@ const Websites: React.FC = () => {
                     </select>
                   </div>
                   <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Status</label>
+                    <select
+                      name="status"
+                      value={website.status}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="active">Active Website</option>
+                      <option value="idea">Side Idea</option>
+                      <option value="archived">Archived (Graveyard)</option>
+                    </select>
+                  </div>
+                  <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
                     <input
                       type="text"
@@ -392,7 +540,13 @@ const Websites: React.FC = () => {
               ) : (
                 // View mode
                 <>
-                  <div className="p-4">
+                  <div className={`p-4 ${
+                    website.status === 'idea' 
+                      ? 'border-l-4 border-yellow-500' 
+                      : website.status === 'archived' 
+                      ? 'border-l-4 border-gray-500' 
+                      : ''
+                  }`}>
                     <div className="flex justify-between items-start">
                       <h3 className="text-lg font-semibold mb-1">{website.name}</h3>
                       <div className="flex space-x-1">
@@ -435,10 +589,72 @@ const Websites: React.FC = () => {
                       <span className="inline-block px-2 py-1 text-xs rounded-full bg-gray-700">
                         {website.category}
                       </span>
+                      
+                      {/* Status badge */}
+                      {website.status !== 'active' && (
+                        <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+                          website.status === 'idea' ? 'bg-yellow-800 text-yellow-200' : 'bg-gray-700 text-gray-300'
+                        }`}>
+                          {website.status === 'idea' ? 'Side Idea' : 'Archived'}
+                        </span>
+                      )}
+                      
                       <span className="text-xs text-gray-400">
                         Added {formatDate(website.createdAt)}
                       </span>
                     </div>
+                    
+                    {/* Quick status change buttons */}
+                    {website.status !== 'idea' && website.status !== 'archived' && (
+                      <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
+                        <button
+                          onClick={() => changeWebsiteStatus(website.id, 'idea')}
+                          className="text-xs px-2 py-1 bg-yellow-800 text-yellow-200 rounded hover:bg-yellow-700"
+                        >
+                          Move to Ideas
+                        </button>
+                        <button
+                          onClick={() => changeWebsiteStatus(website.id, 'archived')}
+                          className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                        >
+                          Archive
+                        </button>
+                      </div>
+                    )}
+                    
+                    {website.status === 'idea' && (
+                      <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
+                        <button
+                          onClick={() => changeWebsiteStatus(website.id, 'active')}
+                          className="text-xs px-2 py-1 bg-blue-700 rounded hover:bg-blue-600"
+                        >
+                          Activate
+                        </button>
+                        <button
+                          onClick={() => changeWebsiteStatus(website.id, 'archived')}
+                          className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                        >
+                          Archive
+                        </button>
+                      </div>
+                    )}
+                    
+                    {website.status === 'archived' && (
+                      <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
+                        <button
+                          onClick={() => changeWebsiteStatus(website.id, 'active')}
+                          className="text-xs px-2 py-1 bg-blue-700 rounded hover:bg-blue-600"
+                        >
+                          Restore
+                        </button>
+                        <button
+                          onClick={() => changeWebsiteStatus(website.id, 'idea')}
+                          className="text-xs px-2 py-1 bg-yellow-800 text-yellow-200 rounded hover:bg-yellow-700"
+                        >
+                          Move to Ideas
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
