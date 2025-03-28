@@ -67,9 +67,12 @@ interface ErasedElement {
 
 export default function App() {
   // Initialize store and migrate data from localStorage on first render
+  const isInitialized = useRef(false);
+  
   useEffect(() => {
     const initializeStore = async () => {
       await storeService.migrateFromLocalStorage();
+      isInitialized.current = true;
     };
     initializeStore();
     
@@ -215,20 +218,29 @@ export default function App() {
     loadWorkspaces();
   }, []);
 
+  // Save workspaces to storage
+  const saveWorkspaces = useCallback(async (workspacesToSave = workspaces) => {
+    try {
+      console.log(`Saving ${workspacesToSave.length} workspaces...`);
+      await storeService.saveWorkspaces(workspacesToSave);
+      
+      // Save active workspace and tab to localStorage for quicker retrieval
+      localStorage.setItem('lastActiveWorkspace', activeWorkspaceId);
+      localStorage.setItem('lastActiveTab', activeTabId);
+      
+      console.log(`Workspaces saved successfully. Active workspace: ${activeWorkspaceId}`);
+    } catch (error) {
+      console.error('Failed to save workspaces:', error);
+    }
+  }, [workspaces, activeWorkspaceId, activeTabId]);
+
   // Save workspaces to store whenever they change
   useEffect(() => {
-    const saveWorkspaces = async () => {
-      try {
-        await storeService.saveWorkspaces(workspaces);
-        // Save active workspace and tab to localStorage for quicker retrieval
-        localStorage.setItem('lastActiveWorkspace', activeWorkspaceId);
-        localStorage.setItem('lastActiveTab', activeTabId);
-      } catch (error) {
-        console.error('Failed to save workspaces:', error);
-      }
-    };
-    saveWorkspaces();
-  }, [workspaces, activeWorkspaceId, activeTabId]);
+    // Don't save if we're just initializing
+    if (isInitialized.current) {
+      saveWorkspaces();
+    }
+  }, [workspaces, saveWorkspaces]);
 
   // Save erased elements to store whenever they change
   useEffect(() => {
@@ -597,13 +609,18 @@ export default function App() {
       isReady: false
     };
     
-    setWorkspaces(prevWorkspaces => 
-      prevWorkspaces.map(workspace => 
+    setWorkspaces(prevWorkspaces => {
+      const updatedWorkspaces = prevWorkspaces.map(workspace => 
         workspace.id === activeWorkspaceId
           ? { ...workspace, tabs: [...workspace.tabs, newTab] }
           : workspace
-      )
-    );
+      );
+      
+      // Schedule saving after state update completes
+      setTimeout(() => saveWorkspaces(updatedWorkspaces), 0);
+      
+      return updatedWorkspaces;
+    });
     
     setActiveTabId(newTab.id);
     setShowDashboard(false);
@@ -661,50 +678,15 @@ export default function App() {
     if (!webview) return;
     
     try {
-      // Set loading state
-      setLoadingTabs(prev => new Set([...prev, tabId]));
-      
       console.log(`Applying plugins to tab ${tabId}`);
-      
-      // Apply global erased elements
-      for (const element of erasedElements) {
-        await webview.executeJavaScript(`
-          (function() {
-            try {
-              const elementsToHide = document.querySelectorAll('${element.selector}');
-              elementsToHide.forEach(el => {
-                el.style.display = 'none';
-              });
-            } catch (e) {
-              console.error('Failed to hide element:', e);
-            }
-          })();
-        `);
-      }
       
       // Apply plugins from plugin manager
       const plugins = pluginManager.getPlugins().filter(p => p.enabled);
       
       // Apply all plugins at once instead of individually
       await applyPluginsToWebview(webview);
-      
-      // Clear loading state after a short delay to ensure everything is rendered
-      setTimeout(() => {
-        setLoadingTabs(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(tabId);
-          return newSet;
-        });
-      }, 500);
-      
     } catch (error) {
       console.error(`Error applying plugins to tab ${tabId}:`, error);
-      // Clear loading state on error
-      setLoadingTabs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(tabId);
-        return newSet;
-      });
     }
   };
 
@@ -726,19 +708,20 @@ export default function App() {
       // Set loading state when webview is attached
       setLoadingTabs(prev => new Set([...prev, tabId]));
       
+      // Track if the page is loading to avoid duplicate processing
+      let isLoading = true;
+      
       // Set up event listeners for this webview
       webview.addEventListener('dom-ready', async () => {
+        // This event fires before page content is fully loaded
         console.log(`Webview DOM ready for tab ${tabId}`);
-        
-        // Apply plugins when DOM is ready
-        try {
-          await applyPluginsToTab(tabId);
-        } catch (error) {
-          console.error(`Error setting up webview for tab ${tabId}:`, error);
-        }
+        // We'll let did-stop-loading handle the erased elements and plugins
       });
       
       webview.addEventListener('did-start-loading', () => {
+        // Set loading flag
+        isLoading = true;
+        
         // Set tab to loading state
         setLoadingTabs(prev => new Set([...prev, tabId]));
         
@@ -830,9 +813,19 @@ export default function App() {
             setUrlInput(url);
           }
           
-          // Apply plugins again after the page is fully loaded
-          await applyPluginsToTab(tabId);
-          
+          // Only process once per page load
+          if (isLoading) {
+            isLoading = false;
+            
+            // Apply erased elements CSS first, then plugins
+            try {
+              console.log(`Tab ${tabId} loaded URL: ${url}`);
+              await applyErasedElementsCSS(webview, url);
+              await applyPluginsToTab(tabId);
+            } catch (error) {
+              console.error(`Error applying addons to tab ${tabId}:`, error);
+            }
+          }
         } catch (error) {
           console.error(`Error updating tab ${tabId} after loading:`, error);
           
@@ -1953,18 +1946,47 @@ export default function App() {
   const addWorkspace = () => {
     if (!newWorkspaceName.trim()) return;
     
+    // Generate unique ID for workspace and first tab
+    const workspaceId = Date.now().toString();
+    const tabId = `${workspaceId}-tab1`;
+    
+    console.log(`Creating new workspace: ${newWorkspaceName.trim()} with ID ${workspaceId} and tab ${tabId}`);
+    
     const newWorkspace: Workspace = {
-      id: Date.now().toString(),
+      id: workspaceId,
       name: newWorkspaceName.trim(),
-      tabs: [{ id: Date.now() + '1', title: 'New Tab', url: 'https://google.com', isReady: false }],
+      tabs: [{ id: tabId, title: 'New Tab', url: 'https://google.com', isReady: false }],
       createdAt: new Date().toISOString()
     };
     
-    setWorkspaces([...workspaces, newWorkspace]);
-    setActiveWorkspaceId(newWorkspace.id);
-    setActiveTabId(newWorkspace.tabs[0].id);
+    // Update workspaces state
+    setWorkspaces(prevWorkspaces => {
+      const updatedWorkspaces = [...prevWorkspaces, newWorkspace];
+      
+      // Schedule saving after state update completes
+      setTimeout(() => saveWorkspaces(updatedWorkspaces), 0);
+      
+      return updatedWorkspaces;
+    });
+    
+    // Set active workspace and tab
+    setActiveWorkspaceId(workspaceId);
+    setActiveTabId(tabId);
+    
+    // Clear input and close new workspace form
     setNewWorkspaceName('');
     setIsAddingWorkspace(false);
+    
+    // Hide all other panels
+    setShowDashboard(false);
+    setShowSettings(false);
+    setShowAIChat(false);
+    setShowWriter(false);
+    setShowTasks(false);
+    setShowImages(false);
+    setShowSubscriptions(false);
+    setShowWebsites(false);
+    setShowAutomations(false);
   };
 
   // Delete a workspace
