@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 
 function createWindow() {
@@ -6,8 +6,9 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: path.join(__dirname, "preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true,
       webviewTag: true,
       webSecurity: false, // This disables same-origin policy for the browser window
     },
@@ -23,6 +24,12 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 }
+
+// Set handlers for IPC messages
+ipcMain.on("eraser-element-selected", (event, selector) => {
+  console.log("Eraser element selected:", selector);
+  // You can save this to Electron store if needed
+});
 
 // Register webview protocol handlers
 app.on("web-contents-created", (e, contents) => {

@@ -2,6 +2,7 @@ import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from '
 import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome } from 'react-icons/fi'
 import { applyPluginsToWebview, Plugin } from './plugins'
 import { pluginManager } from './services/pluginManager'
+import { storeService } from './services/storeService'
 import Settings from './components/Settings/Settings'
 import AIChat from './components/AIChat/AIChat'
 import Writer from './components/Writer/Writer'
@@ -52,6 +53,14 @@ interface ErasedElement {
 }
 
 export default function App() {
+  // Initialize store and migrate data from localStorage on first render
+  useEffect(() => {
+    const initializeStore = async () => {
+      await storeService.migrateFromLocalStorage();
+    };
+    initializeStore();
+  }, []);
+
   const [tabs, setTabs] = useState<Tab[]>([
     { id: '1', title: 'Google', url: 'https://google.com', isReady: false }
   ])
@@ -84,38 +93,58 @@ export default function App() {
   const [showImages, setShowImages] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true) // Dashboard shown by default
   
-  // Load erased elements from localStorage
+  // Load erased elements from store
   useEffect(() => {
-    const storedElements = localStorage.getItem('erased_elements');
-    if (storedElements) {
+    const loadErasedElements = async () => {
       try {
-        setErasedElements(JSON.parse(storedElements));
+        const storedElements = await storeService.getErasedElements();
+        if (storedElements && Array.isArray(storedElements) && storedElements.length > 0) {
+          setErasedElements(storedElements);
+        }
       } catch (error) {
-        console.error('Failed to parse erased elements:', error);
+        console.error('Failed to load erased elements:', error);
       }
-    }
+    };
+    loadErasedElements();
   }, []);
 
-  // Save erased elements to localStorage whenever they change
+  // Save erased elements to store whenever they change
   useEffect(() => {
-    localStorage.setItem('erased_elements', JSON.stringify(erasedElements));
+    const saveElements = async () => {
+      try {
+        await storeService.saveErasedElements(erasedElements);
+      } catch (error) {
+        console.error('Failed to save erased elements:', error);
+      }
+    };
+    saveElements();
   }, [erasedElements]);
 
-  // Load workflows from localStorage
+  // Load workflows from store
   useEffect(() => {
-    const storedWorkflows = localStorage.getItem('workflows');
-    if (storedWorkflows) {
+    const loadWorkflows = async () => {
       try {
-        setWorkflows(JSON.parse(storedWorkflows));
+        const storedWorkflows = await storeService.getWorkflows();
+        if (storedWorkflows && Array.isArray(storedWorkflows) && storedWorkflows.length > 0) {
+          setWorkflows(storedWorkflows);
+        }
       } catch (error) {
-        console.error('Failed to parse stored workflows:', error);
+        console.error('Failed to load workflows:', error);
       }
-    }
+    };
+    loadWorkflows();
   }, []);
 
-  // Save workflows to localStorage whenever they change
+  // Save workflows to store whenever they change
   useEffect(() => {
-    localStorage.setItem('workflows', JSON.stringify(workflows));
+    const saveWorkflows = async () => {
+      try {
+        await storeService.saveWorkflows(workflows);
+      } catch (error) {
+        console.error('Failed to save workflows:', error);
+      }
+    };
+    saveWorkflows();
   }, [workflows]);
 
   // Toggle eraser mode and inject eraser script when activated

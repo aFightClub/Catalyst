@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiTrash2, FiFolder, FiCheck, FiX, FiEdit, FiMoreVertical } from 'react-icons/fi';
+import { storeService } from '../../services/storeService';
 
 interface Task {
   id: string;
@@ -37,7 +38,7 @@ const DEFAULT_PROJECTS: Project[] = [
   }
 ];
 
-// Storage keys for localStorage
+// Storage keys for localStorage - keeping for reference
 const STORAGE_KEYS = {
   TASKS: 'tasks_list',
   PROJECTS: 'tasks_projects'
@@ -67,70 +68,77 @@ const Tasks: React.FC = () => {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [showProjectActions, setShowProjectActions] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load tasks and projects from localStorage on component mount
+  // Load tasks and projects on component mount
   useEffect(() => {
-    console.log("Loading tasks and projects from localStorage");
-    
-    // Load tasks
-    const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
-    if (savedTasks) {
+    const loadData = async () => {
+      setIsLoading(true);
       try {
-        const parsedTasks = JSON.parse(savedTasks);
-        console.log("Found saved tasks:", parsedTasks.length);
-        setTasks(parsedTasks);
-      } catch (e) {
-        console.error('Failed to parse saved tasks:', e);
-        // Initialize with empty array if parsing fails
-        setTasks([]);
-        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
-      }
-    } else {
-      // Initialize with empty array if no tasks found
-      console.log("No saved tasks found, initializing empty array");
-      setTasks([]);
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
-    }
-
-    // Load projects
-    const savedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    if (savedProjects) {
-      try {
-        const parsedProjects = JSON.parse(savedProjects);
-        console.log("Found saved projects:", parsedProjects.length);
-        if (Array.isArray(parsedProjects) && parsedProjects.length > 0) {
-          setProjects(parsedProjects);
+        console.log("Loading tasks and projects from store");
+        
+        // Load tasks
+        const storedTasks = await storeService.getTasks();
+        if (Array.isArray(storedTasks)) {
+          setTasks(storedTasks);
         } else {
-          // Initialize with default projects if empty array
-          console.log("Saved projects array is empty, using defaults");
-          setProjects(DEFAULT_PROJECTS);
-          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
+          console.warn("Tasks data is not an array, using empty array", storedTasks);
+          setTasks([]);
         }
-      } catch (e) {
-        console.error('Failed to parse saved projects:', e);
-        // Initialize with defaults if parsing fails
+        
+        // Load projects
+        const storedProjects = await storeService.getProjects();
+        if (Array.isArray(storedProjects) && storedProjects.length > 0) {
+          setProjects(storedProjects);
+        } else {
+          console.log("No projects found, using defaults");
+          setProjects(DEFAULT_PROJECTS);
+          await storeService.saveProjects(DEFAULT_PROJECTS);
+        }
+      } catch (error) {
+        console.error("Failed to load data:", error);
+        // Use defaults on error
+        setTasks([]);
         setProjects(DEFAULT_PROJECTS);
-        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      // Initialize with defaults if no projects found
-      console.log("No saved projects found, using defaults");
-      setProjects(DEFAULT_PROJECTS);
-      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
-    }
+    };
+    
+    loadData();
   }, []);
 
-  // Save tasks to localStorage whenever they change
+  // Save tasks whenever they change
   useEffect(() => {
-    console.log("Saving tasks to localStorage:", tasks.length);
-    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
-  }, [tasks]);
+    const saveTasks = async () => {
+      if (isLoading) return; // Don't save during initial load
+      
+      try {
+        console.log("Saving tasks to store:", tasks.length);
+        await storeService.saveTasks(tasks);
+      } catch (error) {
+        console.error("Failed to save tasks:", error);
+      }
+    };
+    
+    saveTasks();
+  }, [tasks, isLoading]);
 
-  // Save projects to localStorage whenever they change
+  // Save projects whenever they change
   useEffect(() => {
-    console.log("Saving projects to localStorage:", projects.length);
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-  }, [projects]);
+    const saveProjects = async () => {
+      if (isLoading) return; // Don't save during initial load
+      
+      try {
+        console.log("Saving projects to store:", projects.length);
+        await storeService.saveProjects(projects);
+      } catch (error) {
+        console.error("Failed to save projects:", error);
+      }
+    };
+    
+    saveProjects();
+  }, [projects, isLoading]);
 
   const addTask = () => {
     if (!newTaskTitle.trim()) return;
@@ -221,20 +229,35 @@ const Tasks: React.FC = () => {
   };
 
   // Get tasks for the active project, sorted by completion status and creation date
-  const filteredTasks = tasks
-    .filter(task => task.projectId === activeProjectId)
-    .sort((a, b) => {
-      // Sort by completion status (incomplete tasks first)
-      if (a.completed !== b.completed) {
-        return a.completed ? 1 : -1;
-      }
-      // Then sort by creation date (newest first for incomplete, oldest first for complete)
-      if (a.completed) {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      } else {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
+  const filteredTasks = tasks && Array.isArray(tasks) 
+    ? tasks
+        .filter(task => task.projectId === activeProjectId)
+        .sort((a, b) => {
+          // Sort by completion status (incomplete tasks first)
+          if (a.completed !== b.completed) {
+            return a.completed ? 1 : -1;
+          }
+          // Then sort by creation date (newest first for incomplete, oldest first for complete)
+          if (a.completed) {
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          } else {
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          }
+        })
+    : [];
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full bg-gray-900">
+        <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-white">Tasks</h2>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-gray-400">Loading tasks...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
@@ -360,7 +383,7 @@ const Tasks: React.FC = () => {
                 </div>
                 
                 <div className="text-gray-400 text-xs mt-1">
-                  {tasks.filter(task => task.projectId === project.id).length} tasks
+                  {Array.isArray(tasks) ? tasks.filter(task => task.projectId === project.id).length : 0} tasks
                 </div>
               </div>
             ))}

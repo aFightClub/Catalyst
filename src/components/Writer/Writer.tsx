@@ -8,6 +8,7 @@ import Quote from '@editorjs/quote';
 import Marker from '@editorjs/marker';
 import Checklist from '@editorjs/checklist';
 import Table from '@editorjs/table';
+import { storeService } from '../../services/storeService';
 
 interface Document {
   id: string;
@@ -24,19 +25,33 @@ const Writer: React.FC = () => {
   const [newDocName, setNewDocName] = useState('');
   const [isCreatingDoc, setIsCreatingDoc] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const editorInstance = useRef<any>(null);
 
-  // Load documents from localStorage on component mount
+  // Load documents from store on component mount
   useEffect(() => {
-    const savedDocs = localStorage.getItem('writer_docs');
-    if (savedDocs) {
+    const loadDocuments = async () => {
+      setIsLoading(true);
       try {
-        const parsedDocs = JSON.parse(savedDocs);
-        setDocuments(parsedDocs);
-      } catch (e) {
-        console.error('Failed to parse saved documents:', e);
+        const storedDocs = await storeService.getDocuments();
+        if (Array.isArray(storedDocs)) {
+          setDocuments(storedDocs);
+          if (storedDocs.length > 0 && !currentDocId) {
+            setCurrentDocId(storedDocs[0].id);
+          }
+        } else {
+          console.warn("Documents data is not an array, using empty array", storedDocs);
+          setDocuments([]);
+        }
+      } catch (error) {
+        console.error("Failed to load documents:", error);
+        setDocuments([]);
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+    
+    loadDocuments();
   }, []);
 
   // Add dark mode styles for Editor.js when component mounts
@@ -231,7 +246,7 @@ const Writer: React.FC = () => {
 
   // Initialize editor when current document changes
   useEffect(() => {
-    if (!currentDocId) return;
+    if (!currentDocId || isLoading) return;
 
     // Destroy existing editor instance if it exists
     if (editorInstance.current) {
@@ -244,7 +259,7 @@ const Writer: React.FC = () => {
 
     // Initialize editor with the current document's content
     initializeEditor(currentDoc.content);
-  }, [currentDocId, documents]);
+  }, [currentDocId, documents, isLoading]);
 
   const initializeEditor = (initialData: any = {}) => {
     if (editorInstance.current) return;
@@ -296,9 +311,13 @@ const Writer: React.FC = () => {
     });
   };
 
-  const saveDocuments = (updatedDocs: Document[]) => {
-    localStorage.setItem('writer_docs', JSON.stringify(updatedDocs));
-    setDocuments(updatedDocs);
+  const saveDocuments = async (updatedDocs: Document[]) => {
+    try {
+      await storeService.saveDocuments(updatedDocs);
+      setDocuments(updatedDocs);
+    } catch (error) {
+      console.error("Failed to save documents:", error);
+    }
   };
 
   const createNewDocument = () => {
@@ -351,7 +370,7 @@ const Writer: React.FC = () => {
           : doc
       );
       
-      saveDocuments(updatedDocs);
+      await saveDocuments(updatedDocs);
     } catch (error) {
       console.error('Failed to save document:', error);
     } finally {
@@ -379,7 +398,20 @@ const Writer: React.FC = () => {
     }
   };
 
-  const currentDocument = currentDocId ? documents.find(doc => doc.id === currentDocId) : null;
+  const currentDocument = currentDocId && documents ? documents.find(doc => doc.id === currentDocId) : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full bg-gray-900">
+        <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-white">Writer</h2>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-gray-400">Loading documents...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
@@ -447,7 +479,7 @@ const Writer: React.FC = () => {
             )}
             
             <div className="flex-1 overflow-y-auto">
-              {documents.length === 0 ? (
+              {!documents || documents.length === 0 ? (
                 <div className="p-4 text-center text-gray-400">
                   <FiFolder className="w-8 h-8 mx-auto mb-2" />
                   <p>No documents yet</p>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CodeEditor from '../CodeEditor/index';
 import { StoredPlugin } from '../../types/plugin';
 import { pluginManager } from '../../services/pluginManager';
+import { storeService } from '../../services/storeService';
 import { FiKey, FiPackage, FiActivity, FiClock } from 'react-icons/fi';
 
 // Settings pages
@@ -12,7 +13,9 @@ enum SettingsPage {
   AUTOMATIONS = 'automations',
 }
 
+// Define ApiKeys interface with index signature
 interface ApiKeys {
+  [key: string]: string | undefined;
   openai?: string;
 }
 
@@ -26,20 +29,31 @@ const Settings: React.FC = () => {
   useEffect(() => {
     setPlugins(pluginManager.getPlugins());
     
-    // Load API keys
-    const storedKeys = localStorage.getItem('api_keys');
-    if (storedKeys) {
+    // Load API keys from store using async method
+    const loadApiKeys = async () => {
       try {
-        setApiKeys(JSON.parse(storedKeys));
+        const keys = await storeService.getApiKeys();
+        setApiKeys(keys as ApiKeys);
       } catch (error) {
-        console.error('Failed to parse API keys:', error);
+        console.error("Failed to load API keys:", error);
       }
-    }
+    };
+    
+    loadApiKeys();
   }, []);
 
   const saveApiKeys = (keys: ApiKeys) => {
     setApiKeys(keys);
-    localStorage.setItem('api_keys', JSON.stringify(keys));
+    // Save API keys using async method
+    const saveKeys = async () => {
+      try {
+        await storeService.saveApiKeys(keys as Record<string, string>);
+      } catch (error) {
+        console.error("Failed to save API keys:", error);
+      }
+    };
+    
+    saveKeys();
   };
 
   const createNewPlugin = () => {
