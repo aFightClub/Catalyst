@@ -158,6 +158,9 @@ export default function App() {
   const [urlInput, setUrlInput] = useState('');
   const [isAddingWorkspace, setIsAddingWorkspace] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
   
   // Helper function to get current workspace
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
@@ -2046,6 +2049,72 @@ export default function App() {
     }
   };
 
+  // Start editing a workspace name
+  const startEditingWorkspace = (id: string) => {
+    const workspace = workspaces.find(w => w.id === id);
+    if (workspace) {
+      setEditingWorkspaceId(id);
+      setEditName(workspace.name);
+    }
+  };
+
+  // Save workspace name edit
+  const saveWorkspaceEdit = () => {
+    if (!editingWorkspaceId || !editName.trim()) return;
+    
+    setWorkspaces(prevWorkspaces => 
+      prevWorkspaces.map(workspace => 
+        workspace.id === editingWorkspaceId
+          ? { ...workspace, name: editName.trim() }
+          : workspace
+      )
+    );
+    
+    setEditingWorkspaceId(null);
+    setEditName('');
+  };
+
+  // Start editing a tab name
+  const startEditingTab = (workspaceId: string, tabId: string) => {
+    const workspace = workspaces.find(w => w.id === workspaceId);
+    const tab = workspace?.tabs.find(t => t.id === tabId);
+    
+    if (tab) {
+      setEditingTabId(tabId);
+      setEditName(tab.title);
+    }
+  };
+
+  // Save tab name edit
+  const saveTabEdit = (workspaceId: string) => {
+    if (!editingTabId || !editName.trim()) return;
+    
+    setWorkspaces(prevWorkspaces => 
+      prevWorkspaces.map(workspace => 
+        workspace.id === workspaceId
+          ? { 
+              ...workspace, 
+              tabs: workspace.tabs.map(tab => 
+                tab.id === editingTabId
+                  ? { ...tab, title: editName.trim() }
+                  : tab
+              ) 
+            }
+          : workspace
+      )
+    );
+    
+    setEditingTabId(null);
+    setEditName('');
+  };
+
+  // Cancel any edit
+  const cancelEdit = () => {
+    setEditingWorkspaceId(null);
+    setEditingTabId(null);
+    setEditName('');
+  };
+
   // Close a tab
   const closeTab = (workspaceId: string, tabId: string) => {
     // Don't close the last tab
@@ -2148,7 +2217,7 @@ export default function App() {
               className={`mb-2 ${activeWorkspaceId === workspace.id ? 'bg-gray-700' : ''}`}
             >
               <div 
-                className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-700"
+                className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-700 group"
                 onClick={() => {
                   setActiveWorkspaceId(workspace.id);
                   if (workspace.tabs.length > 0) {
@@ -2164,22 +2233,76 @@ export default function App() {
                   setShowWebsites(false);
                 }}
               >
-                <div className="flex items-center">
-                  <FiPackage className="w-4 h-4 mr-2" />
-                  <span className="font-medium">{workspace.name}</span>
-                </div>
-                
-                {workspaces.length > 1 && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteWorkspace(workspace.id);
-                    }}
-                    className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete Workspace"
-                  >
-                    &times;
-                  </button>
+                {editingWorkspaceId === workspace.id ? (
+                  <div className="flex items-center w-full" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="flex-1 px-2 py-1 bg-gray-600 text-white border border-gray-500 rounded"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveWorkspaceEdit();
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                    />
+                    <div className="flex ml-2">
+                      <button 
+                        onClick={saveWorkspaceEdit}
+                        className="p-1 text-green-400 hover:text-green-300 rounded"
+                        title="Save"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={cancelEdit}
+                        className="p-1 text-red-400 hover:text-red-300 rounded"
+                        title="Cancel"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center">
+                      <FiPackage className="w-4 h-4 mr-2" />
+                      <span className="font-medium">{workspace.name}</span>
+                    </div>
+                    
+                    <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditingWorkspace(workspace.id);
+                        }}
+                        className="text-gray-400 hover:text-blue-400"
+                        title="Edit Workspace Name"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                      {workspaces.length > 1 && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Are you sure you want to delete this workspace?')) {
+                              deleteWorkspace(workspace.id);
+                            }
+                          }}
+                          className="text-gray-400 hover:text-red-400"
+                          title="Delete Workspace"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
               
@@ -2195,44 +2318,88 @@ export default function App() {
                         activeTabId === tab.id ? 'bg-gray-600' : 'hover:bg-gray-600'
                       }`}
                     >
-                      <div 
-                        className="flex items-center space-x-2 overflow-hidden flex-1"
-                        onClick={() => {
-                          setActiveTabId(tab.id);
-                        }}
-                      >
-                        {tab.favicon ? (
-                          <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" alt="favicon" />
-                        ) : (
-                          <FiChrome className="w-4 h-4 flex-shrink-0" />
-                        )}
-                        <span className="truncate">{tab.title}</span>
-                      </div>
-                      <button
-                        className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeTab(workspace.id, tab.id);
-                        }}
-                      >
-                        &times;
-                      </button>
+                      {editingTabId === tab.id ? (
+                        <div className="flex items-center w-full" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="flex-1 px-2 py-1 bg-gray-700 text-white text-sm border border-gray-500 rounded"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveTabEdit(workspace.id);
+                              if (e.key === 'Escape') cancelEdit();
+                            }}
+                          />
+                          <div className="flex ml-2">
+                            <button 
+                              onClick={() => saveTabEdit(workspace.id)}
+                              className="p-1 text-green-400 hover:text-green-300 rounded"
+                              title="Save"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button 
+                              onClick={cancelEdit}
+                              className="p-1 text-red-400 hover:text-red-300 rounded"
+                              title="Cancel"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div 
+                            className="flex items-center space-x-2 overflow-hidden flex-1"
+                            onClick={() => {
+                              setActiveTabId(tab.id);
+                            }}
+                          >
+                            {tab.favicon ? (
+                              <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" alt="favicon" />
+                            ) : (
+                              <FiChrome className="w-4 h-4 flex-shrink-0" />
+                            )}
+                            <span className="truncate">{tab.title}</span>
+                          </div>
+                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100">
+                            <button
+                              className="text-gray-400 hover:text-blue-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingTab(workspace.id, tab.id);
+                              }}
+                              title="Edit Tab Name"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                              </svg>
+                            </button>
+                            <button
+                              className="text-gray-400 hover:text-red-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                closeTab(workspace.id, tab.id);
+                              }}
+                              title="Close Tab"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
-                  ))}
+                  </div>
                   
-                  {/* Add New Tab button inside workspace */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      addTab();
-                    }}
-                    className="w-full mt-1 px-2 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-600 rounded flex items-center"
-                  >
-                    <FiPlus className="mr-1 w-3 h-3" />
-                    <span>New Tab</span>
-                  </button>
-                </div>
-              )}
+                )}
+                
             </div>
           ))}
         </div>

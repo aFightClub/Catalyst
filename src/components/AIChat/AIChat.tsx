@@ -5,6 +5,7 @@ import { storeService } from '../../services/storeService';
 interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  type?: 'function_call' | 'function_result';
 }
 
 interface FunctionCall {
@@ -64,6 +65,8 @@ const AIChat: React.FC = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [showChatList, setShowChatList] = useState(true);
   const [showAssistantSelect, setShowAssistantSelect] = useState(false);
+  const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
+  const [newChatTitle, setNewChatTitle] = useState('');
   
   // Original state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -82,6 +85,35 @@ const AIChat: React.FC = () => {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Add custom scrollbar styles
+  const scrollbarStyles = `
+    /* Custom scrollbar for dark mode */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #1f1f1f;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #4b5563;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6b7280;
+    }
+    
+    /* Firefox scrollbar */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #4b5563 #1f1f1f;
+    }
+  `;
 
   // Available models
   const availableModels = [
@@ -302,6 +334,83 @@ const AIChat: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Process message content to add formatting
+  const formatMessageContent = (content: string) => {
+    if (!content) return '';
+    
+    // Detect code blocks with triple backticks
+    const codeBlockRegex = /```([\w]*)\n([\s\S]*?)```/g;
+    
+    let formattedContent = content;
+    let match;
+    
+    // Store matches to process all at once to avoid regex state issues
+    const matches = [];
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      matches.push({
+        fullMatch: match[0],
+        language: match[1] || '',
+        code: match[2]
+      });
+    }
+    
+    // Replace code blocks with JSX
+    for (const match of matches) {
+      const codeBlockId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const replacementHTML = `<div class="relative bg-gray-800 rounded-md my-5 overflow-hidden shadow-lg border border-gray-700">
+        <div class="flex items-center justify-between px-4 py-2 bg-gray-700 text-xs">
+          <span class="text-gray-300 font-medium">${match.language || 'code'}</span>
+          <button 
+            class="text-gray-300 hover:text-white px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 transition-colors duration-200"
+            onclick="(() => { 
+              const codeEl = document.getElementById('${codeBlockId}'); 
+              if (codeEl) {
+                navigator.clipboard.writeText(codeEl.textContent || '');
+                const button = event.currentTarget;
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => { button.textContent = originalText; }, 2000);
+              }
+            })(); return false;"
+          >
+            Copy
+          </button>
+        </div>
+        <pre class="p-4 overflow-x-auto bg-gray-800"><code id="${codeBlockId}" class="text-green-400 text-sm font-mono leading-relaxed">${match.code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+      </div>`;
+      
+      formattedContent = formattedContent.replace(match.fullMatch, replacementHTML);
+    }
+    
+    // Convert line breaks to <br> and wrap paragraphs for proper rendering
+    if (!matches.length) {
+      // Split by double newlines to identify paragraphs
+      const paragraphs = formattedContent.split(/\n\n+/);
+      formattedContent = paragraphs.map(p => {
+        // Convert single newlines to <br> within paragraphs
+        const processed = p.replace(/\n/g, '<br>');
+        return `<p class="mb-3">${processed}</p>`;
+      }).join('');
+    } else {
+      // Process text outside of code blocks
+      const fragments = formattedContent.split(/(<div class="relative bg-gray-800.*?<\/div>)/gs);
+      formattedContent = fragments.map(fragment => {
+        if (fragment.startsWith('<div class="relative bg-gray-800')) {
+          return fragment; // This is a code block, leave it as is
+        } else {
+          // Process text content
+          const paragraphs = fragment.split(/\n\n+/);
+          return paragraphs.map(p => {
+            const processed = p.trim().replace(/\n/g, '<br>');
+            return processed ? `<p class="mb-3">${processed}</p>` : '';
+          }).join('');
+        }
+      }).join('');
+    }
+    
+    return formattedContent;
+  };
+
   // Clear chat history
   const clearChatHistory = () => {
     if (!activeChatId) return;
@@ -337,6 +446,37 @@ const AIChat: React.FC = () => {
     }
   };
   
+  // Add these new functions for chat renaming
+  // Start renaming a chat
+  const startRenaming = (chatId: string) => {
+    const chat = chats.find(c => c.id === chatId);
+    if (chat) {
+      setRenamingChatId(chatId);
+      setNewChatTitle(chat.title);
+    }
+  };
+
+  // Rename chat
+  const renameChat = () => {
+    if (!renamingChatId || !newChatTitle.trim()) return;
+    
+    const updatedChats = chats.map(chat => 
+      chat.id === renamingChatId
+        ? { ...chat, title: newChatTitle.trim() }
+        : chat
+    );
+    
+    setChats(updatedChats);
+    setRenamingChatId(null);
+    setNewChatTitle('');
+  };
+
+  // Handle renaming cancel
+  const cancelRenaming = () => {
+    setRenamingChatId(null);
+    setNewChatTitle('');
+  };
+
   // Create a new chat with selected assistant
   const createNewChat = (assistantId: string) => {
     const assistant = assistants.find(a => a.id === assistantId);
@@ -849,6 +989,9 @@ const AIChat: React.FC = () => {
       return;
     }
     
+    // Set loading state immediately
+    setIsLoading(true);
+    
     const userMessage: Message = { role: 'user', content: input };
     
     // Update the messages state for immediate feedback
@@ -874,7 +1017,6 @@ const AIChat: React.FC = () => {
     
     setChats(updatedChats);
     setInput('');
-    setIsLoading(true);
     
     // Add empty message to show the typing indicator
     const typingMessage: Message = { role: 'assistant' as const, content: '' };
@@ -949,12 +1091,14 @@ const AIChat: React.FC = () => {
         // Replace the typing indicator with function call message and result
         const functionCallMessage: Message = {
           role: 'assistant' as const,
-          content: `Calling function: ${functionName}...`
+          content: `Calling function: ${functionName}...`,
+          type: 'function_call'
         };
         
         const functionResultMessage: Message = {
           role: 'assistant' as const,
-          content: functionResult
+          content: functionResult,
+          type: 'function_result'
         };
         
         // Remove typing indicator and add function messages
@@ -1016,6 +1160,7 @@ const AIChat: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
+      <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center">
           {!showChatList && (
@@ -1027,18 +1172,85 @@ const AIChat: React.FC = () => {
               <FiChevronLeft className="w-5 h-5" />
             </button>
           )}
-          <h2 className="text-xl font-bold text-white">AI Chat</h2>
+          {!showChatList && activeChatId && renamingChatId === activeChatId ? (
+            <div className="flex items-center">
+              <input
+                type="text"
+                value={newChatTitle}
+                onChange={(e) => setNewChatTitle(e.target.value)}
+                className="px-2 py-1 bg-gray-700 rounded text-white text-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Enter chat name"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') renameChat();
+                  if (e.key === 'Escape') cancelRenaming();
+                }}
+              />
+              <div className="flex space-x-1 ml-2">
+                <button
+                  onClick={renameChat}
+                  className="p-1 text-gray-300 hover:text-green-500 rounded"
+                  title="Save"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <button
+                  onClick={cancelRenaming}
+                  className="p-1 text-gray-300 hover:text-red-500 rounded"
+                  title="Cancel"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : !showChatList && activeChatId ? (
+            <div className="flex items-center">
+              <h2 className="text-xl font-bold text-white">
+                {chats.find(c => c.id === activeChatId)?.title || 'AI Chat'}
+              </h2>
+              <button
+                onClick={() => {
+                  const chat = chats.find(c => c.id === activeChatId);
+                  if (chat) {
+                    setRenamingChatId(activeChatId);
+                    setNewChatTitle(chat.title);
+                  }
+                }}
+                className="ml-2 p-1 text-gray-400 hover:text-blue-500 rounded"
+                title="Rename Chat"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <h2 className="text-xl font-bold text-white">AI Chat</h2>
+          )}
         </div>
         
         <div className="flex items-center space-x-2">
           {!showChatList && messages.length > 0 && (
-            <button
-              onClick={clearChatHistory}
-              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white"
-              title="Clear Chat History"
-            >
-              Clear
-            </button>
+            <>
+              <button
+                onClick={clearChatHistory}
+                className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white"
+                title="Clear Chat History"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => deleteChat(activeChatId!)}
+                className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-red-500"
+                title="Delete Chat"
+              >
+                <FiTrash2 className="w-5 h-5" />
+              </button>
+            </>
           )}
           <button 
             onClick={() => setShowAPISettings(!showAPISettings)}
@@ -1164,12 +1376,73 @@ const AIChat: React.FC = () => {
             <div className="space-y-2">
               {chats.map(chat => {
                 const chatAssistant = assistants.find(a => a.id === chat.assistantId);
+                
+                // Renaming mode for this chat
+                if (renamingChatId === chat.id) {
+                  return (
+                    <div 
+                      key={chat.id}
+                      className="p-3 rounded-lg bg-gray-700 group"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center">
+                        <div className="mr-3">
+                          {chatAssistant?.profileImage ? (
+                            <img 
+                              src={chatAssistant.profileImage} 
+                              alt={chatAssistant.name} 
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                              {chatAssistant ? chatAssistant.name.charAt(0).toUpperCase() : 'A'}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={newChatTitle}
+                            onChange={(e) => setNewChatTitle(e.target.value)}
+                            className="w-full px-2 py-1 bg-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Enter chat name"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') renameChat();
+                              if (e.key === 'Escape') cancelRenaming();
+                            }}
+                          />
+                        </div>
+                        <div className="flex space-x-1 ml-2">
+                          <button
+                            onClick={renameChat}
+                            className="p-1 text-gray-300 hover:text-green-500 rounded"
+                            title="Save"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={cancelRenaming}
+                            className="p-1 text-gray-300 hover:text-red-500 rounded"
+                            title="Cancel"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // Regular display mode
                 return (
                   <div 
                     key={chat.id}
-                    className={`flex items-center p-3 rounded-lg cursor-pointer ${
-                      chat.id === activeChatId ? 'bg-gray-700' : 'hover:bg-gray-800'
-                    }`}
+                    className="flex items-center p-3 rounded-lg cursor-pointer group relative hover:bg-gray-800"
                     onClick={() => {
                       setActiveChatId(chat.id);
                       setMessages(chat.messages);
@@ -1195,15 +1468,30 @@ const AIChat: React.FC = () => {
                         {new Date(chat.updatedAt).toLocaleString()}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteChat(chat.id);
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100"
-                    >
-                      <FiTrash2 size={16} />
-                    </button>
+                    <div className="opacity-0 group-hover:opacity-100 flex space-x-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startRenaming(chat.id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-blue-500 rounded"
+                        title="Rename"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteChat(chat.id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                        title="Delete"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1234,28 +1522,37 @@ const AIChat: React.FC = () => {
                       {message.role === 'user' ? (
                         <div className="self-end max-w-3/4 bg-gray-700 rounded-lg p-3 text-white">
                           <div className="whitespace-pre-wrap">
-                            {message.content}
+                            <div dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }} />
+                          </div>
+                        </div>
+                      ) : message.type === 'function_call' ? (
+                        <div className="self-start max-w-full w-full bg-gray-800 border-l-4 border-blue-500 px-3 py-2 my-2 text-blue-300 text-sm flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <div className="font-mono">{message.content}</div>
+                        </div>
+                      ) : message.type === 'function_result' ? (
+                        <div className="self-start max-w-3/4 bg-transparent text-white">
+                          <div className="whitespace-pre-wrap">
+                            <div dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }} />
                           </div>
                         </div>
                       ) : (
                         <div className="self-start max-w-3/4 bg-transparent text-white">
                           <div className="whitespace-pre-wrap">
-                            {message.content || (isLoading && index === messages.length - 1 ? (
-                              <div className="flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="24" viewBox="0 0 24 24">
-                                  <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                                  <circle cx="16" cy="10" r="0" fill="currentColor">
-                                    <animate attributeName="r" begin=".67" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
-                                  </circle>
-                                  <circle cx="12" cy="10" r="0" fill="currentColor">
-                                    <animate attributeName="r" begin=".33" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
-                                  </circle>
-                                  <circle cx="8" cy="10" r="0" fill="currentColor">
-                                    <animate attributeName="r" begin="0" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
-                                  </circle>
-                                </svg>
+                            {isLoading && index === messages.length - 1 ? (
+                              <div className="flex items-center text-blue-400">
+                                <span className="mr-2">AI is thinking</span>
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5"></div>
+                                  <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5" style={{ animationDelay: '0.2s' }}></div>
+                                  <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5" style={{ animationDelay: '0.4s' }}></div>
+                                </div>
                               </div>
-                            ) : '')}
+                            ) : (
+                              <div dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }} />
+                            )}
                           </div>
                         </div>
                       )}
