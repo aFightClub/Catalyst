@@ -45,6 +45,10 @@ const schema = {
     type: "object",
     default: {},
   },
+  subscriptions: {
+    type: "array",
+    default: [],
+  },
 };
 
 // Track initialization status
@@ -239,6 +243,16 @@ export const storeService = {
     return s.set("workflows", workflows);
   },
 
+  // Subscriptions
+  getSubscriptions: async () => {
+    const s = await ensureStore();
+    return s.get("subscriptions") as any[];
+  },
+  saveSubscriptions: async (subscriptions: any[]) => {
+    const s = await ensureStore();
+    return s.set("subscriptions", subscriptions);
+  },
+
   // Erased Elements
   getErasedElements: async () => {
     const s = await ensureStore();
@@ -308,6 +322,13 @@ export const storeService = {
       if (localWorkflows) {
         s.set("workflows", JSON.parse(localWorkflows));
         localStorage.removeItem("workflows");
+      }
+
+      // Migrate subscriptions
+      const localSubscriptions = localStorage.getItem("subscriptions");
+      if (localSubscriptions) {
+        s.set("subscriptions", JSON.parse(localSubscriptions));
+        localStorage.removeItem("subscriptions");
       }
 
       // Migrate erased elements
