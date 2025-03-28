@@ -737,18 +737,33 @@ export default function App() {
                   <FiArrowLeft className="w-5 h-5" />
                 </button>
                 <button 
-                  onClick={goForward}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  <FiArrowRight className="w-5 h-5" />
-                </button>
-                <button 
                   onClick={refresh}
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   <FiRefreshCw className="w-5 h-5" />
                 </button>
                 <button 
+                  onClick={goForward}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <FiArrowRight className="w-5 h-5" />
+                </button>
+                
+              </div>
+
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={handleUrlKeyDown}
+                  className="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter URL"
+                />
+              </div>
+
+
+              <button 
                   onClick={activatePlugins}
                   className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${showPluginPanel ? 'bg-blue-600' : ''}`}
                   title="Plugins"
@@ -767,7 +782,7 @@ export default function App() {
                   </button>
                   
                   {showLayoutDropdown && (
-                    <div className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-10 w-40">
+                    <div className="absolute top-full right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-10 w-40">
                       <button
                         onClick={() => {
                           setCurrentLayout(LayoutType.SINGLE);
@@ -807,18 +822,6 @@ export default function App() {
                 >
                   <FiTrash2 className="w-5 h-5" />
                 </button>
-              </div>
-
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  onKeyDown={handleUrlKeyDown}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter URL"
-                />
-              </div>
             </div>
 
             {showPluginPanel && (
