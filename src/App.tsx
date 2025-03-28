@@ -1,14 +1,40 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2 } from 'react-icons/fi'
+import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage } from 'react-icons/fi'
 import { applyPluginsToWebview, Plugin } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import Settings from './components/Settings/Settings'
+import AIChat from './components/AIChat/AIChat'
+import Writer from './components/Writer/Writer'
+import Tasks from './components/Tasks/Tasks'
+import Images from './components/Images/Images'
 
 // Define layout types
 enum LayoutType {
   SINGLE = 'single',
   DOUBLE = 'double',
   TRIPLE = 'triple'
+}
+
+// Define workflow action types
+enum ActionType {
+  CLICK = 'click',
+  TYPE = 'type',
+  NAVIGATE = 'navigate',
+  WAIT = 'wait',
+  HOVER = 'hover'
+}
+
+interface WorkflowAction {
+  type: ActionType;
+  data: any;
+  timestamp: number;
+}
+
+interface Workflow {
+  id: string;
+  name: string;
+  actions: WorkflowAction[];
+  variables: string[];
 }
 
 interface Tab {
@@ -38,7 +64,24 @@ export default function App() {
   const [currentLayout, setCurrentLayout] = useState<LayoutType>(LayoutType.SINGLE)
   const [eraserMode, setEraserMode] = useState(false)
   const [erasedElements, setErasedElements] = useState<ErasedElement[]>([])
+  
+  // Workflow state
+  const [showWorkflowDropdown, setShowWorkflowDropdown] = useState(false)
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [isRecording, setIsRecording] = useState(false)
+  const [currentRecording, setCurrentRecording] = useState<WorkflowAction[]>([])
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false)
+  const [workflowModalMode, setWorkflowModalMode] = useState<'create' | 'list'>('create')
+  const [newWorkflowName, setNewWorkflowName] = useState('')
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
+  const [workflowVariables, setWorkflowVariables] = useState<{[key: string]: string}>({})
 
+  // UI State for sidebar features
+  const [showAIChat, setShowAIChat] = useState(false)
+  const [showWriter, setShowWriter] = useState(false)
+  const [showTasks, setShowTasks] = useState(false)
+  const [showImages, setShowImages] = useState(false)
+  
   // Load erased elements from localStorage
   useEffect(() => {
     const storedElements = localStorage.getItem('erased_elements');
@@ -55,6 +98,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('erased_elements', JSON.stringify(erasedElements));
   }, [erasedElements]);
+
+  // Load workflows from localStorage
+  useEffect(() => {
+    const storedWorkflows = localStorage.getItem('workflows');
+    if (storedWorkflows) {
+      try {
+        setWorkflows(JSON.parse(storedWorkflows));
+      } catch (error) {
+        console.error('Failed to parse stored workflows:', error);
+      }
+    }
+  }, []);
+
+  // Save workflows to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('workflows', JSON.stringify(workflows));
+  }, [workflows]);
 
   // Toggle eraser mode and inject eraser script when activated
   const toggleEraserMode = async () => {
@@ -650,6 +710,641 @@ export default function App() {
     }
   };
 
+  // Start recording a new workflow
+  const startRecording = () => {
+    setIsRecording(true);
+    setCurrentRecording([]);
+    setShowWorkflowModal(true);
+    setWorkflowModalMode('create');
+    
+    const webview = webviewRefs.current[activeTabId];
+    if (webview) {
+      // Inject recording script
+      webview.executeJavaScript(`
+        (function() {
+          window.workflowRecording = true;
+          
+          // Create recording UI indicator
+          const indicator = document.createElement('div');
+          indicator.id = 'workflow-recording-indicator';
+          indicator.style.position = 'fixed';
+          indicator.style.top = '10px';
+          indicator.style.right = '10px';
+          indicator.style.backgroundColor = 'rgba(220, 38, 38, 0.8)';
+          indicator.style.color = 'white';
+          indicator.style.padding = '5px 10px';
+          indicator.style.borderRadius = '4px';
+          indicator.style.zIndex = '999999';
+          indicator.style.fontFamily = 'Arial, sans-serif';
+          indicator.style.fontSize = '12px';
+          indicator.textContent = 'Recording...';
+          document.body.appendChild(indicator);
+          
+          // Track clicks
+          window.addEventListener('click', (e) => {
+            if (!window.workflowRecording) return;
+            
+            // Get path to element
+            let path = [];
+            let element = e.target;
+            
+            if (element.id) {
+              path.push('#' + element.id);
+            } else {
+              let selector = element.tagName.toLowerCase();
+              
+              // Add classes (max 2)
+              if (element.classList && element.classList.length) {
+                const classes = Array.from(element.classList).slice(0, 2);
+                selector += classes.map(c => '.' + c).join('');
+              }
+              
+              // Add position if needed
+              let siblings = Array.from(element.parentNode.children).filter(
+                el => el.tagName === element.tagName
+              );
+              
+              if (siblings.length > 1) {
+                const index = siblings.indexOf(element);
+                selector += ':nth-child(' + (index + 1) + ')';
+              }
+              
+              path.push(selector);
+            }
+            
+            // Log the action
+            console.log('WORKFLOW_ACTION:' + JSON.stringify({
+              type: 'click',
+              data: {
+                selector: path.join(' '),
+                x: e.clientX,
+                y: e.clientY,
+                text: element.textContent?.trim()
+              },
+              timestamp: Date.now()
+            }));
+          }, true);
+          
+          // Track typing
+          document.addEventListener('input', (e) => {
+            if (!window.workflowRecording || !e.target || !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) return;
+            
+            const element = e.target;
+            let selector = '';
+            
+            if (element.id) {
+              selector = '#' + element.id;
+            } else {
+              selector = element.tagName.toLowerCase();
+              
+              if (element.classList && element.classList.length) {
+                const classes = Array.from(element.classList).slice(0, 2);
+                selector += classes.map(c => '.' + c).join('');
+              }
+              
+              if (element.name) {
+                selector += '[name="' + element.name + '"]';
+              }
+            }
+            
+            // Log the typing action
+            console.log('WORKFLOW_ACTION:' + JSON.stringify({
+              type: 'type',
+              data: {
+                selector,
+                value: element.value,
+                placeholder: element.placeholder
+              },
+              timestamp: Date.now()
+            }));
+          }, true);
+          
+          // Track hover
+          document.addEventListener('mouseover', (e) => {
+            if (!window.workflowRecording) return;
+            
+            // Only log hovers on elements with handlers (links, buttons, etc.)
+            const element = e.target;
+            if (element instanceof HTMLAnchorElement || 
+                element instanceof HTMLButtonElement || 
+                element.onclick || 
+                element.onmouseover ||
+                element.role === 'button') {
+              
+              let selector = '';
+              if (element.id) {
+                selector = '#' + element.id;
+              } else {
+                selector = element.tagName.toLowerCase();
+                
+                if (element.classList && element.classList.length) {
+                  const classes = Array.from(element.classList).slice(0, 2);
+                  selector += classes.map(c => '.' + c).join('');
+                }
+              }
+              
+              // Log the hover action (throttled to avoid too many events)
+              if (!element.hasAttribute('data-last-hover') || 
+                  Date.now() - parseInt(element.getAttribute('data-last-hover') || '0') > 1000) {
+                
+                element.setAttribute('data-last-hover', Date.now().toString());
+                
+                console.log('WORKFLOW_ACTION:' + JSON.stringify({
+                  type: 'hover',
+                  data: {
+                    selector,
+                    text: element.textContent?.trim()
+                  },
+                  timestamp: Date.now()
+                }));
+              }
+            }
+          }, true);
+          
+          // Track navigation
+          const originalPushState = history.pushState;
+          history.pushState = function() {
+            originalPushState.apply(this, arguments);
+            
+            if (window.workflowRecording) {
+              console.log('WORKFLOW_ACTION:' + JSON.stringify({
+                type: 'navigate',
+                data: {
+                  url: window.location.href
+                },
+                timestamp: Date.now()
+              }));
+            }
+          };
+          
+          window.addEventListener('popstate', () => {
+            if (window.workflowRecording) {
+              console.log('WORKFLOW_ACTION:' + JSON.stringify({
+                type: 'navigate',
+                data: {
+                  url: window.location.href
+                },
+                timestamp: Date.now()
+              }));
+            }
+          });
+        })();
+      `);
+      
+      // Listen for workflow action events
+      webview.addEventListener('console-message', handleWorkflowConsoleMessage);
+    }
+  };
+
+  // Stop recording the current workflow
+  const stopRecording = () => {
+    setIsRecording(false);
+    
+    const webview = webviewRefs.current[activeTabId];
+    if (webview) {
+      // Remove recording indicator and cleanup
+      webview.executeJavaScript(`
+        (function() {
+          window.workflowRecording = false;
+          const indicator = document.getElementById('workflow-recording-indicator');
+          if (indicator) indicator.remove();
+        })();
+      `);
+      
+      // Remove console message listener
+      webview.removeEventListener('console-message', handleWorkflowConsoleMessage);
+      
+      // Process variables in the recording
+      processWorkflowVariables();
+    }
+  };
+
+  // Process the recorded workflow to identify variables
+  const processWorkflowVariables = () => {
+    // Extract text inputs that might contain variables
+    const typeActions = currentRecording.filter(action => action.type === ActionType.TYPE);
+    const variableMap: {[key: string]: string} = {};
+    
+    typeActions.forEach((action, index) => {
+      const varName = `var_${index + 1}`;
+      variableMap[varName] = action.data.value;
+      
+      // Update the action to use the variable
+      action.data.variableName = varName;
+    });
+    
+    setWorkflowVariables(variableMap);
+  };
+
+  // Handle console messages from the webview for workflow recording
+  const handleWorkflowConsoleMessage = (event: any) => {
+    const message = event.message;
+    if (message.startsWith('WORKFLOW_ACTION:')) {
+      try {
+        const action = JSON.parse(message.substring('WORKFLOW_ACTION:'.length));
+        setCurrentRecording(prev => [...prev, action]);
+      } catch (error) {
+        console.error('Error parsing workflow action:', error);
+      }
+    }
+  };
+
+  // Save the current recording as a workflow
+  const saveWorkflow = () => {
+    if (currentRecording.length === 0 || !newWorkflowName.trim()) {
+      return;
+    }
+    
+    // Extract variables
+    const variables = Object.keys(workflowVariables);
+    
+    const newWorkflow: Workflow = {
+      id: Date.now().toString(),
+      name: newWorkflowName.trim(),
+      actions: currentRecording,
+      variables
+    };
+    
+    setWorkflows(prev => [...prev, newWorkflow]);
+    setCurrentRecording([]);
+    setNewWorkflowName('');
+    setShowWorkflowModal(false);
+    setWorkflowVariables({});
+  };
+
+  // Play back a saved workflow
+  const playWorkflow = async (workflow: Workflow, variables: {[key: string]: string}) => {
+    const webview = webviewRefs.current[activeTabId];
+    if (!webview || !tabs.find(tab => tab.id === activeTabId)?.isReady) return;
+    
+    for (const action of workflow.actions) {
+      switch (action.type) {
+        case ActionType.CLICK:
+          await webview.executeJavaScript(`
+            (function() {
+              try {
+                const element = document.querySelector('${action.data.selector}');
+                if (element) {
+                  element.click();
+                  return true;
+                }
+                return false;
+              } catch (e) {
+                console.error('Failed to click element:', e);
+                return false;
+              }
+            })();
+          `);
+          break;
+        
+        case ActionType.TYPE:
+          // Use variable value if available
+          let textValue = action.data.value;
+          if (action.data.variableName && variables[action.data.variableName]) {
+            textValue = variables[action.data.variableName];
+          }
+          
+          await webview.executeJavaScript(`
+            (function() {
+              try {
+                const element = document.querySelector('${action.data.selector}');
+                if (element && (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+                  element.value = ${JSON.stringify(textValue)};
+                  element.dispatchEvent(new Event('input', { bubbles: true }));
+                  return true;
+                }
+                return false;
+              } catch (e) {
+                console.error('Failed to type in element:', e);
+                return false;
+              }
+            })();
+          `);
+          break;
+        
+        case ActionType.NAVIGATE:
+          try {
+            await webview.loadURL(action.data.url);
+          } catch (e) {
+            console.error('Failed to navigate:', e);
+          }
+          break;
+        
+        case ActionType.HOVER:
+          await webview.executeJavaScript(`
+            (function() {
+              try {
+                const element = document.querySelector('${action.data.selector}');
+                if (element) {
+                  element.dispatchEvent(new MouseEvent('mouseover', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                  }));
+                  return true;
+                }
+                return false;
+              } catch (e) {
+                console.error('Failed to hover over element:', e);
+                return false;
+              }
+            })();
+          `);
+          break;
+        
+        case ActionType.WAIT:
+          await new Promise(resolve => setTimeout(resolve, action.data.duration || 1000));
+          break;
+      }
+      
+      // Small delay between actions
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  };
+
+  // Modal for creating or viewing workflows
+  const renderWorkflowModal = () => {
+    if (!showWorkflowModal) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg shadow-lg w-1/2 max-h-[80vh] overflow-auto">
+          <div className="p-4 border-b border-gray-700">
+            <h2 className="text-xl font-bold text-white">
+              {workflowModalMode === 'create' ? 'Create Workflow' : 'Workflows'}
+            </h2>
+          </div>
+          
+          <div className="p-4">
+            {workflowModalMode === 'create' ? (
+              <>
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Workflow Name</label>
+                  <input
+                    type="text"
+                    value={newWorkflowName}
+                    onChange={(e) => setNewWorkflowName(e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter workflow name"
+                  />
+                </div>
+                
+                {isRecording ? (
+                  <div className="mb-4 text-center">
+                    <div className="text-red-400 mb-2 flex items-center justify-center">
+                      <span className="inline-block w-3 h-3 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                      Recording in progress
+                    </div>
+                    <p className="text-gray-400 mb-4">
+                      Perform actions on the page and they will be recorded.
+                      Click "Stop Recording" when done.
+                    </p>
+                    <button
+                      onClick={stopRecording}
+                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                      Stop Recording
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {currentRecording.length > 0 ? (
+                      <div className="mb-4">
+                        <h3 className="text-white font-medium mb-2">Recorded Actions</h3>
+                        <div className="bg-gray-900 p-3 rounded mb-4 max-h-60 overflow-auto">
+                          {currentRecording.map((action, index) => (
+                            <div key={index} className="mb-2 pb-2 border-b border-gray-700 last:border-b-0">
+                              <div className="flex justify-between">
+                                <span className="text-blue-400">
+                                  {action.type.toUpperCase()}
+                                </span>
+                                <span className="text-gray-500 text-sm">
+                                  {new Date(action.timestamp).toLocaleTimeString()}
+                                </span>
+                              </div>
+                              {action.type === ActionType.CLICK && (
+                                <div className="text-gray-300 text-sm">
+                                  Clicked: {action.data.text || action.data.selector}
+                                </div>
+                              )}
+                              {action.type === ActionType.TYPE && (
+                                <div className="text-gray-300 text-sm">
+                                  Typed: 
+                                  <input
+                                    type="text"
+                                    className="ml-2 bg-gray-700 px-2 py-1 rounded text-white"
+                                    defaultValue={action.data.value}
+                                    placeholder={action.data.placeholder}
+                                    onChange={(e) => {
+                                      const varName = action.data.variableName;
+                                      if (varName) {
+                                        setWorkflowVariables(prev => ({
+                                          ...prev,
+                                          [varName]: e.target.value
+                                        }));
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              {action.type === ActionType.NAVIGATE && (
+                                <div className="text-gray-300 text-sm">
+                                  Navigated to: {action.data.url}
+                                </div>
+                              )}
+                              {action.type === ActionType.HOVER && (
+                                <div className="text-gray-300 text-sm">
+                                  Hovered: {action.data.text || action.data.selector}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={saveWorkflow}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            Save Workflow
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-4 text-center">
+                        <p className="text-gray-400 mb-4">
+                          Click "Start Recording" to begin capturing actions.
+                        </p>
+                        <button
+                          onClick={startRecording}
+                          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          Start Recording
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {workflows.length > 0 ? (
+                  <div>
+                    <h3 className="text-white font-medium mb-2">Saved Workflows</h3>
+                    <div className="space-y-3 mb-4">
+                      {workflows.map(workflow => (
+                        <div 
+                          key={workflow.id} 
+                          className="bg-gray-700 rounded p-3 hover:bg-gray-600 cursor-pointer"
+                          onClick={() => setSelectedWorkflow(workflow)}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-medium">
+                              {workflow.name}
+                            </span>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedWorkflow(workflow);
+                                  // Show variable input form if there are variables
+                                  if (workflow.variables.length > 0) {
+                                    const varMap = {} as {[key: string]: string};
+                                    workflow.variables.forEach(v => {
+                                      const action = workflow.actions.find(a => 
+                                        a.type === ActionType.TYPE && a.data.variableName === v
+                                      );
+                                      varMap[v] = action?.data.value || '';
+                                    });
+                                    setWorkflowVariables(varMap);
+                                  } else {
+                                    // Play workflow immediately if no variables
+                                    playWorkflow(workflow, {});
+                                  }
+                                }}
+                                className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
+                                title="Run Workflow"
+                              >
+                                <FiPlay className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWorkflows(workflows.filter(w => w.id !== workflow.id));
+                                }}
+                                className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                                title="Delete Workflow"
+                              >
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-gray-400 text-sm">
+                            {workflow.actions.length} actions
+                            {workflow.variables.length > 0 && ` • ${workflow.variables.length} variables`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    No workflows saved yet. Create one to get started.
+                  </div>
+                )}
+                
+                {selectedWorkflow && selectedWorkflow.variables.length > 0 && (
+                  <div className="mt-4 border-t border-gray-700 pt-4">
+                    <h3 className="text-white font-medium mb-3">
+                      Run Workflow: {selectedWorkflow.name}
+                    </h3>
+                    
+                    <div className="space-y-3 mb-4">
+                      {selectedWorkflow.variables.map(varName => {
+                        const action = selectedWorkflow.actions.find(a => 
+                          a.type === ActionType.TYPE && a.data.variableName === varName
+                        );
+                        
+                        return (
+                          <div key={varName} className="mb-3">
+                            <label className="block text-gray-300 mb-1">
+                              {action?.data.placeholder || 'Input'} ({varName})
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full bg-gray-700 px-3 py-2 rounded text-white"
+                              defaultValue={action?.data.value || ''}
+                              onChange={(e) => {
+                                setWorkflowVariables(prev => ({
+                                  ...prev,
+                                  [varName]: e.target.value
+                                }));
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                      
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => {
+                            playWorkflow(selectedWorkflow, workflowVariables);
+                            setSelectedWorkflow(null);
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          Run Workflow
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          <div className="p-4 border-t border-gray-700 flex justify-between">
+            {workflowModalMode === 'create' ? (
+              <button
+                onClick={() => {
+                  setWorkflowModalMode('list');
+                  if (isRecording) {
+                    stopRecording();
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                View Saved Workflows
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setWorkflowModalMode('create');
+                  setSelectedWorkflow(null);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Create New Workflow
+              </button>
+            )}
+            
+            <button
+              onClick={() => {
+                setShowWorkflowModal(false);
+                if (isRecording) {
+                  stopRecording();
+                }
+                setSelectedWorkflow(null);
+              }}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="h-screen flex">
       <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-12">
@@ -666,6 +1361,10 @@ export default function App() {
                 onClick={() => {
                   setActiveTabId(tab.id)
                   setShowSettings(false)
+                  setShowAIChat(false)
+                  setShowWriter(false)
+                  setShowTasks(false)
+                  setShowImages(false)
                 }}
               >
                 {tab.favicon ? (
@@ -714,7 +1413,69 @@ export default function App() {
           </button>
           
           <button 
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => {
+              setShowAIChat(!showAIChat)
+              setShowSettings(false)
+              setShowWriter(false)
+              setShowTasks(false)
+              setShowImages(false)
+            }}
+            className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiMessageSquare className="w-5 h-5" />
+            <span>AI Chat</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              setShowWriter(!showWriter)
+              setShowSettings(false)
+              setShowAIChat(false)
+              setShowTasks(false)
+              setShowImages(false)
+            }}
+            className={`w-full p-2 rounded-lg ${showWriter ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiEdit className="w-5 h-5" />
+            <span>Writer</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              setShowTasks(!showTasks)
+              setShowSettings(false)
+              setShowAIChat(false)
+              setShowWriter(false)
+              setShowImages(false)
+            }}
+            className={`w-full p-2 rounded-lg ${showTasks ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiCheckSquare className="w-5 h-5" />
+            <span>Tasks</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              setShowImages(!showImages)
+              setShowSettings(false)
+              setShowAIChat(false)
+              setShowWriter(false)
+              setShowTasks(false)
+            }}
+            className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiImage className="w-5 h-5" />
+            <span>Images</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              setShowSettings(!showSettings)
+              setShowAIChat(false)
+              setShowWriter(false)
+              setShowTasks(false)
+              setShowImages(false)
+            }}
             className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
             <FiSettings className="w-5 h-5" />
@@ -726,6 +1487,14 @@ export default function App() {
       <div className="flex-1 flex flex-col">
         {showSettings ? (
           <Settings />
+        ) : showAIChat ? (
+          <AIChat />
+        ) : showWriter ? (
+          <Writer />
+        ) : showTasks ? (
+          <Tasks />
+        ) : showImages ? (
+          <Images />
         ) : (
           <>
             <div className="h-14 bg-gray-800 flex items-center px-4 space-x-2">
@@ -770,6 +1539,44 @@ export default function App() {
                 >
                   <FiPackage className="w-5 h-5" />
                 </button>
+                
+                {/* Workflow Actions Button with Dropdown */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowWorkflowDropdown(!showWorkflowDropdown)}
+                    className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${showWorkflowDropdown ? 'bg-blue-600' : ''}`}
+                    title="Workflow Actions"
+                  >
+                    <FiCode className="w-5 h-5" />
+                  </button>
+                  
+                  {showWorkflowDropdown && (
+                    <div className="absolute top-full right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-2 z-10 w-40">
+                      <button
+                        onClick={() => {
+                          setShowWorkflowDropdown(false);
+                          setShowWorkflowModal(true);
+                          setWorkflowModalMode('create');
+                        }}
+                        className="w-full text-left p-2 rounded-lg mb-1 hover:bg-gray-700 flex items-center"
+                      >
+                        <FiPlus className="mr-2" />
+                        Create New
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowWorkflowDropdown(false);
+                          setShowWorkflowModal(true);
+                          setWorkflowModalMode('list');
+                        }}
+                        className="w-full text-left p-2 rounded-lg hover:bg-gray-700 flex items-center"
+                      >
+                        <FiList className="mr-2" />
+                        View Workflows
+                      </button>
+                    </div>
+                  )}
+                </div>
                 
                 {/* Layout Button with Dropdown */}
                 <div className="relative">
@@ -866,6 +1673,9 @@ export default function App() {
           </>
         )}
       </div>
+      
+      {/* Workflow Modal */}
+      {renderWorkflowModal()}
     </div>
   )
 } 
