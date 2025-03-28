@@ -37,6 +37,10 @@ const schema = {
     type: "array",
     default: [],
   },
+  workflowVariables: {
+    type: "object",
+    default: {},
+  },
   erasedElements: {
     type: "array",
     default: [],
@@ -77,6 +81,10 @@ const schema = {
     ],
   },
   chats: {
+    type: "array",
+    default: [],
+  },
+  automations: {
     type: "array",
     default: [],
   },
@@ -274,6 +282,20 @@ export const storeService = {
     return s.set("workflows", workflows);
   },
 
+  // Workflow Variables
+  getWorkflowVariables: async () => {
+    const s = await ensureStore();
+    return s.get("workflowVariables") as {
+      [workflowId: string]: { [varName: string]: string };
+    };
+  },
+  saveWorkflowVariables: async (variables: {
+    [workflowId: string]: { [varName: string]: string };
+  }) => {
+    const s = await ensureStore();
+    return s.set("workflowVariables", variables);
+  },
+
   // Websites
   getWebsites: async () => {
     const s = await ensureStore();
@@ -342,6 +364,16 @@ export const storeService = {
   saveApiKeys: async (apiKeys: Record<string, string | undefined>) => {
     const s = await ensureStore();
     return s.set("apiKeys", apiKeys);
+  },
+
+  // Automations
+  getAutomations: async () => {
+    const s = await ensureStore();
+    return s.get("automations") as any[];
+  },
+  saveAutomations: async (automations: any[]) => {
+    const s = await ensureStore();
+    return s.set("automations", automations);
   },
 
   // Check if store is initialized

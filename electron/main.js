@@ -55,8 +55,8 @@ ipcMain.on("run-workflow-in-current-window", (event, data) => {
   event.sender.send("run-workflow-in-current-window", data);
 });
 
-ipcMain.on("run-workflow-in-new-tab", async (event, data) => {
-  const { workflowId, startUrl } = data;
+ipcMain.on("run-workflow-in-new-window", async (event, data) => {
+  const { workflowId, variables, detached } = data;
   try {
     // Create a new browser window/tab
     const newWindow = new BrowserWindow({
@@ -67,24 +67,47 @@ ipcMain.on("run-workflow-in-new-tab", async (event, data) => {
         contextIsolation: false,
         webviewTag: true,
       },
+      icon: path.join(__dirname, "../src/images/icon.png"),
     });
 
     const isDevelopment = !app.isPackaged;
+
+    // Encode variables as a JSON string and pass as a query parameter
+    const variablesParam = variables
+      ? `&variables=${encodeURIComponent(JSON.stringify(variables))}`
+      : "";
 
     // Load the app with a special query parameter to indicate which workflow to run
     await newWindow.loadURL(
       isDevelopment
         ? `http://localhost:${
             process.env.PORT || 3000
-          }?runWorkflow=${workflowId}`
+          }?runWorkflow=${workflowId}${variablesParam}`
         : `file://${path.join(
             __dirname,
             "../dist/index.html"
-          )}?runWorkflow=${workflowId}`
+          )}?runWorkflow=${workflowId}${variablesParam}`
     );
 
     // Focus the new window
     newWindow.focus();
+
+    // If this is a scheduled automation that should run detached
+    if (detached) {
+      // Set up listener for 'workflow-complete' event
+      newWindow.webContents.on("workflow-complete", () => {
+        // Close the window when workflow is complete
+        newWindow.close();
+      });
+
+      // Fallback: Close window after a timeout if workflow completion isn't detected
+      // (in a real implementation you might want to make this configurable)
+      setTimeout(() => {
+        if (!newWindow.isDestroyed()) {
+          newWindow.close();
+        }
+      }, 5 * 60 * 1000); // Close after 5 minutes if workflow doesn't complete
+    }
   } catch (error) {
     console.error("Failed to open workflow in new tab:", error);
   }
