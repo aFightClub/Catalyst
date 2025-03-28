@@ -196,7 +196,7 @@ export default function App() {
               setActiveWorkspaceId(workspace.id);
               
               if (lastActiveTab) {
-                const tab = workspace.tabs.find(t => t.id === lastActiveTab);
+                const tab = workspace.tabs.find((t: Tab) => t.id === lastActiveTab);
                 if (tab) {
                   setActiveTabId(tab.id);
                 } else if (workspace.tabs.length > 0) {
@@ -588,38 +588,70 @@ export default function App() {
     }
   }, [erasedElements]);
 
+  // Add a tab to the current workspace
   const addTab = () => {
     const newTab = {
       id: Date.now().toString(),
       title: 'New Tab',
       url: 'https://google.com',
       isReady: false
-    }
-    setTabs([...tabs, newTab])
-    setActiveTabId(newTab.id)
-  }
-
-  const navigateToUrl = (url: string) => {
-    const processedUrl = url.startsWith('http') ? url : `https://${url}`
-    const activeTab = tabs.find(tab => tab.id === activeTabId)
-    if (activeTab) {
-      const updatedTabs = tabs.map(tab => 
-        tab.id === activeTabId ? { ...tab, url: processedUrl, title: 'Loading...' } : tab
+    };
+    
+    setWorkspaces(prevWorkspaces => 
+      prevWorkspaces.map(workspace => 
+        workspace.id === activeWorkspaceId
+          ? { ...workspace, tabs: [...workspace.tabs, newTab] }
+          : workspace
       )
-      setTabs(updatedTabs)
-      setUrlInput(processedUrl)
+    );
+    
+    setActiveTabId(newTab.id);
+    setShowDashboard(false);
+    setShowSettings(false);
+    setShowAIChat(false);
+    setShowWriter(false);
+    setShowTasks(false);
+    setShowImages(false);
+    setShowSubscriptions(false);
+    setShowWebsites(false);
+    setShowAutomations(false);
+  };
+
+  // Navigate to a URL in the current tab
+  const navigateToUrl = (url: string) => {
+    const processedUrl = url.startsWith('http') ? url : `https://${url}`;
+    const activeTab = tabs.find(tab => tab.id === activeTabId);
+    
+    if (activeTab) {
+      // Update the tab URL in workspace state
+      setWorkspaces(prevWorkspaces => 
+        prevWorkspaces.map(workspace => 
+          workspace.id === activeWorkspaceId
+            ? { 
+                ...workspace, 
+                tabs: workspace.tabs.map(tab => 
+                  tab.id === activeTabId 
+                    ? { ...tab, url: processedUrl, title: 'Loading...' } 
+                    : tab
+                ) 
+              }
+            : workspace
+        )
+      );
       
-      const webview = webviewRefs.current[activeTabId]
+      setUrlInput(processedUrl);
+      
+      const webview = webviewRefs.current[activeTabId];
       if (webview && activeTab.isReady) {
         try {
-          webview.loadURL(processedUrl)
+          webview.loadURL(processedUrl);
         } catch (error) {
-          console.error('Error loading URL:', error)
+          console.error('Error loading URL:', error);
         }
       }
     }
-  }
-
+  };
+  
   // Add state for tracking loading status
   const [loadingTabs, setLoadingTabs] = useState<Set<string>>(new Set());
   
@@ -711,12 +743,21 @@ export default function App() {
         setLoadingTabs(prev => new Set([...prev, tabId]));
         
         // Update tab title to show loading
-        setTabs(prevTabs => 
-          prevTabs.map(tab => 
-            tab.id === tabId 
-              ? { ...tab, title: 'Loading...', isReady: false } 
-              : tab
-          )
+        setWorkspaces(prevWorkspaces => 
+          prevWorkspaces.map(workspace => {
+            const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+            if (tabExists) {
+              return {
+                ...workspace,
+                tabs: workspace.tabs.map(tab => 
+                  tab.id === tabId 
+                    ? { ...tab, title: 'Loading...', isReady: false } 
+                    : tab
+                )
+              };
+            }
+            return workspace;
+          })
         );
       });
       
@@ -734,12 +775,21 @@ export default function App() {
           `);
           
           // Update tab information
-          setTabs(prevTabs => 
-            prevTabs.map(tab => 
-              tab.id === tabId 
-                ? { ...tab, title: title || url, url, favicon, isReady: true } 
-                : tab
-            )
+          setWorkspaces(prevWorkspaces => 
+            prevWorkspaces.map(workspace => {
+              const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+              if (tabExists) {
+                return {
+                  ...workspace,
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === tabId 
+                      ? { ...tab, title: title || url, url, favicon, isReady: true } 
+                      : tab
+                  )
+                };
+              }
+              return workspace;
+            })
           );
           
           // Apply plugins again after the page is fully loaded
@@ -769,12 +819,21 @@ export default function App() {
         });
         
         // Update tab title to show error
-        setTabs(prevTabs => 
-          prevTabs.map(tab => 
-            tab.id === tabId 
-              ? { ...tab, title: 'Error Loading Page', isReady: true } 
-              : tab
-          )
+        setWorkspaces(prevWorkspaces => 
+          prevWorkspaces.map(workspace => {
+            const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+            if (tabExists) {
+              return {
+                ...workspace,
+                tabs: workspace.tabs.map(tab => 
+                  tab.id === tabId 
+                    ? { ...tab, title: 'Error Loading Page', isReady: true } 
+                    : tab
+                )
+              };
+            }
+            return workspace;
+          })
         );
       });
     }, 0);
@@ -1333,10 +1392,21 @@ export default function App() {
       // First navigate to the starting URL if it exists
       if (workflow.startUrl) {
         // Update the tab URL
-        const updatedTabs = tabs.map(tab => 
-          tab.id === activeTabId ? { ...tab, url: workflow.startUrl || tab.url, title: 'Loading...' } : tab
+        setWorkspaces(prevWorkspaces => 
+          prevWorkspaces.map(workspace => 
+            workspace.id === activeWorkspaceId
+              ? { 
+                  ...workspace, 
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === activeTabId 
+                      ? { ...tab, url: workflow.startUrl || tab.url, title: 'Loading...' } 
+                      : tab
+                  ) 
+                }
+              : workspace
+          )
         );
-        setTabs(updatedTabs);
+        
         setUrlInput(workflow.startUrl);
         
         // Navigate to the URL
@@ -1810,15 +1880,32 @@ export default function App() {
     }
   };
 
+  // Close a tab
   const closeTab = (workspaceId: string, tabId: string) => {
-    setWorkspaces(prev => prev.map(workspace => 
-      workspace.id === workspaceId
-        ? { ...workspace, tabs: workspace.tabs.filter(tab => tab.id !== tabId) }
-        : workspace
-    ));
-    if (activeTabId === tabId) {
-      setActiveTabId(prev => prev.find(id => id !== tabId) || '1');
+    // Don't close the last tab
+    const workspace = workspaces.find(w => w.id === workspaceId);
+    if (!workspace || workspace.tabs.length <= 1) return; 
+    
+    // If closing the active tab, activate another tab first
+    if (tabId === activeTabId) {
+      const tabIndex = workspace.tabs.findIndex(t => t.id === tabId);
+      const newActiveTab = workspace.tabs[tabIndex === 0 ? 1 : tabIndex - 1];
+      setActiveTabId(newActiveTab.id);
     }
+    
+    // Remove the tab from webviewRefs
+    const newWebviewRefs = { ...webviewRefs.current };
+    delete newWebviewRefs[tabId];
+    webviewRefs.current = newWebviewRefs;
+    
+    // Remove the tab from workspaces state
+    setWorkspaces(prevWorkspaces => 
+      prevWorkspaces.map(workspace => 
+        workspace.id === workspaceId
+          ? { ...workspace, tabs: workspace.tabs.filter(t => t.id !== tabId) }
+          : workspace
+      )
+    );
   };
 
   return (
@@ -1949,7 +2036,7 @@ export default function App() {
                         }}
                       >
                         {tab.favicon ? (
-                          <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" />
+                          <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" alt="favicon" />
                         ) : (
                           <FiChrome className="w-4 h-4 flex-shrink-0" />
                         )}
@@ -1966,6 +2053,30 @@ export default function App() {
                       </button>
                     </div>
                   ))}
+                  
+                  {/* Add New Tab button inside workspace */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addTab();
+                    }}
+                    className="w-full mt-1 px-2 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-600 rounded flex items-center"
+                  >
+                    <FiPlus className="mr-1 w-3 h-3" />
+                    <span>New Tab</span>
+                  </button>
+                  
+                  {/* Button to go back to workspace list */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDashboard(true);
+                    }}
+                    className="w-full mt-2 px-2 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-600 rounded flex items-center"
+                  >
+                    <FiArrowLeft className="mr-1 w-3 h-3" />
+                    <span>Back to Home</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1973,14 +2084,6 @@ export default function App() {
         </div>
 
         <div className="px-2 pb-2 space-y-2 border-t border-gray-700 pt-2">
-          <button
-            onClick={addTab}
-            className="w-full p-2 rounded-lg bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 flex items-center justify-center space-x-2"
-          >
-            <FiPlus className="w-5 h-5" />
-            <span>New Tab</span>
-          </button>
-          
           <button 
             onClick={() => {
               setShowAIChat(!showAIChat)
