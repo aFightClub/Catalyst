@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage } from 'react-icons/fi'
+import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome } from 'react-icons/fi'
 import { applyPluginsToWebview, Plugin } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import Settings from './components/Settings/Settings'
@@ -7,6 +7,7 @@ import AIChat from './components/AIChat/AIChat'
 import Writer from './components/Writer/Writer'
 import Tasks from './components/Tasks/Tasks'
 import Images from './components/Images/Images'
+import Dashboard from './components/Dashboard/Dashboard'
 
 // Define layout types
 enum LayoutType {
@@ -81,6 +82,7 @@ export default function App() {
   const [showWriter, setShowWriter] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
   const [showImages, setShowImages] = useState(false)
+  const [showDashboard, setShowDashboard] = useState(true) // Dashboard shown by default
   
   // Load erased elements from localStorage
   useEffect(() => {
@@ -1348,18 +1350,40 @@ export default function App() {
   return (
     <div className="h-screen flex">
       <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-12">
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col">
+          <button 
+            onClick={() => {
+              setShowDashboard(true)
+              setShowSettings(false)
+              setShowAIChat(false)
+              setShowWriter(false)
+              setShowTasks(false)
+              setShowImages(false)
+            }}
+            className={`w-full p-2 mb-2 rounded-lg ${showDashboard ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiHome className="w-5 h-5" />
+            <span>Home</span>
+          </button>
+        </div>
+
+        <div className="text-sm font-medium text-gray-400 px-4 py-2">
+          Tabs
+        </div>
+        
+        <div className="flex-1 overflow-y-auto mb-2">
           {tabs.map(tab => (
             <div
               key={tab.id}
               className={`px-4 py-2 cursor-pointer flex items-center justify-between group ${
-                activeTabId === tab.id ? 'bg-gray-700' : 'hover:bg-gray-700'
+                activeTabId === tab.id && !showDashboard && !showAIChat && !showWriter && !showTasks && !showImages && !showSettings ? 'bg-gray-700' : 'hover:bg-gray-700'
               }`}
             >
               <div 
                 className="flex items-center space-x-2 overflow-hidden flex-1"
                 onClick={() => {
                   setActiveTabId(tab.id)
+                  setShowDashboard(false)
                   setShowSettings(false)
                   setShowAIChat(false)
                   setShowWriter(false)
@@ -1403,7 +1427,7 @@ export default function App() {
           ))}
         </div>
 
-        <div className="px-2 pb-2 space-y-2">
+        <div className="px-2 pb-2 space-y-2 border-t border-gray-700 pt-2">
           <button
             onClick={addTab}
             className="w-full p-2 rounded-lg bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 flex items-center justify-center space-x-2"
@@ -1415,6 +1439,7 @@ export default function App() {
           <button 
             onClick={() => {
               setShowAIChat(!showAIChat)
+              setShowDashboard(false)
               setShowSettings(false)
               setShowWriter(false)
               setShowTasks(false)
@@ -1429,6 +1454,7 @@ export default function App() {
           <button 
             onClick={() => {
               setShowWriter(!showWriter)
+              setShowDashboard(false)
               setShowSettings(false)
               setShowAIChat(false)
               setShowTasks(false)
@@ -1443,6 +1469,7 @@ export default function App() {
           <button 
             onClick={() => {
               setShowTasks(!showTasks)
+              setShowDashboard(false)
               setShowSettings(false)
               setShowAIChat(false)
               setShowWriter(false)
@@ -1457,6 +1484,7 @@ export default function App() {
           <button 
             onClick={() => {
               setShowImages(!showImages)
+              setShowDashboard(false)
               setShowSettings(false)
               setShowAIChat(false)
               setShowWriter(false)
@@ -1471,6 +1499,7 @@ export default function App() {
           <button 
             onClick={() => {
               setShowSettings(!showSettings)
+              setShowDashboard(false)
               setShowAIChat(false)
               setShowWriter(false)
               setShowTasks(false)
@@ -1495,6 +1524,8 @@ export default function App() {
           <Tasks />
         ) : showImages ? (
           <Images />
+        ) : showDashboard ? (
+          <Dashboard />
         ) : (
           <>
             <div className="h-14 bg-gray-800 flex items-center px-4 space-x-2">
