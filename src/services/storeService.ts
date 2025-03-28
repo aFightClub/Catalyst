@@ -41,6 +41,24 @@ const schema = {
     type: "object",
     default: {},
   },
+  workspaces: {
+    type: "array",
+    default: [
+      {
+        id: "default",
+        name: "Default Workspace",
+        tabs: [
+          {
+            id: "1",
+            title: "Google",
+            url: "https://google.com",
+            isReady: false,
+          },
+        ],
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  },
   erasedElements: {
     type: "array",
     default: [],
@@ -296,6 +314,16 @@ export const storeService = {
     return s.set("workflowVariables", variables);
   },
 
+  // Workspaces
+  getWorkspaces: async () => {
+    const s = await ensureStore();
+    return s.get("workspaces") as any[];
+  },
+  saveWorkspaces: async (workspaces: any[]) => {
+    const s = await ensureStore();
+    return s.set("workspaces", workspaces);
+  },
+
   // Websites
   getWebsites: async () => {
     const s = await ensureStore();
@@ -425,6 +453,27 @@ export const storeService = {
       if (localWorkflows) {
         s.set("workflows", JSON.parse(localWorkflows));
         localStorage.removeItem("workflows");
+      }
+
+      // Migrate tabs to workspaces if available
+      const localTabs = localStorage.getItem("tabs");
+      if (localTabs) {
+        try {
+          const tabs = JSON.parse(localTabs);
+          if (Array.isArray(tabs) && tabs.length > 0) {
+            // Create a default workspace with these tabs
+            const workspace = {
+              id: "default",
+              name: "Migrated Workspace",
+              tabs,
+              createdAt: new Date().toISOString(),
+            };
+            s.set("workspaces", [workspace]);
+          }
+        } catch (e) {
+          console.error("Failed to migrate tabs to workspaces:", e);
+        }
+        localStorage.removeItem("tabs");
       }
 
       // Migrate subscriptions

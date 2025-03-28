@@ -53,6 +53,13 @@ interface Tab {
   isReady?: boolean
 }
 
+interface Workspace {
+  id: string
+  name: string
+  tabs: Tab[]
+  createdAt: string
+}
+
 interface ErasedElement {
   url: string;
   selector: string;
@@ -106,11 +113,27 @@ export default function App() {
     checkForWorkflowToRun();
   }, []); // Run once on component mount
 
-  const [tabs, setTabs] = useState<Tab[]>([
-    { id: '1', title: 'Google', url: 'https://google.com', isReady: false }
-  ])
-  const [activeTabId, setActiveTabId] = useState('1')
-  const [urlInput, setUrlInput] = useState('')
+  // Workspace and tab state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([
+    { 
+      id: 'default', 
+      name: 'Default Workspace',
+      tabs: [{ id: '1', title: 'Google', url: 'https://google.com', isReady: false }],
+      createdAt: new Date().toISOString()
+    }
+  ]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState('default');
+  const [activeTabId, setActiveTabId] = useState('1');
+  const [urlInput, setUrlInput] = useState('');
+  const [isAddingWorkspace, setIsAddingWorkspace] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  
+  // Helper function to get current workspace
+  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
+  
+  // Helper function to get active tabs from current workspace
+  const tabs = activeWorkspace?.tabs || [];
+  
   const webviewRefs = useRef<{ [key: string]: Electron.WebviewTag }>({})
   const initialLoadCompleted = useRef<Set<string>>(new Set())
   const [showPluginPanel, setShowPluginPanel] = useState(false)
@@ -155,6 +178,57 @@ export default function App() {
     };
     loadErasedElements();
   }, []);
+
+  // Load workspaces from store
+  useEffect(() => {
+    const loadWorkspaces = async () => {
+      try {
+        const storedWorkspaces = await storeService.getWorkspaces();
+        if (storedWorkspaces && Array.isArray(storedWorkspaces) && storedWorkspaces.length > 0) {
+          setWorkspaces(storedWorkspaces);
+          // Set active workspace and tab if available
+          const lastActiveWorkspace = localStorage.getItem('lastActiveWorkspace');
+          const lastActiveTab = localStorage.getItem('lastActiveTab');
+          
+          if (lastActiveWorkspace) {
+            const workspace = storedWorkspaces.find(w => w.id === lastActiveWorkspace);
+            if (workspace) {
+              setActiveWorkspaceId(workspace.id);
+              
+              if (lastActiveTab) {
+                const tab = workspace.tabs.find(t => t.id === lastActiveTab);
+                if (tab) {
+                  setActiveTabId(tab.id);
+                } else if (workspace.tabs.length > 0) {
+                  setActiveTabId(workspace.tabs[0].id);
+                }
+              } else if (workspace.tabs.length > 0) {
+                setActiveTabId(workspace.tabs[0].id);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load workspaces:', error);
+      }
+    };
+    loadWorkspaces();
+  }, []);
+
+  // Save workspaces to store whenever they change
+  useEffect(() => {
+    const saveWorkspaces = async () => {
+      try {
+        await storeService.saveWorkspaces(workspaces);
+        // Save active workspace and tab to localStorage for quicker retrieval
+        localStorage.setItem('lastActiveWorkspace', activeWorkspaceId);
+        localStorage.setItem('lastActiveTab', activeTabId);
+      } catch (error) {
+        console.error('Failed to save workspaces:', error);
+      }
+    };
+    saveWorkspaces();
+  }, [workspaces, activeWorkspaceId, activeTabId]);
 
   // Save erased elements to store whenever they change
   useEffect(() => {
@@ -211,7 +285,7 @@ export default function App() {
     };
   }, []);
 
-  // Function to run a workflow in a new tab within the current window
+  // Function to run a workflow in a new tab
   const runWorkflowInNewTab = (workflowId: string, variables: {[key: string]: string} = {}) => {
     // Find the workflow by ID
     const workflowToRun = workflows.find(w => w.id === workflowId);
@@ -220,7 +294,7 @@ export default function App() {
       return;
     }
 
-    // Create a new tab
+    // Create a new tab in the current workspace
     const newTabId = Date.now().toString();
     const initialUrl = workflowToRun.startUrl || 'about:blank';
     
@@ -231,8 +305,15 @@ export default function App() {
       isReady: false
     };
     
-    // Add the new tab and make it active
-    setTabs(prevTabs => [...prevTabs, newTab]);
+    // Add the new tab to the current workspace
+    setWorkspaces(prevWorkspaces => 
+      prevWorkspaces.map(workspace => 
+        workspace.id === activeWorkspaceId
+          ? { ...workspace, tabs: [...workspace.tabs, newTab] }
+          : workspace
+      )
+    );
+    
     setActiveTabId(newTabId);
     
     // Hide settings
@@ -255,7 +336,8 @@ export default function App() {
   
   // Check if we need to run a workflow when a tab becomes ready
   useEffect(() => {
-    if (pendingWorkflowRun && tabs.some(tab => tab.id === pendingWorkflowRun.tabId && tab.isReady)) {
+    if (pendingWorkflowRun && 
+        activeWorkspace.tabs.some(tab => tab.id === pendingWorkflowRun.tabId && tab.isReady)) {
       // Tab is ready, run the workflow
       const { workflow, variables } = pendingWorkflowRun;
       setTimeout(() => {
@@ -263,7 +345,7 @@ export default function App() {
         setPendingWorkflowRun(null);
       }, 1000); // Small delay to ensure the page is fully loaded
     }
-  }, [tabs, pendingWorkflowRun]);
+  }, [workspaces, pendingWorkflowRun, activeWorkspace]);
 
   // Toggle eraser mode and inject eraser script when activated
   const toggleEraserMode = async () => {
@@ -778,13 +860,15 @@ export default function App() {
     );
   };
 
-  // Function to render the layout based on currentLayout - update all instances of webview with renderWebviewWithLoader
+  // Function to render the layout based on currentLayout
   const renderLayout = () => {
+    const currentWorkspaceTabs = activeWorkspace?.tabs || [];
+    
     switch (currentLayout) {
       case LayoutType.SINGLE:
         return (
           <main className="flex-1 p-2.5 pt-0">
-            {tabs.map(tab => (
+            {currentWorkspaceTabs.map(tab => (
               <div
                 key={tab.id}
                 style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%' }}
@@ -801,16 +885,16 @@ export default function App() {
         return (
           <main className="flex-1 p-2.5 pt-0 flex">
             <div className="w-1/2 pr-1 h-full">
-              {tabs.length > 0 && (
+              {currentWorkspaceTabs.length > 0 && (
                 <div className="h-full rounded-md overflow-hidden shadow-lg">
-                  {renderWebviewWithLoader(tabs[0].id, tabs[0].url)}
+                  {renderWebviewWithLoader(currentWorkspaceTabs[0].id, currentWorkspaceTabs[0].url)}
                 </div>
               )}
             </div>
             <div className="w-1/2 pl-1 h-full">
-              {tabs.length > 1 ? (
+              {currentWorkspaceTabs.length > 1 ? (
                 <div className="h-full rounded-md overflow-hidden shadow-lg">
-                  {renderWebviewWithLoader(tabs[1].id, tabs[1].url)}
+                  {renderWebviewWithLoader(currentWorkspaceTabs[1].id, currentWorkspaceTabs[1].url)}
                 </div>
               ) : (
                 <div className="h-full rounded-md overflow-hidden shadow-lg flex items-center justify-center bg-gray-800 text-gray-400">
@@ -827,16 +911,16 @@ export default function App() {
           <main className="flex-1 p-2.5 pt-0 flex flex-col">
             <div className="h-1/2 pb-1 flex">
               <div className="w-1/2 pr-1 h-full">
-                {tabs.length > 0 && (
+                {currentWorkspaceTabs.length > 0 && (
                   <div className="h-full rounded-md overflow-hidden shadow-lg">
-                    {renderWebviewWithLoader(tabs[0].id, tabs[0].url)}
+                    {renderWebviewWithLoader(currentWorkspaceTabs[0].id, currentWorkspaceTabs[0].url)}
                   </div>
                 )}
               </div>
               <div className="w-1/2 pl-1 h-full">
-                {tabs.length > 1 ? (
+                {currentWorkspaceTabs.length > 1 ? (
                   <div className="h-full rounded-md overflow-hidden shadow-lg">
-                    {renderWebviewWithLoader(tabs[1].id, tabs[1].url)}
+                    {renderWebviewWithLoader(currentWorkspaceTabs[1].id, currentWorkspaceTabs[1].url)}
                   </div>
                 ) : (
                   <div className="h-full rounded-md overflow-hidden shadow-lg flex items-center justify-center bg-gray-800 text-gray-400">
@@ -846,9 +930,9 @@ export default function App() {
               </div>
             </div>
             <div className="h-1/2 pt-1">
-              {tabs.length > 2 ? (
+              {currentWorkspaceTabs.length > 2 ? (
                 <div className="h-full rounded-md overflow-hidden shadow-lg">
-                  {renderWebviewWithLoader(tabs[2].id, tabs[2].url)}
+                  {renderWebviewWithLoader(currentWorkspaceTabs[2].id, currentWorkspaceTabs[2].url)}
                 </div>
               ) : (
                 <div className="h-full rounded-md overflow-hidden shadow-lg flex items-center justify-center bg-gray-800 text-gray-400">
@@ -1690,6 +1774,53 @@ export default function App() {
     );
   };
 
+  // Add a new workspace
+  const addWorkspace = () => {
+    if (!newWorkspaceName.trim()) return;
+    
+    const newWorkspace: Workspace = {
+      id: Date.now().toString(),
+      name: newWorkspaceName.trim(),
+      tabs: [{ id: Date.now() + '1', title: 'New Tab', url: 'https://google.com', isReady: false }],
+      createdAt: new Date().toISOString()
+    };
+    
+    setWorkspaces([...workspaces, newWorkspace]);
+    setActiveWorkspaceId(newWorkspace.id);
+    setActiveTabId(newWorkspace.tabs[0].id);
+    setNewWorkspaceName('');
+    setIsAddingWorkspace(false);
+  };
+
+  // Delete a workspace
+  const deleteWorkspace = (id: string) => {
+    // Don't delete if it's the only workspace
+    if (workspaces.length <= 1) return;
+    
+    const updatedWorkspaces = workspaces.filter(w => w.id !== id);
+    setWorkspaces(updatedWorkspaces);
+    
+    // If the active workspace is deleted, activate another one
+    if (id === activeWorkspaceId) {
+      const newActiveWorkspace = updatedWorkspaces[0];
+      setActiveWorkspaceId(newActiveWorkspace.id);
+      if (newActiveWorkspace.tabs.length > 0) {
+        setActiveTabId(newActiveWorkspace.tabs[0].id);
+      }
+    }
+  };
+
+  const closeTab = (workspaceId: string, tabId: string) => {
+    setWorkspaces(prev => prev.map(workspace => 
+      workspace.id === workspaceId
+        ? { ...workspace, tabs: workspace.tabs.filter(tab => tab.id !== tabId) }
+        : workspace
+    ));
+    if (activeTabId === tabId) {
+      setActiveTabId(prev => prev.find(id => id !== tabId) || '1');
+    }
+  };
+
   return (
     <div className="h-screen flex">
       <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-12">
@@ -1713,64 +1844,130 @@ export default function App() {
           </button>
         </div>
 
-        <div className="text-sm font-medium text-gray-400 px-4 py-2">
-          Tabs
+        <div className="text-sm font-medium text-gray-400 px-4 py-2 flex justify-between items-center">
+          <span>Workspaces</span>
+          <button 
+            onClick={() => setIsAddingWorkspace(true)}
+            className="p-1 hover:bg-gray-700 rounded"
+            title="Add New Workspace"
+          >
+            <FiPlus className="w-4 h-4" />
+          </button>
         </div>
         
+        {isAddingWorkspace && (
+          <div className="px-4 py-2 mb-2">
+            <div className="bg-gray-700 p-2 rounded">
+              <input
+                type="text"
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                placeholder="Workspace name"
+                className="w-full bg-gray-600 text-white border border-gray-500 rounded px-2 py-1 mb-2"
+                autoFocus
+              />
+              <div className="flex space-x-1">
+                <button 
+                  onClick={addWorkspace}
+                  disabled={!newWorkspaceName.trim()}
+                  className={`flex-1 px-2 py-1 rounded text-white ${newWorkspaceName.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600'}`}
+                >
+                  Add
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsAddingWorkspace(false);
+                    setNewWorkspaceName('');
+                  }}
+                  className="flex-1 px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="flex-1 overflow-y-auto mb-2">
-          {tabs.map(tab => (
+          {workspaces.map(workspace => (
             <div
-              key={tab.id}
-              className={`px-4 py-2 cursor-pointer flex items-center justify-between group ${
-                activeTabId === tab.id && !showDashboard && !showAIChat && !showWriter && !showTasks && !showImages && !showSettings && !showSubscriptions && !showWebsites ? 'bg-gray-700' : 'hover:bg-gray-700'
-              }`}
+              key={workspace.id}
+              className={`mb-2 ${activeWorkspaceId === workspace.id ? 'bg-gray-700' : ''}`}
             >
               <div 
-                className="flex items-center space-x-2 overflow-hidden flex-1"
+                className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-700"
                 onClick={() => {
-                  setActiveTabId(tab.id)
-                  setShowDashboard(false)
-                  setShowSettings(false)
-                  setShowAIChat(false)
-                  setShowWriter(false)
-                  setShowTasks(false)
-                  setShowImages(false)
-                  setShowSubscriptions(false)
-                  setShowWebsites(false)
-                }}
-              >
-                {tab.favicon ? (
-                  <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" />
-                ) : (
-                  <FiChrome className="w-4 h-4 flex-shrink-0" />
-                )}
-                <span className="truncate">{tab.title}</span>
-              </div>
-              <button
-                className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // Don't close the tab if it's the only one
-                  if (tabs.length <= 1) return
-                  
-                  // If closing the active tab, activate another tab first
-                  if (tab.id === activeTabId) {
-                    const tabIndex = tabs.findIndex(t => t.id === tab.id)
-                    const newActiveTab = tabs[tabIndex === 0 ? 1 : tabIndex - 1]
-                    setActiveTabId(newActiveTab.id)
+                  setActiveWorkspaceId(workspace.id);
+                  if (workspace.tabs.length > 0) {
+                    setActiveTabId(workspace.tabs[0].id);
                   }
-                  
-                  // Remove the tab from webviewRefs
-                  const newWebviewRefs = { ...webviewRefs.current }
-                  delete newWebviewRefs[tab.id]
-                  webviewRefs.current = newWebviewRefs
-                  
-                  // Remove the tab from tabs state
-                  setTabs(tabs.filter(t => t.id !== tab.id))
+                  setShowDashboard(false);
+                  setShowSettings(false);
+                  setShowAIChat(false);
+                  setShowWriter(false);
+                  setShowTasks(false);
+                  setShowImages(false);
+                  setShowSubscriptions(false);
+                  setShowWebsites(false);
                 }}
               >
-                &times;
-              </button>
+                <div className="flex items-center">
+                  <FiPackage className="w-4 h-4 mr-2" />
+                  <span className="font-medium">{workspace.name}</span>
+                </div>
+                
+                {workspaces.length > 1 && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteWorkspace(workspace.id);
+                    }}
+                    className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete Workspace"
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+              
+              {/* Show tabs for active workspace */}
+              {activeWorkspaceId === workspace.id && !showDashboard && 
+               !showSettings && !showAIChat && !showWriter && !showTasks && 
+               !showImages && !showSubscriptions && !showWebsites && (
+                <div className="ml-4 border-l border-gray-700 pl-2">
+                  {workspace.tabs.map(tab => (
+                    <div
+                      key={tab.id}
+                      className={`px-2 py-1 cursor-pointer flex items-center justify-between group ${
+                        activeTabId === tab.id ? 'bg-gray-600' : 'hover:bg-gray-600'
+                      }`}
+                    >
+                      <div 
+                        className="flex items-center space-x-2 overflow-hidden flex-1"
+                        onClick={() => {
+                          setActiveTabId(tab.id);
+                        }}
+                      >
+                        {tab.favicon ? (
+                          <img src={tab.favicon} className="w-4 h-4 flex-shrink-0" />
+                        ) : (
+                          <FiChrome className="w-4 h-4 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{tab.title}</span>
+                      </div>
+                      <button
+                        className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeTab(workspace.id, tab.id);
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1965,6 +2162,10 @@ export default function App() {
                   <FiArrowRight className="w-5 h-5" />
                 </button>
                 
+              </div>
+              
+              <div className="mr-2 px-2 py-1 bg-gray-700 rounded text-sm">
+                {activeWorkspace?.name || 'Default Workspace'}
               </div>
 
               <div className="flex-1">
