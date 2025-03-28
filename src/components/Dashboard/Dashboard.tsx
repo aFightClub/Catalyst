@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiRefreshCw, FiEdit } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiRefreshCw, FiEdit, FiDollarSign, FiGlobe, FiClock } from 'react-icons/fi';
+import { storeService } from '../../services/storeService';
 
 // Card types
 enum CardType {
@@ -18,6 +19,18 @@ interface Card {
   lastFetched?: number;
 }
 
+interface Subscription {
+  id: string;
+  price: number;
+  billingCycle: 'monthly' | 'yearly';
+  category: string;
+}
+
+interface Website {
+  id: string;
+  status: 'active' | 'idea' | 'archived';
+}
+
 const Dashboard: React.FC = () => {
   const [cards, setCards] = useState<Card[]>([]);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
@@ -27,36 +40,83 @@ const Dashboard: React.FC = () => {
   const [newCardFetchUrl, setNewCardFetchUrl] = useState('');
   const [newCardApiKey, setNewCardApiKey] = useState('');
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [websites, setWebsites] = useState<Website[]>([]);
 
-  // Load cards from localStorage
+  // Update current date and time every minute
   useEffect(() => {
-    const savedCards = localStorage.getItem('dashboard_cards');
-    if (savedCards) {
-      try {
-        const parsedCards = JSON.parse(savedCards);
-        setCards(parsedCards);
-      } catch (e) {
-        console.error('Failed to parse saved cards:', e);
-        setCards([]);
-      }
-    } else {
-      // Initialize with default cards for first-time users
-      const defaultCards: Card[] = [
-        {
-          id: '1',
-          type: CardType.TEXT,
-          title: 'Welcome to Your Marketing Dashboard',
-          content: 'Add cards to track your marketing metrics and keep important notes. Click the + button to add a new card.'
-        }
-      ];
-      setCards(defaultCards);
-      localStorage.setItem('dashboard_cards', JSON.stringify(defaultCards));
-    }
+    const intervalId = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 60000);
+    
+    return () => clearInterval(intervalId);
   }, []);
+
+  // Load data from storeService
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // We'll use localStorage for dashboard cards since there's no specific method for them
+        const savedCards = localStorage.getItem('dashboard_cards');
+        if (savedCards) {
+          try {
+            const parsedCards = JSON.parse(savedCards);
+            setCards(parsedCards);
+          } catch (e) {
+            console.error('Failed to parse saved cards:', e);
+            initializeDefaultCards();
+          }
+        } else {
+          initializeDefaultCards();
+        }
+        
+        // Load stats data
+        const storedSubscriptions = await storeService.getSubscriptions();
+        if (storedSubscriptions && Array.isArray(storedSubscriptions)) {
+          setSubscriptions(storedSubscriptions);
+        }
+        
+        const storedWebsites = await storeService.getWebsites();
+        if (storedWebsites && Array.isArray(storedWebsites)) {
+          setWebsites(storedWebsites);
+        }
+      } catch (e) {
+        console.error('Failed to load data:', e);
+        initializeDefaultCards();
+      }
+    };
+    
+    loadData();
+  }, []);
+  
+  // Initialize default cards
+  const initializeDefaultCards = () => {
+    const defaultCards: Card[] = [
+      {
+        id: '1',
+        type: CardType.TEXT,
+        title: 'Welcome to Your Dashboard',
+        content: 'Add cards to track your metrics and keep important notes. Click the + button to add a new card.'
+      }
+    ];
+    setCards(defaultCards);
+  };
 
   // Save cards to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('dashboard_cards', JSON.stringify(cards));
+    const saveCards = async () => {
+      try {
+        // Save to localStorage
+        localStorage.setItem('dashboard_cards', JSON.stringify(cards));
+      } catch (e) {
+        console.error('Failed to save cards:', e);
+      }
+    };
+    
+    if (cards.length > 0) {
+      saveCards();
+    }
   }, [cards]);
 
   // Fetch data for stat cards
@@ -125,6 +185,53 @@ const Dashboard: React.FC = () => {
     
     return () => clearInterval(intervalId);
   }, [cards]);
+
+  // Calculate subscription costs
+  const calculateSubscriptionCosts = () => {
+    let monthlyCost = 0;
+    let yearlyCost = 0;
+    
+    subscriptions.forEach(sub => {
+      const price = parseFloat(sub.price.toString());
+      if (sub.billingCycle === 'monthly') {
+        monthlyCost += price;
+        yearlyCost += price * 12;
+      } else {
+        monthlyCost += price / 12;
+        yearlyCost += price;
+      }
+    });
+    
+    return {
+      monthlyCost,
+      yearlyCost,
+      total: subscriptions.length
+    };
+  };
+  
+  // Get website stats
+  const getWebsiteStats = () => {
+    const activeCount = websites.filter(site => site.status === 'active').length;
+    const ideaCount = websites.filter(site => site.status === 'idea').length;
+    const archivedCount = websites.filter(site => site.status === 'archived').length;
+    
+    return {
+      active: activeCount,
+      ideas: ideaCount,
+      archived: archivedCount,
+      total: websites.length
+    };
+  };
+
+  // Format currency values
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
 
   const addCard = () => {
     if (!newCardTitle) return;
@@ -288,10 +395,15 @@ const Dashboard: React.FC = () => {
     }));
   };
 
+  const { monthlyCost, yearlyCost, total: totalSubscriptions } = calculateSubscriptionCosts();
+  const websiteStats = getWebsiteStats();
+
   return (
     <div className="flex flex-col h-full bg-gray-900 overflow-auto">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center sticky top-0 z-10">
-        <h2 className="text-xl font-bold text-white">Marketing Dashboard</h2>
+        <h2 className="text-xl font-bold text-white">
+          {currentDateTime.toLocaleDateString('en-US', { weekday: 'long' })} ({currentDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()}) - {currentDateTime.toLocaleDateString('en-US', { month: 'long' })}, {currentDateTime.getFullYear()}
+        </h2>
         <button
           onClick={() => {
             setEditingCardId(null);
@@ -303,6 +415,66 @@ const Dashboard: React.FC = () => {
         >
           <FiPlus className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* Stats Overview Section */}
+      <div className="px-4 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Subscription Stats */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <div className="flex items-center mb-2">
+              <FiDollarSign className="text-green-500 mr-2" />
+              <h3 className="text-white font-medium">Subscriptions</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-gray-400 text-sm">Monthly</p>
+                <p className="text-white text-xl font-bold">{formatCurrency(monthlyCost)}</p>
+              </div>
+              <div>
+                <p className="text-gray-400 text-sm">Yearly</p>
+                <p className="text-white text-xl font-bold">{formatCurrency(yearlyCost)}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-400 text-sm">Total Subscriptions</p>
+                <p className="text-white text-xl font-bold">{totalSubscriptions}</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Website Stats */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <div className="flex items-center mb-2">
+              <FiGlobe className="text-blue-500 mr-2" />
+              <h3 className="text-white font-medium">Websites</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-gray-400 text-sm">Active</p>
+                <p className="text-white text-xl font-bold">{websiteStats.active}</p>
+              </div>
+              <div>
+                <p className="text-gray-400 text-sm">Ideas</p>
+                <p className="text-white text-xl font-bold">{websiteStats.ideas}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-400 text-sm">Total Websites</p>
+                <p className="text-white text-xl font-bold">{websiteStats.total}</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Time Stats */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <div className="flex items-center mb-2">
+              <FiClock className="text-purple-500 mr-2" />
+              <h3 className="text-white font-medium">Time Tracker</h3>
+            </div>
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-400 text-lg">Coming soon</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 p-4 overflow-auto">

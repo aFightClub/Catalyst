@@ -404,6 +404,200 @@ export const storeService = {
     return s.set("automations", automations);
   },
 
+  // Export all data to a JSON file
+  exportAllData: async (): Promise<string> => {
+    const s = await ensureStore();
+
+    // Collect all data from the store
+    const exportData = {
+      tasks: await s.get("tasks"),
+      projects: await s.get("projects"),
+      documents: await s.get("documents"),
+      workflows: await s.get("workflows"),
+      workflowVariables: await s.get("workflowVariables"),
+      workspaces: await s.get("workspaces"),
+      erasedElements: await s.get("erasedElements"),
+      apiKeys: await s.get("apiKeys"),
+      websites: await s.get("websites"),
+      subscriptions: await s.get("subscriptions"),
+      userContext: await s.get("userContext"),
+      assistants: await s.get("assistants"),
+      chats: await s.get("chats"),
+      exportDate: new Date().toISOString(),
+      appVersion: "1.0.0", // Add version for future compatibility checks
+    };
+
+    // Convert to JSON string
+    return JSON.stringify(exportData, null, 2);
+  },
+
+  // Import data from a JSON file
+  importFromJSON: async (
+    jsonData: string,
+    options: {
+      overwrite?: boolean;
+      importWorkspaces?: boolean;
+      importWorkflows?: boolean;
+      importTasks?: boolean;
+      importSubscriptions?: boolean;
+      importErasedElements?: boolean;
+      importAssistants?: boolean;
+      importChats?: boolean;
+      importWebsites?: boolean;
+    } = {}
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const s = await ensureStore();
+      const data = JSON.parse(jsonData);
+
+      // Check if the data format is valid
+      if (!data || typeof data !== "object") {
+        return { success: false, message: "Invalid data format" };
+      }
+
+      // Import data selectively based on options
+      if (options.importWorkspaces !== false && data.workspaces) {
+        if (options.overwrite) {
+          await s.set("workspaces", data.workspaces);
+        } else {
+          // Merge workspaces, avoiding duplicates by ID
+          const currentWorkspaces = (await s.get("workspaces")) as any[];
+          const existingIds = new Set(currentWorkspaces.map((w) => w.id));
+          const newWorkspaces = [...currentWorkspaces];
+
+          for (const workspace of data.workspaces) {
+            if (!existingIds.has(workspace.id)) {
+              newWorkspaces.push(workspace);
+              existingIds.add(workspace.id);
+            }
+          }
+
+          await s.set("workspaces", newWorkspaces);
+        }
+      }
+
+      if (options.importWorkflows !== false && data.workflows) {
+        if (options.overwrite) {
+          await s.set("workflows", data.workflows);
+        } else {
+          const currentWorkflows = (await s.get("workflows")) as any[];
+          const existingIds = new Set(currentWorkflows.map((w) => w.id));
+          const newWorkflows = [...currentWorkflows];
+
+          for (const workflow of data.workflows) {
+            if (!existingIds.has(workflow.id)) {
+              newWorkflows.push(workflow);
+              existingIds.add(workflow.id);
+            }
+          }
+
+          await s.set("workflows", newWorkflows);
+        }
+      }
+
+      // Import other data types as needed
+      if (options.importTasks !== false && data.tasks) {
+        if (options.overwrite) {
+          await s.set("tasks", data.tasks);
+        } else {
+          const currentTasks = (await s.get("tasks")) as any[];
+          const existingIds = new Set(currentTasks.map((t) => t.id));
+          const newTasks = [...currentTasks];
+
+          for (const task of data.tasks) {
+            if (!existingIds.has(task.id)) {
+              newTasks.push(task);
+              existingIds.add(task.id);
+            }
+          }
+
+          await s.set("tasks", newTasks);
+        }
+      }
+
+      if (options.importSubscriptions !== false && data.subscriptions) {
+        if (options.overwrite) {
+          await s.set("subscriptions", data.subscriptions);
+        } else {
+          const currentSubs = (await s.get("subscriptions")) as any[];
+          const existingIds = new Set(currentSubs.map((sub) => sub.id));
+          const newSubs = [...currentSubs];
+
+          for (const sub of data.subscriptions) {
+            if (!existingIds.has(sub.id)) {
+              newSubs.push(sub);
+              existingIds.add(sub.id);
+            }
+          }
+
+          await s.set("subscriptions", newSubs);
+        }
+      }
+
+      if (options.importErasedElements !== false && data.erasedElements) {
+        if (options.overwrite) {
+          await s.set("erasedElements", data.erasedElements);
+        } else {
+          // For erased elements, we can't easily check for duplicates,
+          // so we'll add them all and let the UI filter out duplicates
+          const currentElements = (await s.get("erasedElements")) as any[];
+          await s.set("erasedElements", [
+            ...currentElements,
+            ...data.erasedElements,
+          ]);
+        }
+      }
+
+      if (options.importWebsites !== false && data.websites) {
+        if (options.overwrite) {
+          await s.set("websites", data.websites);
+        } else {
+          const currentSites = (await s.get("websites")) as any[];
+          const existingIds = new Set(currentSites.map((site) => site.id));
+          const newSites = [...currentSites];
+
+          for (const site of data.websites) {
+            if (!existingIds.has(site.id)) {
+              newSites.push(site);
+              existingIds.add(site.id);
+            }
+          }
+
+          await s.set("websites", newSites);
+        }
+      }
+
+      if (options.importAssistants !== false && data.assistants) {
+        if (options.overwrite) {
+          await s.set("assistants", data.assistants);
+        } else {
+          const currentAssistants = (await s.get("assistants")) as any[];
+          const existingIds = new Set(currentAssistants.map((a) => a.id));
+          const newAssistants = [...currentAssistants];
+
+          for (const assistant of data.assistants) {
+            if (!existingIds.has(assistant.id)) {
+              newAssistants.push(assistant);
+              existingIds.add(assistant.id);
+            }
+          }
+
+          await s.set("assistants", newAssistants);
+        }
+      }
+
+      return { success: true, message: "Data imported successfully" };
+    } catch (error) {
+      console.error("Error importing data:", error);
+      return {
+        success: false,
+        message: `Error importing data: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+  },
+
   // Check if store is initialized
   isInitialized: () => isInitialized,
 

@@ -2032,7 +2032,7 @@ export default function App() {
             className={`w-full p-2 mb-2 rounded-lg ${showDashboard ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
             <FiHome className="w-5 h-5" />
-            <span>Home</span>
+            <span>Dashboard</span>
           </button>
         </div>
 
@@ -2170,18 +2170,6 @@ export default function App() {
                     <FiPlus className="mr-1 w-3 h-3" />
                     <span>New Tab</span>
                   </button>
-                  
-                  {/* Button to go back to workspace list */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDashboard(true);
-                    }}
-                    className="w-full mt-2 px-2 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-600 rounded flex items-center"
-                  >
-                    <FiArrowLeft className="mr-1 w-3 h-3" />
-                    <span>Back to Home</span>
-                  </button>
                 </div>
               )}
             </div>
@@ -2285,6 +2273,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowWebsites(false)
+              setShowAutomations(false)
             }}
             className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -2302,6 +2291,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowWebsites(false)
+              setShowSubscriptions(false)
             }}
             className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >

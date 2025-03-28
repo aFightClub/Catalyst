@@ -27,7 +27,7 @@ enum SettingsPage {
   API_KEYS = 'api_keys',
   PLUGINS = 'plugins',
   WORKFLOWS = 'workflows',
-  AUTOMATIONS = 'automations',
+  DATA_BACKUP = 'data_backup',
 }
 
 // Define ApiKeys interface with index signature
@@ -60,6 +60,7 @@ declare global {
   interface Window {
     electron?: {
       send: (channel: string, data: any) => void;
+      invoke: (channel: string, data?: any) => Promise<any>;
     };
   }
 }
@@ -387,13 +388,13 @@ const Settings: React.FC = () => {
           <span>Workflows</span>
         </button>
         <button 
-          onClick={() => setCurrentPage(SettingsPage.AUTOMATIONS)}
+          onClick={() => setCurrentPage(SettingsPage.DATA_BACKUP)}
           className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.AUTOMATIONS ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+            currentPage === SettingsPage.DATA_BACKUP ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
           }`}
         >
-          <FiClock className="mr-2" />
-          <span>Scheduled Automations</span>
+          <FiSave className="mr-2" />
+          <span>Data Backup</span>
         </button>
       </div>
     </div>
@@ -1005,21 +1006,314 @@ const Settings: React.FC = () => {
     </div>
   );
 
-  const renderAutomationsPage = () => (
-    <div className="p-6 bg-gray-900 text-white">
-      <h3 className="text-xl font-bold mb-6">Scheduled Automations</h3>
-      <div className="bg-gray-800 rounded-lg p-6 flex flex-col items-center justify-center text-center">
-        <FiClock className="w-12 h-12 mb-4 text-gray-500" />
-        <h4 className="text-lg font-medium mb-2">Set Up Scheduled Tasks</h4>
-        <p className="text-gray-400 mb-4">
-          Schedule browser tasks to run automatically at specific times or intervals.
-        </p>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-          Create Schedule
-        </button>
+  const renderDataBackupPage = () => {
+    const [exportStatus, setExportStatus] = useState<string | null>(null);
+    const [importStatus, setImportStatus] = useState<string | null>(null);
+    const [importOptions, setImportOptions] = useState({
+      overwrite: false,
+      importWorkspaces: true,
+      importWorkflows: true,
+      importTasks: true,
+      importSubscriptions: true,
+      importErasedElements: true,
+      importAssistants: true,
+      importWebsites: true
+    });
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    const handleExportData = async () => {
+      try {
+        setExportStatus("Exporting data...");
+        const jsonData = await storeService.exportAllData();
+        
+        // Check if we're in Electron environment
+        if (window.electron?.invoke) {
+          // Use native Electron save dialog
+          setExportStatus("Choosing save location...");
+          const defaultPath = `browser-backup-${new Date().toISOString().split('T')[0]}.json`;
+          const result = await window.electron.invoke('export-data-to-file', { 
+            content: jsonData,
+            defaultPath
+          });
+          
+          if (result.success) {
+            setExportStatus(`Data saved to ${result.path}`);
+          } else {
+            setExportStatus(`Export canceled: ${result.message}`);
+          }
+        } else {
+          // Browser environment fallback
+          const blob = new Blob([jsonData], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          
+          // Create a link and trigger download
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `browser-backup-${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          
+          // Clean up
+          URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          setExportStatus("Data exported successfully!");
+        }
+        
+        // Clear status after a few seconds
+        setTimeout(() => setExportStatus(null), 3000);
+      } catch (error) {
+        console.error("Error exporting data:", error);
+        setExportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+    
+    const handleImportClick = async () => {
+      // Check if we're in Electron environment
+      if (window.electron?.invoke) {
+        try {
+          setImportStatus("Choosing file to import...");
+          
+          // Use native Electron open dialog
+          const result = await window.electron.invoke('import-data-from-file');
+          
+          if (result.success) {
+            setImportStatus("Reading file...");
+            const content = result.content;
+            
+            // Import the data
+            const importResult = await storeService.importFromJSON(content, importOptions);
+            
+            if (importResult.success) {
+              setImportStatus("Data imported successfully! Refreshing...");
+              
+              // Reload the page after a short delay to apply changes
+              setTimeout(() => {
+                window.location.reload();
+              }, 1500);
+            } else {
+              setImportStatus(`Import failed: ${importResult.message}`);
+            }
+          } else {
+            setImportStatus(`Import canceled: ${result.message}`);
+          }
+        } catch (error) {
+          console.error("Error importing data:", error);
+          setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      } else {
+        // Browser environment fallback
+        fileInputRef.current?.click();
+      }
+    };
+    
+    // Handle file input change (for browser-based file selection)
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      try {
+        setImportStatus("Reading file...");
+        
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const content = e.target?.result as string;
+            if (!content) {
+              setImportStatus("Error: File is empty");
+              return;
+            }
+            
+            setImportStatus("Importing data...");
+            const result = await storeService.importFromJSON(content, importOptions);
+            
+            if (result.success) {
+              setImportStatus("Data imported successfully! Refreshing...");
+              
+              // Reload the page after a short delay to apply changes
+              setTimeout(() => {
+                window.location.reload();
+              }, 1500);
+            } else {
+              setImportStatus(`Import failed: ${result.message}`);
+            }
+          } catch (error) {
+            console.error("Error importing data:", error);
+            setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        };
+        
+        reader.readAsText(file);
+      } catch (error) {
+        console.error("Error reading file:", error);
+        setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+    
+    const toggleOption = (option: keyof typeof importOptions) => {
+      setImportOptions(prev => ({
+        ...prev,
+        [option]: !prev[option]
+      }));
+    };
+    
+    return (
+      <div className="p-6 bg-gray-900 text-white">
+        <h3 className="text-xl font-bold mb-6">Data Backup & Restore</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Export Section */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h4 className="text-lg font-medium mb-4">Export Data</h4>
+            <p className="text-gray-400 mb-4">
+              Export all your workspaces, tabs, workflows, and settings to a JSON file for backup purposes.
+            </p>
+            
+            <button
+              onClick={handleExportData}
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center"
+            >
+              <FiExternalLink className="mr-2" />
+              Export to JSON File
+            </button>
+            
+            {exportStatus && (
+              <div className={`mt-3 p-2 rounded text-sm ${exportStatus.includes('Error') ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>
+                {exportStatus}
+              </div>
+            )}
+          </div>
+          
+          {/* Import Section */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h4 className="text-lg font-medium mb-4">Import Data</h4>
+            <p className="text-gray-400 mb-4">
+              Restore your data from a previously exported JSON file.
+            </p>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 text-sm font-medium mb-2">Import Options</label>
+              
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={importOptions.overwrite}
+                    onChange={() => toggleOption('overwrite')}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">Overwrite existing data (instead of merging)</span>
+                </label>
+                
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importWorkspaces}
+                      onChange={() => toggleOption('importWorkspaces')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Workspaces</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importWorkflows}
+                      onChange={() => toggleOption('importWorkflows')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Workflows</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importTasks}
+                      onChange={() => toggleOption('importTasks')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Tasks</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importSubscriptions}
+                      onChange={() => toggleOption('importSubscriptions')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Subscriptions</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importAssistants}
+                      onChange={() => toggleOption('importAssistants')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Assistants</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importWebsites}
+                      onChange={() => toggleOption('importWebsites')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Websites</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importErasedElements}
+                      onChange={() => toggleOption('importErasedElements')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Erased Elements</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            
+            <button
+              onClick={handleImportClick}
+              className="w-full px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center"
+            >
+              <FiPlus className="mr-2" />
+              Import from JSON File
+            </button>
+            
+            {importStatus && (
+              <div className={`mt-3 p-2 rounded text-sm ${importStatus.includes('Error') || importStatus.includes('failed') ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+                {importStatus}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="mt-6 bg-blue-900 bg-opacity-20 p-4 rounded border border-blue-800">
+          <h4 className="text-lg font-medium mb-2 text-blue-300">About Data Backup</h4>
+          <p className="text-gray-400">
+            Your data is stored locally in your browser or application. Exporting allows you to create a backup 
+            file that contains all your workspaces, workflows, and settings. This file can be used to restore your 
+            data in case of data loss or when moving to a new device.
+          </p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -1033,8 +1327,8 @@ const Settings: React.FC = () => {
         return renderPluginsPage();
       case SettingsPage.WORKFLOWS:
         return renderWorkflowsPage();
-      case SettingsPage.AUTOMATIONS:
-        return renderAutomationsPage();
+      case SettingsPage.DATA_BACKUP:
+        return renderDataBackupPage();
       default:
         return renderContextPage();
     }
