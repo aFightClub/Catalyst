@@ -45,6 +45,10 @@ const schema = {
     type: "object",
     default: {},
   },
+  websites: {
+    type: "array",
+    default: [],
+  },
   subscriptions: {
     type: "array",
     default: [],
@@ -268,6 +272,16 @@ export const storeService = {
   saveWorkflows: async (workflows: any[]) => {
     const s = await ensureStore();
     return s.set("workflows", workflows);
+  },
+
+  // Websites
+  getWebsites: async () => {
+    const s = await ensureStore();
+    return s.get("websites") as any[];
+  },
+  saveWebsites: async (websites: any[]) => {
+    const s = await ensureStore();
+    return s.set("websites", websites);
   },
 
   // Subscriptions

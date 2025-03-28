@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome, FiDollarSign } from 'react-icons/fi'
+import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome, FiDollarSign, FiGlobe } from 'react-icons/fi'
 import { applyPluginsToWebview, Plugin } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import { storeService } from './services/storeService'
@@ -10,6 +10,7 @@ import Tasks from './components/Tasks/Tasks'
 import Images from './components/Images/Images'
 import Dashboard from './components/Dashboard/Dashboard'
 import Subscriptions from './components/Subscriptions/Subscriptions'
+import Websites from './components/Websites/Websites'
 
 // Define layout types
 enum LayoutType {
@@ -136,6 +137,7 @@ export default function App() {
   const [showImages, setShowImages] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true) // Dashboard shown by default
   const [showSubscriptions, setShowSubscriptions] = useState(false)
+  const [showWebsites, setShowWebsites] = useState(false)
   
   // Load erased elements from store
   useEffect(() => {
@@ -1697,6 +1699,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowSubscriptions(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 mb-2 rounded-lg ${showDashboard ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1714,7 +1717,7 @@ export default function App() {
             <div
               key={tab.id}
               className={`px-4 py-2 cursor-pointer flex items-center justify-between group ${
-                activeTabId === tab.id && !showDashboard && !showAIChat && !showWriter && !showTasks && !showImages && !showSettings && !showSubscriptions ? 'bg-gray-700' : 'hover:bg-gray-700'
+                activeTabId === tab.id && !showDashboard && !showAIChat && !showWriter && !showTasks && !showImages && !showSettings && !showSubscriptions && !showWebsites ? 'bg-gray-700' : 'hover:bg-gray-700'
               }`}
             >
               <div 
@@ -1728,6 +1731,7 @@ export default function App() {
                   setShowTasks(false)
                   setShowImages(false)
                   setShowSubscriptions(false)
+                  setShowWebsites(false)
                 }}
               >
                 {tab.favicon ? (
@@ -1784,6 +1788,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowSubscriptions(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1800,6 +1805,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowSubscriptions(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 rounded-lg ${showWriter ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1816,6 +1822,7 @@ export default function App() {
               setShowWriter(false)
               setShowImages(false)
               setShowSubscriptions(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 rounded-lg ${showTasks ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1832,11 +1839,29 @@ export default function App() {
               setShowWriter(false)
               setShowTasks(false)
               setShowSubscriptions(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
             <FiImage className="w-5 h-5" />
             <span>Images</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              setShowWebsites(!showWebsites)
+              setShowDashboard(false)
+              setShowSettings(false)
+              setShowAIChat(false)
+              setShowWriter(false)
+              setShowTasks(false)
+              setShowImages(false)
+              setShowSubscriptions(false)
+            }}
+            className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiGlobe className="w-5 h-5" />
+            <span>Websites</span>
           </button>
           
           <button 
@@ -1848,6 +1873,7 @@ export default function App() {
               setShowWriter(false)
               setShowTasks(false)
               setShowImages(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1864,6 +1890,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowSubscriptions(false)
+              setShowWebsites(false)
             }}
             className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1886,6 +1913,8 @@ export default function App() {
           <Images />
         ) : showSubscriptions ? (
           <Subscriptions />
+        ) : showWebsites ? (
+          <Websites />
         ) : showDashboard ? (
           <Dashboard />
         ) : (
