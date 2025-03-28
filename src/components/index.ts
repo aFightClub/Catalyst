@@ -15,3 +15,7 @@ export { default as Dashboard } from "./Dashboard/Dashboard";
 export { default as Subscriptions } from "./Subscriptions/Subscriptions";
 export { default as Websites } from "./Websites/Websites";
 export { default as Automations } from "./Automations/Automations";
+
+// New Plugin components
+export { default as PluginEditor } from "./PluginEditor";
+export { default as PluginsManager } from "./Plugins/PluginsManager";

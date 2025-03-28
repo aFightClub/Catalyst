@@ -262,7 +262,18 @@ export default function App() {
       webview.addEventListener('dom-ready', async () => {
         // This event fires before page content is fully loaded
         console.log(`Webview DOM ready for tab ${tabId}`);
-        // We'll let did-stop-loading handle the erased elements and plugins
+        // Apply plugins as soon as DOM is ready to ensure they work properly
+        try {
+          // We'll still apply erased elements and plugins in did-stop-loading
+          // but this ensures that plugins that need to run early in page load will work
+          const plugins = pluginManager.getPlugins().filter(p => p.enabled);
+          if (plugins.length > 0) {
+            console.log(`Applying ${plugins.length} plugins on DOM ready for tab ${tabId}`);
+            await applyPluginsToWebview(webview);
+          }
+        } catch (error) {
+          console.error(`Error applying plugins on DOM ready for tab ${tabId}:`, error);
+        }
       });
       
       webview.addEventListener('did-start-loading', () => {
@@ -531,16 +542,28 @@ export default function App() {
   
   const applyPluginsToTab = async (tabId: string) => {
     const webview = webviewRefs.current[tabId];
-    if (!webview) return;
+    if (!webview) {
+      console.warn(`No webview found for tab ${tabId}, can't apply plugins`);
+      return;
+    }
+    
+    // Ensure webview is ready
+    if (webview.isLoading()) {
+      console.log(`Tab ${tabId} is still loading, delaying plugin application`);
+      return;
+    }
     
     try {
       console.log(`Applying plugins to tab ${tabId}`);
       
-      // Apply plugins from plugin manager
-      const plugins = pluginManager.getPlugins().filter(p => p.enabled);
+      // Get the current URL from the webview
+      const currentUrl = await webview.getURL();
+      console.log(`Tab ${tabId} URL: ${currentUrl}`);
       
-      // Apply all plugins at once instead of individually
+      // Apply plugins using applyPluginsToWebview
       await applyPluginsToWebview(webview);
+      
+      console.log(`Successfully applied plugins to tab ${tabId}`);
     } catch (error) {
       console.error(`Error applying plugins to tab ${tabId}:`, error);
     }
@@ -1207,6 +1230,39 @@ export default function App() {
       window.removeEventListener('set-layout', handleLayoutChange as EventListener);
     };
   }, []);
+
+  // Listen for requests to apply plugins to all active tabs
+  useEffect(() => {
+    const handleApplyPluginsToActiveTabs = () => {
+      console.log('Applying plugins to all active tabs');
+      
+      // Apply plugins to the current active tab first
+      const activeWebview = webviewRefs.current[activeTabId];
+      if (activeWebview && !activeWebview.isLoading()) {
+        applyPluginsToWebview(activeWebview)
+          .then(() => console.log(`Applied plugins to active tab: ${activeTabId}`))
+          .catch(error => console.error(`Error applying plugins to active tab: ${activeTabId}`, error));
+      }
+      
+      // Apply to all other tabs in the current workspace
+      tabs.forEach(tab => {
+        if (tab.id !== activeTabId) {
+          const webview = webviewRefs.current[tab.id];
+          if (webview && !webview.isLoading()) {
+            applyPluginsToWebview(webview)
+              .then(() => console.log(`Applied plugins to tab: ${tab.id}`))
+              .catch(error => console.error(`Error applying plugins to tab: ${tab.id}`, error));
+          }
+        }
+      });
+    };
+
+    window.addEventListener('apply-plugins-to-active-tabs', handleApplyPluginsToActiveTabs);
+    
+    return () => {
+      window.removeEventListener('apply-plugins-to-active-tabs', handleApplyPluginsToActiveTabs);
+    };
+  }, [activeTabId, tabs]);
 
   return (
     <div className="h-screen flex">

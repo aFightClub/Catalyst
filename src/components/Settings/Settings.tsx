@@ -4,6 +4,7 @@ import { StoredPlugin } from '../../types/plugin';
 import { pluginManager } from '../../services/pluginManager';
 import { storeService } from '../../services/storeService';
 import { FiKey, FiPackage, FiActivity, FiClock, FiPlay, FiEdit, FiTrash2, FiExternalLink, FiUser, FiMessageCircle, FiPlus, FiX, FiImage, FiSave } from 'react-icons/fi';
+import PluginsManager from '../Plugins/PluginsManager';
 
 // Define Workflow and ActionType interfaces since we can't import from App
 interface WorkflowAction {
@@ -918,79 +919,9 @@ const Settings: React.FC = () => {
   );
 
   const renderPluginsPage = () => (
-    <div className="flex h-full bg-gray-900">
-      <div className="w-64 border-r border-gray-700 p-4 bg-gray-800 overflow-y-auto">
-        <h3 className="text-lg font-bold mb-4 text-white">Installed Plugins</h3>
-        <button
-          onClick={createNewPlugin}
-          className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          New Plugin
-        </button>
-        <div className="space-y-2 overflow-y-auto">
-          {plugins.map(plugin => (
-            <div
-              key={plugin.id}
-              className={`p-2 rounded cursor-pointer flex justify-between items-center ${
-                selectedPlugin?.id === plugin.id ? 'bg-gray-600' : 'hover:bg-gray-700'
-              }`}
-              onClick={() => setSelectedPlugin(plugin)}
-            >
-              <span className="text-white">{plugin.name}</span>
-              <input
-                type="checkbox"
-                checked={plugin.enabled}
-                onChange={(e) => updatePlugin({ ...plugin, enabled: e.target.checked })}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="flex-1 p-4">
-        {selectedPlugin ? (
-          <div className="h-full flex flex-col">
-            <div className="mb-4 flex items-center justify-between">
-              <input
-                type="text"
-                value={selectedPlugin.name}
-                onChange={(e) => updatePlugin({ ...selectedPlugin, name: e.target.value })}
-                className="bg-gray-800 text-white px-2 py-1 rounded"
-              />
-              <div className="space-x-2">
-                <select
-                  value={selectedPlugin.type}
-                  onChange={(e) => handleTypeChange(e.target.value as 'css' | 'js' | 'html')}
-                  className="bg-gray-800 text-white px-2 py-1 rounded"
-                >
-                  <option value="js">JavaScript</option>
-                  <option value="css">CSS</option>
-                  <option value="html">HTML</option>
-                </select>
-                <button
-                  onClick={() => deletePlugin(selectedPlugin.id)}
-                  className="px-4 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-            <div className="flex-1">
-              <CodeEditor
-                value={selectedPlugin.code}
-                onChange={(code: string) => updatePlugin({ ...selectedPlugin, code })}
-                language={editorLanguage}
-                placeholder={`Enter ${selectedPlugin.type.toUpperCase()} code here...`}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
-            Select a plugin or create a new one
-          </div>
-        )}
-      </div>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-6">Plugins</h1>
+      <PluginsManager />
     </div>
   );
 
