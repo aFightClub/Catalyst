@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome, FiDollarSign, FiGlobe, FiLoader } from 'react-icons/fi'
+import { FiPlus, FiSettings, FiChrome, FiArrowLeft, FiArrowRight, FiRefreshCw, FiPackage, FiLayout, FiTrash2, FiCode, FiPlay, FiList, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, FiHome, FiDollarSign, FiGlobe, FiLoader, FiClock } from 'react-icons/fi'
 import { applyPluginsToWebview, Plugin } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import { storeService } from './services/storeService'
@@ -11,6 +11,7 @@ import Images from './components/Images/Images'
 import Dashboard from './components/Dashboard/Dashboard'
 import Subscriptions from './components/Subscriptions/Subscriptions'
 import Websites from './components/Websites/Websites'
+import Automations from './components/Automations/Automations'
 
 // Define layout types
 enum LayoutType {
@@ -138,6 +139,7 @@ export default function App() {
   const [showDashboard, setShowDashboard] = useState(true) // Dashboard shown by default
   const [showSubscriptions, setShowSubscriptions] = useState(false)
   const [showWebsites, setShowWebsites] = useState(false)
+  const [showAutomations, setShowAutomations] = useState(false)
   
   // Load erased elements from store
   useEffect(() => {
@@ -1702,6 +1704,7 @@ export default function App() {
               setShowImages(false)
               setShowSubscriptions(false)
               setShowWebsites(false)
+              setShowAutomations(false)
             }}
             className={`w-full p-2 mb-2 rounded-lg ${showDashboard ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1859,6 +1862,7 @@ export default function App() {
               setShowTasks(false)
               setShowImages(false)
               setShowSubscriptions(false)
+              setShowAutomations(false)
             }}
             className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
           >
@@ -1881,6 +1885,23 @@ export default function App() {
           >
             <FiDollarSign className="w-5 h-5" />
             <span>Subscriptions</span>
+          </button>
+          
+          <button 
+            onClick={() => {
+              setShowAutomations(!showAutomations)
+              setShowDashboard(false)
+              setShowSettings(false)
+              setShowAIChat(false)
+              setShowWriter(false)
+              setShowTasks(false)
+              setShowImages(false)
+              setShowWebsites(false)
+            }}
+            className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          >
+            <FiClock className="w-5 h-5" />
+            <span>Automations</span>
           </button>
           
           <button 
@@ -1913,10 +1934,12 @@ export default function App() {
           <Tasks />
         ) : showImages ? (
           <Images />
-        ) : showSubscriptions ? (
-          <Subscriptions />
+        ) : showAutomations ? (
+          <Automations />
         ) : showWebsites ? (
           <Websites />
+        ) : showSubscriptions ? (
+          <Subscriptions />
         ) : showDashboard ? (
           <Dashboard />
         ) : (
