@@ -49,6 +49,33 @@ const schema = {
     type: "array",
     default: [],
   },
+  userContext: {
+    type: "object",
+    default: {
+      name: "",
+      company: "",
+      voice: "",
+      backStory: "",
+      websiteLinks: "",
+      additionalInfo: "",
+    },
+  },
+  assistants: {
+    type: "array",
+    default: [
+      {
+        id: "default",
+        name: "Default Assistant",
+        systemPrompt: "You are a helpful assistant.",
+        profileImage: "",
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  },
+  chats: {
+    type: "array",
+    default: [],
+  },
 };
 
 // Track initialization status
@@ -253,6 +280,36 @@ export const storeService = {
     return s.set("subscriptions", subscriptions);
   },
 
+  // User Context
+  getUserContext: async () => {
+    const s = await ensureStore();
+    return s.get("userContext") as Record<string, string>;
+  },
+  saveUserContext: async (context: Record<string, string>) => {
+    const s = await ensureStore();
+    return s.set("userContext", context);
+  },
+
+  // Assistants
+  getAssistants: async () => {
+    const s = await ensureStore();
+    return s.get("assistants") as any[];
+  },
+  saveAssistants: async (assistants: any[]) => {
+    const s = await ensureStore();
+    return s.set("assistants", assistants);
+  },
+
+  // Chats
+  getChats: async () => {
+    const s = await ensureStore();
+    return s.get("chats") as any[];
+  },
+  saveChats: async (chats: any[]) => {
+    const s = await ensureStore();
+    return s.set("chats", chats);
+  },
+
   // Erased Elements
   getErasedElements: async () => {
     const s = await ensureStore();
@@ -329,6 +386,27 @@ export const storeService = {
       if (localSubscriptions) {
         s.set("subscriptions", JSON.parse(localSubscriptions));
         localStorage.removeItem("subscriptions");
+      }
+
+      // Migrate user context
+      const localUserContext = localStorage.getItem("user_context");
+      if (localUserContext) {
+        s.set("userContext", JSON.parse(localUserContext));
+        localStorage.removeItem("user_context");
+      }
+
+      // Migrate assistants
+      const localAssistants = localStorage.getItem("assistants");
+      if (localAssistants) {
+        s.set("assistants", JSON.parse(localAssistants));
+        localStorage.removeItem("assistants");
+      }
+
+      // Migrate chats
+      const localChats = localStorage.getItem("chats");
+      if (localChats) {
+        s.set("chats", JSON.parse(localChats));
+        localStorage.removeItem("chats");
       }
 
       // Migrate erased elements

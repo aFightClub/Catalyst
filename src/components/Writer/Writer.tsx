@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiPlus, FiSave, FiTrash2, FiList, FiFolder, FiFile } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiList, FiFolder, FiFile, FiMoreVertical, FiEdit, FiX } from 'react-icons/fi';
 import EditorJS from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 import List from '@editorjs/list';
@@ -16,26 +16,90 @@ interface Document {
   content: any;
   createdAt: string;
   updatedAt: string;
+  projectId: string;
 }
+
+interface Project {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+const DEFAULT_PROJECTS: Project[] = [
+  {
+    id: 'default',
+    name: 'General',
+    color: '#3B82F6', // blue-500
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'work',
+    name: 'Work Documents',
+    color: '#EF4444', // red-500
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'personal',
+    name: 'Personal Notes',
+    color: '#10B981', // emerald-500
+    createdAt: new Date().toISOString()
+  }
+];
+
+const COLORS = [
+  '#3B82F6', // blue-500
+  '#EF4444', // red-500
+  '#10B981', // emerald-500
+  '#F59E0B', // amber-500
+  '#8B5CF6', // violet-500
+  '#EC4899', // pink-500
+  '#14B8A6', // teal-500
+  '#6366F1', // indigo-500
+  '#F97316', // orange-500
+];
 
 const Writer: React.FC = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<string>('default');
   const [showDocList, setShowDocList] = useState(true);
   const [newDocName, setNewDocName] = useState('');
   const [isCreatingDoc, setIsCreatingDoc] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectColor, setNewProjectColor] = useState(COLORS[0]);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showProjectActions, setShowProjectActions] = useState<string | null>(null);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const editorInstance = useRef<any>(null);
 
-  // Load documents from store on component mount
+  // Load documents and projects from store on component mount
   useEffect(() => {
-    const loadDocuments = async () => {
+    const loadData = async () => {
       setIsLoading(true);
       try {
+        // Load documents
         const storedDocs = await storeService.getDocuments();
         if (Array.isArray(storedDocs)) {
           setDocuments(storedDocs);
+          
+          // Backward compatibility - add projectId if missing
+          const docsWithProjects = storedDocs.map(doc => {
+            if (!doc.projectId) {
+              return { ...doc, projectId: 'default' };
+            }
+            return doc;
+          });
+          
+          if (JSON.stringify(docsWithProjects) !== JSON.stringify(storedDocs)) {
+            await storeService.saveDocuments(docsWithProjects);
+            setDocuments(docsWithProjects);
+          }
+          
           if (storedDocs.length > 0 && !currentDocId) {
             setCurrentDocId(storedDocs[0].id);
           }
@@ -43,16 +107,60 @@ const Writer: React.FC = () => {
           console.warn("Documents data is not an array, using empty array", storedDocs);
           setDocuments([]);
         }
+        
+        // Load projects
+        const storedProjects = await storeService.getProjects();
+        if (Array.isArray(storedProjects) && storedProjects.length > 0) {
+          setProjects(storedProjects);
+        } else {
+          console.log("No projects found, using defaults for Writer");
+          setProjects(DEFAULT_PROJECTS);
+          await storeService.saveProjects(DEFAULT_PROJECTS);
+        }
       } catch (error) {
-        console.error("Failed to load documents:", error);
+        console.error("Failed to load data:", error);
         setDocuments([]);
+        setProjects(DEFAULT_PROJECTS);
       } finally {
         setIsLoading(false);
       }
     };
     
-    loadDocuments();
+    loadData();
   }, []);
+
+  // Save documents whenever they change
+  useEffect(() => {
+    const saveData = async () => {
+      if (isLoading) return; // Don't save during initial load
+      
+      try {
+        await storeService.saveDocuments(documents);
+      } catch (error) {
+        console.error("Failed to save documents:", error);
+      }
+    };
+    
+    saveData();
+  }, [documents, isLoading]);
+  
+  // Save projects whenever they change
+  useEffect(() => {
+    const saveProjects = async () => {
+      if (isLoading) return; // Don't save during initial load
+      
+      try {
+        await storeService.saveProjects(projects);
+      } catch (error) {
+        console.error("Failed to save projects:", error);
+      }
+    };
+    
+    saveProjects();
+  }, [projects, isLoading]);
+  
+  // Filter documents by active project
+  const filteredDocuments = documents.filter(doc => doc.projectId === activeProjectId);
 
   // Add dark mode styles for Editor.js when component mounts
   useEffect(() => {
@@ -259,6 +367,9 @@ const Writer: React.FC = () => {
 
     // Initialize editor with the current document's content
     initializeEditor(currentDoc.content);
+    
+    // Set up autosave
+    setupAutoSave();
   }, [currentDocId, documents, isLoading]);
 
   const initializeEditor = (initialData: any = {}) => {
@@ -308,6 +419,17 @@ const Writer: React.FC = () => {
       data: initialData,
       autofocus: true,
       placeholder: 'Let\'s write something awesome!',
+      onChange: () => {
+        // Trigger save when content changes
+        if (autoSaveTimer) {
+          clearInterval(autoSaveTimer);
+        }
+        // Set a new timer to save after 2 seconds of inactivity
+        const timer = setTimeout(() => {
+          saveCurrentDocument();
+        }, 2000);
+        setAutoSaveTimer(timer as unknown as NodeJS.Timeout);
+      }
     });
   };
 
@@ -322,12 +444,14 @@ const Writer: React.FC = () => {
 
   const createNewDocument = () => {
     if (!newDocName.trim()) return;
-
+    
     const now = new Date().toISOString();
+    
     const newDoc: Document = {
       id: Date.now().toString(),
       name: newDocName.trim(),
       content: {
+        time: Date.now(),
         blocks: [
           {
             type: 'header',
@@ -339,40 +463,132 @@ const Writer: React.FC = () => {
           {
             type: 'paragraph',
             data: {
-              text: 'Start writing here...'
+              text: 'Start writing...'
             }
           }
         ]
       },
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      projectId: activeProjectId
     };
-
+    
     const updatedDocs = [...documents, newDoc];
-    saveDocuments(updatedDocs);
+    setDocuments(updatedDocs);
     setCurrentDocId(newDoc.id);
-    setNewDocName('');
+    setShowDocList(false);
     setIsCreatingDoc(false);
+    setNewDocName('');
+    
+    // Wait for render, then initialize editor
+    setTimeout(() => {
+      initializeEditor(newDoc.content);
+    }, 100);
   };
 
-  const saveCurrentDocument = async () => {
-    if (!editorInstance.current || !currentDocId) return;
+  // Add project
+  const addProject = () => {
+    if (!newProjectName.trim()) return;
 
-    setIsSaving(true);
-    
-    try {
-      const savedData = await editorInstance.current.save();
-      const now = new Date().toISOString();
+    const newProject: Project = {
+      id: Date.now().toString(),
+      name: newProjectName.trim(),
+      color: newProjectColor,
+      createdAt: new Date().toISOString()
+    };
+
+    setProjects([...projects, newProject]);
+    setActiveProjectId(newProject.id);
+    setIsCreatingProject(false);
+    setNewProjectName('');
+    setNewProjectColor(COLORS[0]);
+  };
+
+  // Delete project
+  const deleteProject = (projectId: string) => {
+    if (projects.length <= 1) {
+      alert('You must have at least one project');
+      return;
+    }
+
+    if (confirm('Are you sure you want to delete this project and all its documents?')) {
+      // Delete the project
+      const updatedProjects = projects.filter(project => project.id !== projectId);
+      setProjects(updatedProjects);
       
+      // Set documents in this project to the default project
       const updatedDocs = documents.map(doc => 
-        doc.id === currentDocId
-          ? { ...doc, content: savedData, updatedAt: now }
-          : doc
+        doc.projectId === projectId ? {...doc, projectId: 'default'} : doc
       );
       
-      await saveDocuments(updatedDocs);
+      setDocuments(updatedDocs);
+      
+      // Switch to another project if the active project was deleted
+      if (activeProjectId === projectId) {
+        setActiveProjectId(updatedProjects[0]?.id || 'default');
+      }
+      
+      setShowProjectActions(null);
+    }
+  };
+  
+  // Auto-save setup
+  const setupAutoSave = () => {
+    if (autoSaveTimer) {
+      clearInterval(autoSaveTimer);
+    }
+    
+    // Set up periodic backup autosave every 30 seconds for safety
+    const timer = setInterval(() => {
+      if (editorInstance.current) {
+        saveCurrentDocument();
+      }
+    }, 30000);
+    
+    setAutoSaveTimer(timer);
+    
+    return () => {
+      if (autoSaveTimer) {
+        clearInterval(autoSaveTimer);
+      }
+    };
+  };
+  
+  // Clean up autosave on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearInterval(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
+
+  // Save current document
+  const saveCurrentDocument = async () => {
+    if (!currentDocId || !editorInstance.current) return;
+    
+    try {
+      setIsSaving(true);
+      
+      // Get data from editor
+      const editorData = await editorInstance.current.save();
+      
+      // Update document in state
+      const updatedDocs = documents.map(doc => {
+        if (doc.id === currentDocId) {
+          return {
+            ...doc,
+            content: editorData,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return doc;
+      });
+      
+      setDocuments(updatedDocs);
+      console.log('Document auto-saved.');
     } catch (error) {
-      console.error('Failed to save document:', error);
+      console.error('Error saving document:', error);
     } finally {
       setIsSaving(false);
     }
@@ -419,14 +635,6 @@ const Writer: React.FC = () => {
         <h2 className="text-xl font-bold text-white">Writer</h2>
         <div className="flex space-x-2">
           <button 
-            onClick={saveCurrentDocument}
-            className={`p-2 rounded-lg ${currentDocId ? 'hover:bg-blue-600 bg-blue-700' : 'bg-gray-600 cursor-not-allowed'}`}
-            disabled={!currentDocId || isSaving}
-            title="Save Document"
-          >
-            <FiSave className="w-5 h-5" />
-          </button>
-          <button 
             onClick={() => setShowDocList(!showDocList)}
             className={`p-2 rounded-lg hover:bg-gray-700 ${showDocList ? 'bg-gray-700' : ''}`}
             title="Toggle Document List"
@@ -439,6 +647,100 @@ const Writer: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
         {showDocList && (
           <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
+            <div className="p-3 border-b border-gray-700">
+              <h3 className="text-white font-medium mb-2">Projects</h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {projects.map(project => (
+                  <div 
+                    key={project.id}
+                    className={`p-2 rounded flex items-center justify-between cursor-pointer ${
+                      activeProjectId === project.id ? 'bg-gray-700' : 'hover:bg-gray-700'
+                    }`}
+                    onClick={() => setActiveProjectId(project.id)}
+                  >
+                    <div className="flex items-center">
+                      <div 
+                        className="w-3 h-3 rounded-full mr-2" 
+                        style={{ backgroundColor: project.color }}
+                      ></div>
+                      <span className="text-white text-sm truncate">{project.name}</span>
+                    </div>
+                    <button
+                      className="opacity-0 hover:opacity-100 p-1 rounded hover:bg-gray-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowProjectActions(project.id);
+                      }}
+                    >
+                      <FiMoreVertical className="w-3 h-3 text-gray-400" />
+                    </button>
+                    
+                    {showProjectActions === project.id && (
+                      <div className="absolute z-10 right-0 mt-8 bg-gray-800 border border-gray-700 rounded shadow-lg">
+                        <button
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 flex items-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteProject(project.id);
+                          }}
+                        >
+                          <FiTrash2 className="w-3 h-3 mr-2" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setIsCreatingProject(true)}
+                className="mt-2 w-full px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center"
+              >
+                <FiPlus className="w-3 h-3 mr-1" />
+                New Project
+              </button>
+            </div>
+            
+            {isCreatingProject && (
+              <div className="p-3 border-b border-gray-700">
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Project name"
+                  autoFocus
+                />
+                <div className="flex mb-2">
+                  {COLORS.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => setNewProjectColor(color)}
+                      className={`w-6 h-6 rounded-full mr-1 ${
+                        newProjectColor === color ? 'ring-2 ring-white' : ''
+                      }`}
+                      style={{ backgroundColor: color }}
+                    ></button>
+                  ))}
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => setIsCreatingProject(false)}
+                    className="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={addProject}
+                    className="px-3 py-1 text-sm rounded bg-blue-600 hover:bg-blue-700"
+                    disabled={!newProjectName.trim()}
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="p-3 border-b border-gray-700 flex justify-between items-center">
               <h3 className="text-white font-medium">Documents</h3>
               <button 
@@ -479,19 +781,19 @@ const Writer: React.FC = () => {
             )}
             
             <div className="flex-1 overflow-y-auto">
-              {!documents || documents.length === 0 ? (
+              {!filteredDocuments || filteredDocuments.length === 0 ? (
                 <div className="p-4 text-center text-gray-400">
                   <FiFolder className="w-8 h-8 mx-auto mb-2" />
-                  <p>No documents yet</p>
+                  <p>No documents in this project</p>
                   <button
                     onClick={() => setIsCreatingDoc(true)}
                     className="mt-2 px-3 py-1 text-sm rounded bg-blue-600 hover:bg-blue-700"
                   >
-                    Create your first document
+                    Create document
                   </button>
                 </div>
               ) : (
-                documents.map(doc => (
+                filteredDocuments.map(doc => (
                   <div 
                     key={doc.id}
                     className={`p-3 border-b border-gray-700 cursor-pointer hover:bg-gray-700 group ${
@@ -530,7 +832,12 @@ const Writer: React.FC = () => {
           {currentDocument ? (
             <>
               <div className="p-3 bg-gray-800 border-b border-gray-700">
-                <h3 className="text-white font-medium truncate">{currentDocument.name}</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-medium truncate">{currentDocument.name}</h3>
+                  {isSaving && (
+                    <span className="text-xs text-gray-400 animate-pulse">Saving...</span>
+                  )}
+                </div>
                 <div className="text-gray-400 text-xs mt-1">
                   Last edited: {formatDate(currentDocument.updatedAt)}
                 </div>
