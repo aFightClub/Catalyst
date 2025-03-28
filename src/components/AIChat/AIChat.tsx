@@ -127,6 +127,52 @@ const AIChat: React.FC = () => {
         },
         required: ['name']
       }
+    },
+    {
+      name: 'get_tasks',
+      description: 'Get list of tasks from the task manager',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'string',
+            description: 'Optional: Filter tasks by project ID'
+          },
+          completed: {
+            type: 'boolean',
+            description: 'Optional: Filter tasks by completion status'
+          }
+        }
+      }
+    },
+    {
+      name: 'get_subscriptions',
+      description: 'Get list of user subscriptions',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'get_websites',
+      description: 'Get list of user saved websites',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'get_documents',
+      description: 'Get list of documents from the writer',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: {
+            type: 'string',
+            description: 'Optional: Get a specific document by ID'
+          }
+        }
+      }
     }
   ];
 
@@ -495,6 +541,247 @@ const AIChat: React.FC = () => {
         localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(documents));
         
         return `Document "${name}" created successfully!`;
+      }
+      else if (functionCall.name === 'get_tasks') {
+        const { projectId, completed } = functionCall.arguments;
+        const tasks = await storeService.getTasks();
+        
+        if (!tasks || tasks.length === 0) {
+          return "You don't have any tasks yet.";
+        }
+        
+        let filteredTasks = [...tasks];
+        
+        // Apply filters if provided
+        if (projectId !== undefined) {
+          filteredTasks = filteredTasks.filter(task => task.projectId === projectId);
+        }
+        
+        if (completed !== undefined) {
+          filteredTasks = filteredTasks.filter(task => task.completed === completed);
+        }
+        
+        if (filteredTasks.length === 0) {
+          let message = "No tasks found";
+          if (projectId) message += ` in project "${projectId}"`;
+          if (completed !== undefined) message += ` that are ${completed ? "completed" : "incomplete"}`;
+          return message + ".";
+        }
+        
+        // Group tasks by project
+        const tasksByProject: Record<string, any[]> = {};
+        
+        filteredTasks.forEach(task => {
+          const project = task.projectId || 'default';
+          if (!tasksByProject[project]) {
+            tasksByProject[project] = [];
+          }
+          tasksByProject[project].push(task);
+        });
+        
+        // Create a text-based response
+        let response = "Here are your tasks:\n\n";
+        
+        // Add tasks by project
+        Object.keys(tasksByProject).forEach(project => {
+          response += `Project: ${project}\n`;
+          
+          const projectTasks = tasksByProject[project];
+          
+          // Sort tasks: incomplete first, then by created date
+          projectTasks.sort((a, b) => {
+            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+          
+          projectTasks.forEach(task => {
+            response += `${task.completed ? '✓' : '☐'} ${task.title}\n`;
+            
+            if (task.createdAt) {
+              const date = new Date(task.createdAt);
+              response += `   Created: ${date.toLocaleDateString()}\n`;
+            }
+            
+            response += "\n";
+          });
+        });
+        
+        // Add summary
+        const completedCount = filteredTasks.filter(t => t.completed).length;
+        const pendingCount = filteredTasks.length - completedCount;
+        
+        response += `Summary:\n`;
+        response += `• Total Tasks: ${filteredTasks.length}\n`;
+        response += `• Completed: ${completedCount}\n`;
+        response += `• Pending: ${pendingCount}`;
+        
+        return response;
+      }
+      else if (functionCall.name === 'get_subscriptions') {
+        const subscriptions = await storeService.getSubscriptions();
+        
+        if (!subscriptions || subscriptions.length === 0) {
+          return "You don't have any subscriptions yet.";
+        }
+        
+        // Create a text-based response
+        let response = "Here are your subscriptions:\n\n";
+        
+        subscriptions.forEach(sub => {
+          // Format price
+          const price = typeof sub.price === 'number' ? sub.price : 0;
+          const priceDisplay = `$${price}${sub.billingCycle === 'monthly' ? '/mo' : '/yr'}`;
+          
+          // Add subscription details
+          response += `📌 ${sub.name}\n`;
+          response += `   Price: ${priceDisplay}\n`;
+          
+          if (sub.url) {
+            response += `   Website: ${sub.url}\n`;
+          }
+          
+          if (sub.billingCycle) {
+            response += `   Billing: ${sub.billingCycle === 'monthly' ? 'Monthly' : 'Yearly'}\n`;
+          }
+          
+          if (sub.startDate) {
+            response += `   Started: ${new Date(sub.startDate).toLocaleDateString()}\n`;
+          }
+          
+          if (sub.notes) {
+            response += `   Notes: ${sub.notes}\n`;
+          }
+          
+          response += "\n";
+        });
+        
+        // Add total cost summary
+        let monthlyCost = 0;
+        let yearlyCost = 0;
+        
+        subscriptions.forEach(sub => {
+          const price = typeof sub.price === 'number' ? sub.price : 0;
+          if (sub.billingCycle === 'monthly') {
+            monthlyCost += price;
+            yearlyCost += price * 12;
+          } else {
+            monthlyCost += price / 12;
+            yearlyCost += price;
+          }
+        });
+        
+        response += `Summary:\n`;
+        response += `• Total Monthly Cost: $${monthlyCost.toFixed(2)}\n`;
+        response += `• Total Yearly Cost: $${yearlyCost.toFixed(2)}\n`;
+        response += `• Number of Subscriptions: ${subscriptions.length}`;
+        
+        return response;
+      }
+      else if (functionCall.name === 'get_websites') {
+        const websites = await storeService.getWebsites();
+        
+        if (!websites || websites.length === 0) {
+          return "You don't have any saved websites yet.";
+        }
+        
+        // Group websites by category
+        const websitesByCategory: Record<string, any[]> = {};
+        
+        websites.forEach(site => {
+          const category = site.category || 'Other';
+          if (!websitesByCategory[category]) {
+            websitesByCategory[category] = [];
+          }
+          websitesByCategory[category].push(site);
+        });
+        
+        // Create a text-based response
+        let response = "Here are your saved websites:\n\n";
+        
+        // Add websites by category
+        Object.keys(websitesByCategory).sort().forEach(category => {
+          response += `Category: ${category}\n`;
+          
+          websitesByCategory[category].forEach(site => {
+            response += `• ${site.name}\n`;
+            
+            if (site.url) {
+              response += `  URL: ${site.url}\n`;
+            }
+            
+            if (site.description) {
+              response += `  Description: ${site.description}\n`;
+            }
+            
+            response += "\n";
+          });
+        });
+        
+        return response;
+      }
+      else if (functionCall.name === 'get_documents') {
+        const { documentId } = functionCall.arguments;
+        const documents = await storeService.getDocuments();
+        
+        if (!documents || documents.length === 0) {
+          return "You don't have any documents yet.";
+        }
+        
+        if (documentId) {
+          // Return specific document if ID is provided
+          const document = documents.find(doc => doc.id === documentId);
+          
+          if (!document) {
+            return `Document with ID ${documentId} not found.`;
+          }
+          
+          // Extract text content from document blocks
+          let textContent = '';
+          
+          if (document.content && document.content.blocks) {
+            document.content.blocks.forEach((block: { type: string; data: { text: string } }) => {
+              if (block.type === 'header') {
+                textContent += `${block.data.text}\n\n`;
+              } else if (block.type === 'paragraph') {
+                textContent += `${block.data.text}\n\n`;
+              }
+            });
+          }
+          
+          // Format the response
+          const createdDate = document.createdAt ? new Date(document.createdAt).toLocaleDateString() : 'Unknown';
+          const updatedDate = document.updatedAt ? new Date(document.updatedAt).toLocaleDateString() : 'Unknown';
+          
+          let response = `📄 Document: ${document.name}\n\n`;
+          response += `Created: ${createdDate}\n`;
+          response += `Last Updated: ${updatedDate}\n\n`;
+          response += `Content:\n\n${textContent.trim()}`;
+          
+          return response;
+        } else {
+          // Return list of all documents
+          let response = "Here are your documents:\n\n";
+          
+          // Sort documents by most recently updated
+          const sortedDocs = [...documents].sort((a, b) => 
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+          
+          sortedDocs.forEach(doc => {
+            response += `📄 ${doc.name}\n`;
+            
+            if (doc.updatedAt) {
+              response += `   Last Updated: ${new Date(doc.updatedAt).toLocaleDateString()}\n`;
+            }
+            
+            response += `   ID: ${doc.id}\n\n`;
+          });
+          
+          // Add instructions for viewing full documents
+          response += `To view the full content of a document, ask me to "show document {document name}" or use the document ID.`;
+          
+          return response;
+        }
       }
       
       return 'Function not implemented';
@@ -925,84 +1212,90 @@ const AIChat: React.FC = () => {
         </div>
       ) : (
         <>
-          <div 
-            ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4"
-          >
-            {messages.length === 0 ? (
-              <div className="text-center text-gray-400 mt-10">
-                <FiCpu className="w-12 h-12 mx-auto mb-4" />
-                <p>Send a message to start chatting</p>
-              </div>
-            ) : (
-              messages
-                .filter(msg => msg.role !== 'system') // Don't show system messages
-                .map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-3/4 rounded-lg p-3 ${
-                      message.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 text-gray-200'
-                    }`}
-                  >
-                    <div className="whitespace-pre-wrap">
-                      {message.content || (isLoading && index === messages.length - 1 ? (
-                        <div className="flex items-center justify-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="24" viewBox="0 0 24 24">
-                            <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-                            <circle cx="16" cy="10" r="0" fill="currentColor">
-                              <animate attributeName="r" begin=".67" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
-                            </circle>
-                            <circle cx="12" cy="10" r="0" fill="currentColor">
-                              <animate attributeName="r" begin=".33" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
-                            </circle>
-                            <circle cx="8" cy="10" r="0" fill="currentColor">
-                              <animate attributeName="r" begin="0" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
-                            </circle>
-                          </svg>
-                        </div>
-                      ) : '')}
-                    </div>
-                  </div>
+          <div className="flex-1 overflow-y-auto p-4 flex justify-center">
+            <div
+              ref={messagesContainerRef}
+              className="max-w-2xl w-full"
+            >
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-400 mt-10">
+                  <FiCpu className="w-12 h-12 mx-auto mb-4" />
+                  <p>Send a message to start chatting</p>
                 </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
+              ) : (
+                <div className="space-y-4">
+                  {messages
+                    .filter(msg => msg.role !== 'system') // Don't show system messages
+                    .map((message, index) => (
+                    <div
+                      key={index}
+                      className="flex flex-col"
+                    >
+                      {message.role === 'user' ? (
+                        <div className="self-end max-w-3/4 bg-gray-700 rounded-lg p-3 text-white">
+                          <div className="whitespace-pre-wrap">
+                            {message.content}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="self-start max-w-3/4 bg-transparent text-white">
+                          <div className="whitespace-pre-wrap">
+                            {message.content || (isLoading && index === messages.length - 1 ? (
+                              <div className="flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="24" viewBox="0 0 24 24">
+                                  <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+                                  <circle cx="16" cy="10" r="0" fill="currentColor">
+                                    <animate attributeName="r" begin=".67" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
+                                  </circle>
+                                  <circle cx="12" cy="10" r="0" fill="currentColor">
+                                    <animate attributeName="r" begin=".33" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
+                                  </circle>
+                                  <circle cx="8" cy="10" r="0" fill="currentColor">
+                                    <animate attributeName="r" begin="0" calcMode="spline" dur="1.5s" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" repeatCount="indefinite" values="0;1.75;0;0"/>
+                                  </circle>
+                                </svg>
+                              </div>
+                            ) : '')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
           </div>
 
-          <div className="p-4 bg-gray-800 border-t border-gray-700">
-            <form onSubmit={handleSubmit} className="flex">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="flex-1 px-4 py-2 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Type your message..."
-                disabled={isLoading || !apiKey}
-              />
-              <button
-                type="submit"
-                className={`px-4 py-2 rounded-r flex items-center justify-center ${
-                  isLoading || !apiKey || !input.trim()
-                    ? 'bg-gray-600 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-                disabled={isLoading || !apiKey || !input.trim()}
-              >
-                <FiSend className="w-5 h-5" />
-              </button>
-            </form>
-            {!apiKey && (
-              <p className="mt-2 text-sm text-red-400">
-                Please set your OpenAI API key in settings
-              </p>
-            )}
+          <div className="p-4 bg-gray-800 border-t border-gray-700 flex justify-center">
+            <div className="max-w-2xl w-full">
+              <form onSubmit={handleSubmit} className="flex">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  className="flex-1 px-4 py-2 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Type your message..."
+                  disabled={isLoading || !apiKey}
+                />
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-r flex items-center justify-center ${
+                    isLoading || !apiKey || !input.trim()
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                  disabled={isLoading || !apiKey || !input.trim()}
+                >
+                  <FiSend className="w-5 h-5" />
+                </button>
+              </form>
+              {!apiKey && (
+                <p className="mt-2 text-sm text-red-400">
+                  Please set your OpenAI API key in settings
+                </p>
+              )}
+            </div>
           </div>
         </>
       )}
