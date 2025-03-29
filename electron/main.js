@@ -311,4 +311,22 @@ autoUpdater.on("download-progress", (progressObj) => {
 
 autoUpdater.on("update-downloaded", (info) => {
   console.log("Update downloaded:", info);
+
+  // Notify user and offer to restart
+  const { dialog } = require("electron");
+  dialog
+    .showMessageBox({
+      type: "info",
+      title: "Update Ready",
+      message: `Catalyst ${info.version} is ready to install`,
+      detail:
+        "The update has been downloaded. Restart the application to apply the updates.",
+      buttons: ["Restart Now", "Later"],
+      defaultId: 0,
+    })
+    .then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
 });

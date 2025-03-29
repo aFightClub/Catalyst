@@ -6,6 +6,9 @@ import {
 } from 'react-icons/fi';
 import { Workspace, Tab } from '../../types';
 
+// Get package version
+const appVersion = require('../../../package.json').version;
+
 interface SidebarProps {
   workspaces: Workspace[];
   activeWorkspaceId: string;
@@ -117,7 +120,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiHome className="w-5 h-5" />
-          <span>Dashboard</span>
+          <div className="flex flex-col items-start">
+            <span>Dashboard</span>
+            <span className="text-xs opacity-70">Catalyst v{appVersion}</span>
+          </div>
         </button>
       </div>
 
