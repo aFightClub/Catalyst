@@ -17,7 +17,8 @@
       {
         "provider": "github",
         "owner": "aFightClub",
-        "repo": "Catalyst"
+        "repo": "Catalyst",
+        "releaseType": "release"
       }
     ],
     "files": [
@@ -34,7 +35,12 @@
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "identity": "Wynter Jones (7X2UF4FZHC)"
     },
     "win": {
       "icon": "src/images/icon.png",
