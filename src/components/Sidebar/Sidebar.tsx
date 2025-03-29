@@ -92,8 +92,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   setEditName
 }) => {
   return (
-    <aside className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-12">
-      <div className="flex flex-col">
+    <aside 
+      className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-8"
+      data-draggable="true"
+    >
+      <div className="flex flex-col px-3">
         <button 
           onClick={() => {
             setShowDashboard(true)
@@ -106,14 +109,22 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 mb-2 rounded-lg ${showDashboard ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full border border-gray-700 p-3 my-3 rounded-lg text-white font-medium shadow-lg transition-all duration-200 hover:shadow-xl 
+            ${showDashboard 
+              ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
+              : 'hover:bg-gradient-to-r hover:from-blue-500/70 hover:to-purple-600/70'
+            } flex items-center justify-center space-x-3`}
+          data-draggable="false"
         >
           <FiHome className="w-5 h-5" />
           <span>Dashboard</span>
         </button>
       </div>
 
-      <div className="text-sm font-medium text-gray-400 px-4 py-2 flex justify-between items-center">
+      <div 
+        className="text-sm font-medium text-gray-400 px-4 py-2 flex justify-between items-center"
+        data-draggable="false"
+      >
         <span>Workspaces</span>
         <button 
           onClick={() => setIsAddingWorkspace(true)}
@@ -178,6 +189,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 setShowImages(false);
                 setShowSubscriptions(false);
                 setShowWebsites(false);
+                setShowAutomations(false);
               }}
             >
               {editingWorkspaceId === workspace.id ? (
@@ -256,7 +268,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Show tabs for active workspace */}
             {activeWorkspaceId === workspace.id && !showDashboard && 
              !showSettings && !showAIChat && !showWriter && !showTasks && 
-             !showImages && !showSubscriptions && !showWebsites && (
+             !showImages && !showSubscriptions && !showWebsites && !showAutomations && (
               <div className="ml-4 border-l border-gray-700 pl-2">
                 {workspace.tabs.map(tab => (
                   <div

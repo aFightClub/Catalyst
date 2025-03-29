@@ -32,6 +32,14 @@ ipcMain.on("eraser-element-selected", (event, selector) => {
   // You can save this to Electron store if needed
 });
 
+// Add handler for window drag operation
+ipcMain.on("window-drag-start", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.beginWindowDrag();
+  }
+});
+
 // Register webview protocol handlers
 app.on("web-contents-created", (e, contents) => {
   if (contents.getType() === "webview") {

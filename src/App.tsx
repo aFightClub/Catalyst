@@ -1315,6 +1315,31 @@ export default function App() {
     
   }, [activeWorkspaceId, workspaces]);
 
+  // Add event listener to handle draggable regions
+  useEffect(() => {
+    try {
+      // Setup window drag handling
+      const handleDrag = (e: MouseEvent) => {
+        // Check if the clicked element has the draggable attribute
+        const target = e.target as HTMLElement;
+        const isDraggable = target.closest('[data-draggable="true"]') && 
+                           !target.closest('[data-draggable="false"]');
+                          
+        if (isDraggable && (window as any).electron) {
+          (window as any).electron.send('window-drag-start', {});
+        }
+      };
+
+      document.addEventListener('mousedown', handleDrag);
+      
+      return () => {
+        document.removeEventListener('mousedown', handleDrag);
+      };
+    } catch (error) {
+      console.error('Failed to set up drag handlers:', error);
+    }
+  }, []);
+
   return (
     <div className="h-screen flex">
       {/* Sidebar Component */}

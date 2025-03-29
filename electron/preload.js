@@ -1,11 +1,38 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const Store = require("electron-store");
 
-// Create a Store instance
-const store = new Store({
-  name: "custom-web-browser-data",
-  // Schema is defined in renderer to avoid duplication
-});
+// Try to load electron-store with a fallback
+let Store;
+let store;
+try {
+  Store = require("electron-store");
+  // Create a Store instance
+  store = new Store({
+    name: "custom-web-browser-data",
+  });
+} catch (error) {
+  console.warn(
+    "electron-store module not found, using in-memory storage fallback"
+  );
+  // Simple in-memory fallback
+  store = {
+    data: {},
+    get: function (key) {
+      return this.data[key];
+    },
+    set: function (key, value) {
+      this.data[key] = value;
+      return true;
+    },
+    delete: function (key) {
+      delete this.data[key];
+      return true;
+    },
+    clear: function () {
+      this.data = {};
+      return true;
+    },
+  };
+}
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -55,6 +82,7 @@ contextBridge.exposeInMainWorld("electron", {
       "eraser-element-selected",
       "run-workflow-in-current-window",
       "run-workflow-in-new-tab",
+      "window-drag-start", // Channel for window dragging
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
