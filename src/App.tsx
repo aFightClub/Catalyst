@@ -1605,46 +1605,43 @@ export default function App() {
                 // Generate a unique ID for this script execution
                 const scriptId = `workflow-js-${Date.now()}`;
                 
-                // Replace content placeholders in the code
-                const processedCode = jsCode.replace(/{{content}}/g, JSON.stringify(contentValue));
+                // Replace content placeholders in the code with actual content
+                // Use direct string value to avoid JSON stringification issues
+                const processedCode = jsCode.replace(/{{content}}/g, `"${contentValue.replace(/"/g, '\\"')}"`);
                 
-                // Execute using the plugin approach (appending script element) which works with CSP
+                // Apply the JavaScript code using the same approach as plugins
+                // First ensure the page is fully loaded
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
                 await webview.executeJavaScript(`
                   (function() {
                     try {
-                      // Check if a script with this ID already exists and remove it
-                      const existingScript = document.getElementById('${scriptId}');
-                      if (existingScript) existingScript.remove();
+                      // Clean up any existing workflow scripts
+                      const existingScripts = document.querySelectorAll('script[id^="workflow-js-"]');
+                      existingScripts.forEach(script => script.remove());
                       
-                      // Create a script element
+                      // Create a new script element
                       const script = document.createElement('script');
                       script.id = '${scriptId}';
-                      
-                      // Add code that includes proper JSON-stringified content
                       script.textContent = ${JSON.stringify(processedCode)};
                       
-                      // Add script to page to execute it
+                      // Add to document to execute
                       document.head.appendChild(script);
                       
-                      console.log('Successfully executed workflow JavaScript');
-                      setTimeout(() => {
-                        alert('JavaScript executed successfully');
-                        
-                        // Optional cleanup
-                        const scriptElement = document.getElementById('${scriptId}');
-                        if (scriptElement) scriptElement.remove();
-                      }, 100);
-                      
+                      console.log('Successfully injected workflow JavaScript');
                       return true;
                     } catch (error) {
-                      console.error('Error executing JavaScript:', error);
-                      alert('JavaScript Error: ' + error.message);
+                      console.error('Failed to execute JavaScript:', error);
                       return false;
                     }
-                  })();
+                  })()
                 `);
                 
-                addToast('JavaScript executed successfully', 'success');
+                // Wait a moment for the script to execute
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Show success notification
+                addToast('JavaScript step executed', 'success');
               } catch (error) {
                 console.error('Error executing JavaScript:', error);
                 addToast('Failed to execute JavaScript: ' + (error instanceof Error ? error.message : String(error)), 'error');

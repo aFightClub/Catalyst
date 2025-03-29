@@ -492,33 +492,40 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                   </div>
                   
                   <div className="space-y-3 mb-4">
-                    {/* Show regular input variables */}
-                    {selectedWorkflow.variables && selectedWorkflow.variables.map(varName => {
-                      const action = selectedWorkflow.actions.find(a => 
-                        a.type === ActionType.TYPE && a.data.variableName === varName
-                      );
-                      
-                      return (
-                        <div key={varName} className="mb-3">
-                          <label className="block text-gray-300 mb-1">
-                            {action?.data.placeholder || 'Input'} ({varName})
-                          </label>
-                          <input
-                            type="text"
-                            className="w-full bg-gray-700 px-3 py-2 rounded text-white"
-                            defaultValue={action?.data.value || ''}
-                            onChange={(e) => {
-                              setWorkflowVariables((prev) => ({
-                                ...prev,
-                                [varName]: e.target.value
-                              }));
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
+                    {/* Group inputs by type for better organization */}
                     
-                    {/* Show JavaScript content variables */}
+                    {/* Regular input variables */}
+                    {selectedWorkflow.variables && selectedWorkflow.variables.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-gray-300 text-sm font-medium mb-2">Form Inputs</h4>
+                        {selectedWorkflow.variables.map(varName => {
+                          const action = selectedWorkflow.actions.find(a => 
+                            a.type === ActionType.TYPE && a.data?.variableName === varName
+                          );
+                          
+                          return (
+                            <div key={varName} className="mb-3">
+                              <label className="block text-gray-300 mb-1">
+                                {action?.data?.placeholder || 'Input'} ({varName})
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full bg-gray-700 px-3 py-2 rounded text-white"
+                                defaultValue={action?.data?.value || ''}
+                                onChange={(e) => {
+                                  setWorkflowVariables((prev) => ({
+                                    ...prev,
+                                    [varName]: e.target.value
+                                  }));
+                                }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    
+                    {/* JavaScript content variables */}
                     {selectedWorkflow.actions
                       .filter(a => a.type === ActionType.JAVASCRIPT && a.data?.variableName)
                       .map(action => {
