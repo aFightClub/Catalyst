@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 
 // Set app name
-app.setName("Custom Web Browser");
+app.setName("Catalyst");
 
 function createWindow() {
   // Create the browser window.

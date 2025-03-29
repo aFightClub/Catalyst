@@ -1,6 +1,6 @@
 {
   "name": "catalyst-browser",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "The secondary web browser of digital creatives.",
   "main": "electron/main.js",
   "scripts": {

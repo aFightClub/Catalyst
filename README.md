@@ -1,4 +1,4 @@
-# Custom Web Browser
+# Catalyst Web Browser
 
 A modern web browser built with Electron and React, featuring a sleek Arc-inspired design with a tab sidebar and favorites bar.
 
