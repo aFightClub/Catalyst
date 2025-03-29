@@ -23,3 +23,5 @@ export { default as PluginsManager } from "./Plugins/PluginsManager";
 // Update this file to export your new Toast components
 export { default as Toast } from "./Toast/Toast";
 export { default as ToastContainer } from "./Toast/ToastContainer";
+
+export { default as Media } from "./Media/Media";

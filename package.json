@@ -7,11 +7,19 @@
     "start": "vite",
     "build": "vite build",
     "electron:dev": "concurrently \"vite\" \"electron .\"",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "publish": "electron-builder build --mac --publish always"
   },
   "build": {
     "appId": "com.catalystbrowser.app",
     "productName": "Catalyst",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "aFightClub",
+        "repo": "Catalyst"
+      }
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*"
@@ -22,7 +30,11 @@
     },
     "mac": {
       "icon": "src/images/icon.png",
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
       "icon": "src/images/icon.png",
@@ -50,6 +62,7 @@
     "@editorjs/table": "^2.4.4",
     "@types/prismjs": "^1.26.5",
     "electron-store": "^10.0.1",
+    "electron-updater": "^6.6.2",
     "prismjs": "^1.30.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

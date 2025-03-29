@@ -464,7 +464,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiImage className="w-5 h-5" />
-          <span>Images</span>
+          <span>Media</span>
         </button>
         
         <button 

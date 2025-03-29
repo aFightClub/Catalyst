@@ -20,7 +20,8 @@ import {
   LayoutDropdown,
   BrowserLayout,
   WorkflowModal,
-  ToastContainer
+  ToastContainer,
+  Media
 } from './components'
 
 // Temporary type extension to handle isCustomNamed until types.ts changes are applied
@@ -134,6 +135,7 @@ export default function App() {
   const [showWriter, setShowWriter] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
   const [showImages, setShowImages] = useState(false)
+  const [showMedia, setShowMedia] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true) // Dashboard shown by default
   const [showSubscriptions, setShowSubscriptions] = useState(false)
   const [showWebsites, setShowWebsites] = useState(false)
@@ -2021,47 +2023,69 @@ export default function App() {
     setWorkflowModalMode('create');
   };
 
+  // Listen for event to show Media component
+  useEffect(() => {
+    const handleShowMedia = () => {
+      setShowDashboard(false);
+      setShowAIChat(false);
+      setShowWriter(false);
+      setShowTasks(false);
+      setShowImages(false);
+      setShowAutomations(false);
+      setShowWebsites(false);
+      setShowSubscriptions(false);
+      setShowMedia(true);
+    };
+
+    window.addEventListener('show-media-component', handleShowMedia);
+    
+    return () => {
+      window.removeEventListener('show-media-component', handleShowMedia);
+    };
+  }, []);
+
   return (
-    <div className="h-screen flex">
-      {/* Sidebar Component */}
+    <div className="flex h-screen bg-gray-900 text-white">
+      {/* Sidebar */}
       <Sidebar 
-        workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
-        activeTabId={activeTabId}
+        workspaces={workspaces}
+        setActiveWorkspaceId={setActiveWorkspaceId}
+        setActiveTabId={setActiveTabId}
         isAddingWorkspace={isAddingWorkspace}
+        setIsAddingWorkspace={setIsAddingWorkspace}
         newWorkspaceName={newWorkspaceName}
+        setNewWorkspaceName={setNewWorkspaceName}
+        handleCreateWorkspace={addWorkspace}
         editingWorkspaceId={editingWorkspaceId}
-        editingTabId={editingTabId}
+        setEditingWorkspaceId={setEditingWorkspaceId}
         editName={editName}
-        showDashboard={showDashboard}
-        showSettings={showSettings}
-        showAIChat={showAIChat}
-        showWriter={showWriter}
-        showTasks={showTasks}
-        showImages={showImages}
-        showSubscriptions={showSubscriptions}
-        showWebsites={showWebsites}
-        showAutomations={showAutomations}
-        setShowDashboard={setShowDashboard}
+        setActiveTabToFirst={setActiveTabId}
         setShowSettings={setShowSettings}
+        setShowDashboard={setShowDashboard}
         setShowAIChat={setShowAIChat}
         setShowWriter={setShowWriter}
         setShowTasks={setShowTasks}
         setShowImages={setShowImages}
-        setShowSubscriptions={setShowSubscriptions}
+        setShowMedia={setShowMedia}
         setShowWebsites={setShowWebsites}
+        setShowSubscriptions={setShowSubscriptions}
         setShowAutomations={setShowAutomations}
-        setIsAddingWorkspace={setIsAddingWorkspace}
-        setNewWorkspaceName={setNewWorkspaceName}
-        addWorkspace={addWorkspace}
-        addTab={addTab}
-        setActiveWorkspaceId={setActiveWorkspaceId}
-        setActiveTabId={setActiveTabId}
+        showSettings={showSettings}
+        showDashboard={showDashboard}
+        showAIChat={showAIChat}
+        showWriter={showWriter}
+        showTasks={showTasks}
+        showImages={showImages}
+        showMedia={showMedia}
+        showWebsites={showWebsites}
+        showSubscriptions={showSubscriptions}
+        showAutomations={showAutomations}
         startEditingWorkspace={startEditingWorkspace}
         saveWorkspaceEdit={saveWorkspaceEdit}
+        cancelEdit={cancelEdit}
         startEditingTab={startEditingTab}
         saveTabEdit={saveTabEdit}
-        cancelEdit={cancelEdit}
         deleteWorkspace={deleteWorkspace}
         closeTab={closeTab}
         setEditName={setEditName}
@@ -2078,6 +2102,8 @@ export default function App() {
           <Tasks />
         ) : showImages ? (
           <Images />
+        ) : showMedia ? (
+          <Media />
         ) : showAutomations ? (
           <Automations />
         ) : showWebsites ? (

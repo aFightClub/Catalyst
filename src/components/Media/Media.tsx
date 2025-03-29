@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FiDownload, FiCopy, FiImage, FiExternalLink, FiType, FiMove, FiEdit, FiLayers, FiVideo, FiMusic, FiPlusCircle, FiTrash, FiVolume2 } from 'react-icons/fi';
+import MediaPlayer, { MediaPlayerHandle } from './MediaPlayer';
+import VideoExporter from './VideoExporter';
 
 interface ImageTemplate {
   id: string;
@@ -119,6 +121,10 @@ const Media: React.FC = () => {
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const mediaPlayerRef = useRef<MediaPlayerHandle>(null);
+
+  // Add state for video preview sources
+  const [previewSources, setPreviewSources] = useState<{ type: 'video' | 'audio' | 'image'; url: string; startTime: number; duration: number }[]>([]);
 
   // Filtered templates based on active platform
   const filteredTemplates = activePlatform === 'all' 
@@ -284,49 +290,89 @@ const Media: React.FC = () => {
         
     if (inputRef.current) {
       inputRef.current.click();
+      console.log(`Opening file dialog for ${type}`);
     }
   };
   
   const processMediaFile = (file: File, type: 'video' | 'image' | 'audio') => {
+    console.log(`Processing ${type} file:`, file.name);
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const url = event.target?.result as string;
-      
-      // Create new media asset
-      const newAsset: MediaAsset = {
-        id: `${type}-${Date.now()}`,
-        type,
-        name: file.name,
-        path: file.name, // In a real app, this would be the file path
-        url,
-        duration: type === 'image' ? 5 : undefined // Default duration for images is 5s
-      };
-      
-      // For videos and audio, we need to get the duration
-      if (type === 'video' || type === 'audio') {
-        const element = document.createElement(type);
-        element.src = url;
-        element.onloadedmetadata = () => {
-          setMediaAssets(prev => prev.map(asset => 
-            asset.id === newAsset.id 
-              ? { ...asset, duration: element.duration } 
-              : asset
-          ));
-        };
-      }
-      
-      setMediaAssets(prev => [...prev, newAsset]);
+    
+    // Add error handler for file reading
+    reader.onerror = (error) => {
+      console.error(`Error reading file ${file.name}:`, error);
+      alert(`Failed to read file ${file.name}. Please try another file.`);
     };
+    
+    reader.onload = (event) => {
+      try {
+        const url = event.target?.result as string;
+        console.log(`File loaded: ${file.name} (${type})`);
+        
+        // Create new media asset
+        const newAsset: MediaAsset = {
+          id: `${type}-${Date.now()}`,
+          type,
+          name: file.name,
+          path: file.name,
+          url,
+          duration: type === 'image' ? 5 : undefined
+        };
+        
+        // For videos and audio, we need to get the duration
+        if (type === 'video' || type === 'audio') {
+          const element = document.createElement(type);
+          
+          // Add error handler for media loading
+          element.onerror = () => {
+            console.error(`Error loading ${type} element for ${file.name}`);
+            alert(`The ${type} file "${file.name}" could not be loaded. It may be corrupted or in an unsupported format.`);
+          };
+          
+          element.src = url;
+          
+          element.onloadedmetadata = () => {
+            console.log(`Loaded ${type} metadata:`, element.duration);
+            setMediaAssets(prev => prev.map(asset => 
+              asset.id === newAsset.id 
+                ? { ...asset, duration: element.duration } 
+                : asset
+            ));
+          };
+        }
+        
+        setMediaAssets(prev => [...prev, newAsset]);
+        
+        // Update UI with feedback
+        showNotification(`Added ${file.name} to media library`, 'success');
+      } catch (error) {
+        console.error(`Error processing file ${file.name}:`, error);
+        showNotification(`Failed to process ${file.name}`, 'error');
+      }
+    };
+    
     reader.readAsDataURL(file);
   };
   
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'image' | 'audio') => {
+    console.log(`File input change for ${type}`, e.target.files);
     const files = e.target.files;
-    if (!files || files.length === 0) return;
     
-    Array.from(files).forEach(file => {
-      processMediaFile(file, type);
-    });
+    if (!files || files.length === 0) {
+      console.log(`No ${type} files selected`);
+      return;
+    }
+    
+    console.log(`Selected ${files.length} ${type} files`);
+    
+    try {
+      Array.from(files).forEach(file => {
+        processMediaFile(file, type);
+      });
+    } catch (error) {
+      console.error('Error processing files:', error);
+      showNotification('Error adding media files', 'error');
+    }
     
     // Reset the input
     e.target.value = '';
@@ -383,6 +429,9 @@ const Media: React.FC = () => {
     if (newEndTime > totalDuration) {
       setTotalDuration(newEndTime);
     }
+    
+    // Update preview sources after adding new asset
+    updatePreviewSources();
   };
   
   const removeAssetFromTrack = (trackType: 'video' | 'audio', trackId: string, assetId: string) => {
@@ -399,6 +448,9 @@ const Media: React.FC = () => {
           : track
       ));
     }
+    
+    // Update preview sources after removing asset
+    updatePreviewSources();
   };
   
   const addNewTrack = (type: 'video' | 'audio') => {
@@ -454,7 +506,7 @@ const Media: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
   
-  // Modified export function to show notifications
+  // Modified export function to use new VideoExporter component
   const handleExport = () => {
     showNotification('Starting video export...', 'info');
     
@@ -463,6 +515,72 @@ const Media: React.FC = () => {
       showNotification('Video exported successfully!', 'success');
     }, 2000);
   };
+
+  // Helper function to get sources for video preview
+  const updatePreviewSources = () => {
+    const sources: { type: 'video' | 'audio' | 'image'; url: string; startTime: number; duration: number }[] = [];
+    
+    // Add video and image sources
+    videoTracks.forEach(track => {
+      track.assets.forEach(asset => {
+        const mediaAsset = mediaAssets.find(m => m.id === asset.assetId);
+        if (mediaAsset && (mediaAsset.type === 'video' || mediaAsset.type === 'image')) {
+          sources.push({
+            type: mediaAsset.type,
+            url: mediaAsset.url,
+            startTime: asset.startTime,
+            duration: asset.duration
+          });
+        }
+      });
+    });
+    
+    // Sort sources by start time
+    sources.sort((a, b) => a.startTime - b.startTime);
+    
+    setPreviewSources(sources);
+  };
+
+  // Handle timeline scrubbing
+  const handleTimelineSeek = (time: number) => {
+    setCurrentTime(time);
+    
+    // Use the MediaPlayer ref to seek
+    if (mediaPlayerRef.current) {
+      mediaPlayerRef.current.seek(time);
+    }
+  };
+
+  // Play/pause the preview from timeline
+  const togglePlayback = () => {
+    console.log('Toggle playback called, current state:', isPlaying);
+    if (mediaPlayerRef.current) {
+      if (isPlaying) {
+        console.log('Pausing playback');
+        mediaPlayerRef.current.pause();
+      } else {
+        console.log('Starting playback');
+        mediaPlayerRef.current.play();
+      }
+    } else {
+      console.warn('MediaPlayer reference is not available');
+    }
+  };
+
+  // Handle media player time updates
+  const handleTimeUpdate = (time: number) => {
+    setCurrentTime(time);
+  };
+
+  // Handle media player play state changes
+  const handlePlayStateChange = (playing: boolean) => {
+    setIsPlaying(playing);
+  };
+
+  // Update preview sources when tracks or assets change
+  useEffect(() => {
+    updatePreviewSources();
+  }, [videoTracks, audioTracks, mediaAssets]);
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
@@ -586,42 +704,14 @@ const Media: React.FC = () => {
                 </div>
                 
                 <div className="p-3 overflow-auto">
-                  <h3 className="text-white font-medium mb-3">Export Settings</h3>
-                  
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-gray-300 text-sm mb-1">Resolution</label>
-                      <select 
-                        className="w-full bg-gray-700 text-white px-2 py-1 rounded-md"
-                        value={`${videoResolution.width}x${videoResolution.height}`}
-                        onChange={(e) => {
-                          const [width, height] = e.target.value.split('x').map(Number);
-                          setVideoResolution({ width, height });
-                        }}
-                      >
-                        <option value="1920x1080">1920x1080 (1080p)</option>
-                        <option value="1280x720">1280x720 (720p)</option>
-                        <option value="854x480">854x480 (480p)</option>
-                        <option value="640x360">640x360 (360p)</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-gray-300 text-sm mb-1">File Format</label>
-                      <select className="w-full bg-gray-700 text-white px-2 py-1 rounded-md">
-                        <option value="mp4">MP4 (H.264)</option>
-                        <option value="webm">WebM (VP9)</option>
-                      </select>
-                    </div>
-                    
-                    <button
-                      onClick={handleExport}
-                      className="w-full px-3 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white flex items-center justify-center"
-                    >
-                      <FiDownload className="mr-2" />
-                      Export Video
-                    </button>
-                  </div>
+                  {/* Add the VideoExporter component */}
+                  <VideoExporter 
+                    videoTracks={videoTracks}
+                    audioTracks={audioTracks}
+                    mediaAssets={mediaAssets}
+                    resolution={videoResolution}
+                    onExport={handleExport}
+                  />
                 </div>
               </div>
               
@@ -629,42 +719,46 @@ const Media: React.FC = () => {
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Video Preview */}
                 <div className="p-4 flex justify-center bg-black">
-                  <div 
-                    className="bg-gray-800 rounded-md overflow-hidden flex items-center justify-center relative"
-                    style={{ width: '100%', maxWidth: '800px', height: '450px' }}
-                  >
-                    <video
-                      ref={videoPreviewRef}
-                      className="w-full h-full"
-                      src=""
-                      controls
+                  {previewSources.length > 0 ? (
+                    <MediaPlayer 
+                      ref={mediaPlayerRef}
+                      sources={previewSources}
+                      width={videoResolution.width > 800 ? 800 : videoResolution.width}
+                      height={videoResolution.height > 450 ? 450 : videoResolution.height}
+                      onTimeUpdate={handleTimeUpdate}
+                      onPlayStateChange={handlePlayStateChange}
+                    />
+                  ) : (
+                    <div 
+                      className="bg-gray-800 rounded-md overflow-hidden flex items-center justify-center"
+                      style={{ width: '800px', height: '450px' }}
                     >
-                      Your browser does not support the video tag.
-                    </video>
-                    
-                    {/* Preview placeholder when no video */}
-                    {videoTracks[0]?.assets.length === 0 && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-                        <FiVideo size={48} className="mb-2" />
-                        <p>Add media to timeline to preview</p>
+                      <div className="text-center text-gray-400">
+                        <FiVideo size={48} className="mx-auto mb-4" />
+                        <p className="mb-4">No media in timeline</p>
+                        <p className="text-sm">Drag media from the library to the timeline below</p>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Timeline */}
                 <div className="flex-1 flex flex-col bg-gray-900 overflow-hidden">
                   <div className="p-2 bg-gray-800 border-b border-gray-700 flex items-center">
                     <div className="flex space-x-2">
-                      <button className="p-2 rounded-md bg-gray-700 text-white">
+                      <button 
+                        className="p-2 rounded-md bg-gray-700 text-white"
+                        onClick={togglePlayback}
+                      >
                         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </button>
-                      <button className="p-2 rounded-md bg-gray-700 text-white">
-                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none">
-                          <rect x="6" y="4" width="4" height="16" />
-                          <rect x="14" y="4" width="4" height="16" />
+                          {isPlaying ? (
+                            <>
+                              <rect x="6" y="4" width="4" height="16" />
+                              <rect x="14" y="4" width="4" height="16" />
+                            </>
+                          ) : (
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          )}
                         </svg>
                       </button>
                     </div>
@@ -673,6 +767,24 @@ const Media: React.FC = () => {
                       {`${Math.floor(currentTime / 60)}:${Math.floor(currentTime % 60).toString().padStart(2, '0')}`}
                       <span className="mx-1">/</span>
                       {`${Math.floor(totalDuration / 60)}:${Math.floor(totalDuration % 60).toString().padStart(2, '0')}`}
+                    </div>
+                    
+                    <div className="mx-4 flex-1">
+                      <div 
+                        className="h-2 bg-gray-700 rounded-full cursor-pointer relative"
+                        onClick={(e) => {
+                          if (!timelineRef.current) return;
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const clickPosition = (e.clientX - rect.left) / rect.width;
+                          const newTime = clickPosition * totalDuration;
+                          handleTimelineSeek(newTime);
+                        }}
+                      >
+                        <div 
+                          className="absolute h-full bg-blue-600 rounded-full"
+                          style={{ width: `${(currentTime / totalDuration) * 100}%` }}
+                        ></div>
+                      </div>
                     </div>
                     
                     <div className="ml-auto flex space-x-2">
@@ -705,6 +817,15 @@ const Media: React.FC = () => {
                             </div>
                           </div>
                         ))}
+                        
+                        {/* Current time indicator */}
+                        <div 
+                          className="absolute h-full border-l-2 border-red-500 z-10" 
+                          style={{ 
+                            left: `${(currentTime / totalDuration) * 100}%`,
+                            transform: 'translateX(-1px)'
+                          }}
+                        ></div>
                       </div>
                       
                       {/* Video Tracks */}
@@ -728,13 +849,21 @@ const Media: React.FC = () => {
                                     left: `${(asset.startTime / totalDuration) * 100}%`,
                                     width: `${(asset.duration / totalDuration) * 100}%`,
                                   }}
+                                  // Add click handler to select asset for editing
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAssetId(asset.assetId);
+                                  }}
                                 >
                                   <div className="text-white text-xs truncate max-w-full">
                                     {mediaAsset.name}
                                   </div>
                                   <button
                                     className="ml-auto text-white opacity-50 hover:opacity-100"
-                                    onClick={() => removeAssetFromTrack('video', track.id, asset.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeAssetFromTrack('video', track.id, asset.id);
+                                    }}
                                   >
                                     <FiTrash size={12} />
                                   </button>
@@ -766,6 +895,11 @@ const Media: React.FC = () => {
                                     left: `${(asset.startTime / totalDuration) * 100}%`,
                                     width: `${(asset.duration / totalDuration) * 100}%`,
                                   }}
+                                  // Add click handler to select asset for editing
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAssetId(asset.assetId);
+                                  }}
                                 >
                                   <div className="text-white text-xs truncate max-w-xs">
                                     {mediaAsset.name}
@@ -775,7 +909,10 @@ const Media: React.FC = () => {
                                   </div>
                                   <button
                                     className="ml-auto text-white opacity-50 hover:opacity-100"
-                                    onClick={() => removeAssetFromTrack('audio', track.id, asset.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeAssetFromTrack('audio', track.id, asset.id);
+                                    }}
                                   >
                                     <FiTrash size={12} />
                                   </button>

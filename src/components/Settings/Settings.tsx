@@ -95,6 +95,8 @@ const Settings: React.FC = () => {
   // Data Backup page state
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState<string | null>(null);
   const [importOptions, setImportOptions] = useState({
     overwrite: false,
     importWorkspaces: true,
@@ -498,6 +500,50 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error("Error exporting data:", error);
       setExportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Handle deleting all data
+  const handleDeleteAllData = async () => {
+    if (!confirm("WARNING: This will permanently delete ALL your data including workspaces, workflows, assistants, and settings. This action CANNOT be undone. Are you absolutely sure?")) {
+      return;
+    }
+    
+    try {
+      setDeleteStatus("Deleting all data...");
+      
+      // Delete all data types
+      await storeService.saveWorkspaces([]);
+      await storeService.saveWorkflows([]);
+      await storeService.saveTasks([]);
+      await storeService.saveSubscriptions([]);
+      await storeService.saveErasedElements([]);
+      await storeService.saveAssistants([]);
+      await storeService.saveWebsites([]);
+      await storeService.saveChats([]);
+      await storeService.saveDocuments([]);
+      await storeService.saveProjects([]);
+      await storeService.saveAutomations([]);
+      await storeService.saveWorkflowVariables({});
+      await storeService.saveApiKeys({});
+      await storeService.saveUserContext({
+        name: '',
+        company: '',
+        voice: '',
+        backStory: '',
+        websiteLinks: '',
+        additionalInfo: ''
+      });
+      
+      setDeleteStatus("All data deleted successfully! Refreshing...");
+      
+      // Reload the page after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error("Error deleting data:", error);
+      setDeleteStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -1318,11 +1364,32 @@ const Settings: React.FC = () => {
         
         <div className="mt-6 bg-blue-900 bg-opacity-20 p-4 rounded border border-blue-800">
           <h4 className="text-lg font-medium mb-2 text-blue-300">About Data Backup</h4>
-          <p className="text-gray-400">
+          <p className="text-gray-400 mb-4">
             Your data is stored locally in your browser or application. Exporting allows you to create a backup 
             file that contains all your workspaces, workflows, and settings. This file can be used to restore your 
             data in case of data loss or when moving to a new device.
           </p>
+          
+          <div className="bg-red-900 bg-opacity-20 p-4 rounded border border-red-800 mt-6">
+            <h4 className="text-lg font-medium mb-2 text-red-300">Danger Zone</h4>
+            <p className="text-gray-400 mb-4">
+              Delete all your data permanently. This action cannot be undone. Please export a backup first if you may need your data later.
+            </p>
+            
+            <button
+              onClick={handleDeleteAllData}
+              className="w-full px-4 py-3 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center"
+            >
+              <FiTrash2 className="mr-2" />
+              Delete All Data
+            </button>
+            
+            {deleteStatus && (
+              <div className={`mt-3 p-2 rounded text-sm ${deleteStatus.includes('Error') ? 'bg-red-900 text-red-200' : 'bg-red-900 text-red-200'}`}>
+                {deleteStatus}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );

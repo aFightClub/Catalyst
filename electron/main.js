@@ -1,8 +1,11 @@
 const { app, BrowserWindow, ipcMain, Menu, MenuItem } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const path = require("path");
 
+let mainWindow;
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
@@ -18,15 +21,22 @@ function createWindow() {
     icon: path.join(__dirname, "../src/images/icon.png"),
   });
 
+  mainWindow.loadURL(
+    app.isPackaged
+      ? `file://${path.join(__dirname, "../dist/index.html")}`
+      : "http://localhost:3001"
+  );
+
   if (!app.isPackaged) {
-    win.loadURL("http://localhost:3001");
-    win.webContents.openDevTools();
-  } else {
-    win.loadFile(path.join(__dirname, "../dist/index.html"));
+    mainWindow.webContents.openDevTools();
   }
 
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
   // Add context menu for the window
-  win.webContents.on("context-menu", (event, params) => {
+  mainWindow.webContents.on("context-menu", (event, params) => {
     const menu = new Menu();
 
     // Add Cut/Copy/Paste items when text is selected or in an editable field
@@ -256,7 +266,14 @@ if (process.platform === "linux" || process.platform === "win32") {
   });
 }
 
-app.whenReady().then(createWindow);
+app.on("ready", () => {
+  createWindow();
+
+  // Check for updates after app launch
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -265,7 +282,33 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (mainWindow === null) {
     createWindow();
   }
+});
+
+// Auto-updater events
+autoUpdater.on("checking-for-update", () => {
+  console.log("Checking for update...");
+});
+
+autoUpdater.on("update-available", (info) => {
+  console.log("Update available:", info);
+});
+
+autoUpdater.on("update-not-available", (info) => {
+  console.log("Update not available:", info);
+});
+
+autoUpdater.on("error", (err) => {
+  console.log("Error in auto-updater:", err);
+});
+
+autoUpdater.on("download-progress", (progressObj) => {
+  console.log(`Download speed: ${progressObj.bytesPerSecond}`);
+  console.log(`Downloaded ${progressObj.percent}%`);
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+  console.log("Update downloaded:", info);
 });

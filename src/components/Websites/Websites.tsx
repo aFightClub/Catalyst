@@ -266,43 +266,7 @@ const Websites: React.FC = () => {
         </div>
       </div>
       
-      {/* Status filter pills */}
-      <div className="mb-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedStatus(null)}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedStatus === null ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            All Statuses
-          </button>
-          <button
-            onClick={() => setSelectedStatus('active')}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedStatus === 'active' ? 'bg-blue-600' : 'bg-blue-800 bg-opacity-50 hover:bg-blue-700'
-            }`}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setSelectedStatus('idea')}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedStatus === 'idea' ? 'bg-yellow-600' : 'bg-yellow-800 bg-opacity-50 hover:bg-yellow-700'
-            }`}
-          >
-            Side Ideas
-          </button>
-          <button
-            onClick={() => setSelectedStatus('archived')}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedStatus === 'archived' ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            Graveyard
-          </button>
-        </div>
-      </div>
+      
       
       {/* Category filter */}
       <div className="mb-6">
@@ -603,24 +567,7 @@ const Websites: React.FC = () => {
                         Added {formatDate(website.createdAt)}
                       </span>
                     </div>
-                    
-                    {/* Quick status change buttons */}
-                    {website.status !== 'idea' && website.status !== 'archived' && (
-                      <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
-                        <button
-                          onClick={() => changeWebsiteStatus(website.id, 'idea')}
-                          className="text-xs px-2 py-1 bg-yellow-800 text-yellow-200 rounded hover:bg-yellow-700"
-                        >
-                          Move to Ideas
-                        </button>
-                        <button
-                          onClick={() => changeWebsiteStatus(website.id, 'archived')}
-                          className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
-                        >
-                          Archive
-                        </button>
-                      </div>
-                    )}
+                
                     
                     {website.status === 'idea' && (
                       <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">

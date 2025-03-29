@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiDownload, FiCopy, FiImage, FiExternalLink, FiType, FiMove, FiEdit, FiLayers } from 'react-icons/fi';
+import { FiDownload, FiCopy, FiImage, FiExternalLink, FiType, FiMove, FiEdit, FiLayers, FiVideo } from 'react-icons/fi';
 
 interface ImageTemplate {
   id: string;
@@ -373,6 +373,12 @@ const Media: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const navigateToVideoBuilder = () => {
+    // Dispatch a custom event to inform App.tsx to switch to the Media component
+    // This approach ensures compatibility with the existing app architecture
+    window.dispatchEvent(new CustomEvent('show-media-component'));
+  };
+
   const copyDimensions = () => {
     if (!selectedTemplate) return;
     navigator.clipboard.writeText(`${selectedTemplate.width}x${selectedTemplate.height}`);
@@ -381,7 +387,7 @@ const Media: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-gray-900">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
-        <h2 className="text-xl font-bold text-white">Social Media Templates</h2>
+        <h2 className="text-xl font-bold text-white">Media</h2>
         <div className="flex space-x-2">
           <button 
             onClick={() => setActiveTab('templates')}
@@ -395,222 +401,230 @@ const Media: React.FC = () => {
           >
             Image Builder
           </button>
+          <button 
+            onClick={navigateToVideoBuilder}
+            className="px-3 py-1 rounded bg-gray-700 text-white"
+          >
+            Video Builder
+          </button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
-          {activeTab === 'templates' && (
-            <div className="p-3 border-b border-gray-700">
-              <h3 className="text-white font-medium mb-2">Platforms</h3>
-              <div className="space-y-1">
-                <button
-                  onClick={() => setActivePlatform('all')}
-                  className={`w-full text-left px-3 py-2 rounded-md ${
-                    activePlatform === 'all' ? 'bg-blue-600' : 'hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="text-white">All Platforms</span>
-                </button>
-                
-                {platforms.map(platform => (
+        {/* Sidebar - only shown when not in videoBuilder */}
+        {activeTab !== 'videoBuilder' && (
+          <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
+            {activeTab === 'templates' && (
+              <div className="p-3 border-b border-gray-700">
+                <h3 className="text-white font-medium mb-2">Platforms</h3>
+                <div className="space-y-1">
                   <button
-                    key={platform.id}
-                    onClick={() => setActivePlatform(platform.id)}
-                    className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
-                      activePlatform === platform.id ? 'bg-gray-700' : 'hover:bg-gray-700'
+                    onClick={() => setActivePlatform('all')}
+                    className={`w-full text-left px-3 py-2 rounded-md ${
+                      activePlatform === 'all' ? 'bg-blue-600' : 'hover:bg-gray-700'
                     }`}
                   >
-                    <div 
-                      className="w-3 h-3 rounded-full mr-2"
-                      style={{ backgroundColor: PLATFORM_COLORS[platform.id] }}
-                    ></div>
-                    <span className="text-white">{platform.name}</span>
+                    <span className="text-white">All Platforms</span>
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'imageBuilder' && selectedTemplate && (
-            <div className="p-3 flex flex-col overflow-auto h-full">
-              <h3 className="text-white font-medium mb-3">Image Editor</h3>
-              
-              <div className="mb-4">
-                <h4 className="text-gray-300 text-sm mb-2">Template</h4>
-                <div className="bg-gray-700 rounded p-2 mb-2">
-                  <div className="text-white">{selectedTemplate.name}</div>
-                  <div className="text-gray-400 text-sm">{selectedTemplate.width} x {selectedTemplate.height}</div>
-                </div>
-                <button
-                  onClick={() => setActiveTab('templates')}
-                  className="w-full px-3 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-white text-sm"
-                >
-                  Change Template
-                </button>
-              </div>
-              
-              <div className="mb-4">
-                <h4 className="text-gray-300 text-sm mb-2">Background</h4>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Color</label>
-                    <div className="flex items-center">
-                      <input
-                        type="color"
-                        value={backgroundColor}
-                        onChange={(e) => setBackgroundColor(e.target.value)}
-                        className="w-6 h-6 rounded mr-1"
-                      />
-                      <input
-                        type="text"
-                        value={backgroundColor}
-                        onChange={(e) => setBackgroundColor(e.target.value)}
-                        className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Image</label>
+                  
+                  {platforms.map(platform => (
                     <button
-                      onClick={uploadBackgroundImage}
-                      className="w-full px-2 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-white text-sm"
+                      key={platform.id}
+                      onClick={() => setActivePlatform(platform.id)}
+                      className={`w-full text-left px-3 py-2 rounded-md flex items-center ${
+                        activePlatform === platform.id ? 'bg-gray-700' : 'hover:bg-gray-700'
+                      }`}
                     >
-                      Upload
+                      <div 
+                        className="w-3 h-3 rounded-full mr-2"
+                        style={{ backgroundColor: PLATFORM_COLORS[platform.id] }}
+                      ></div>
+                      <span className="text-white">{platform.name}</span>
                     </button>
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      onChange={handleImageUpload}
-                      accept="image/*" 
-                      className="hidden" 
-                    />
-                  </div>
+                  ))}
                 </div>
-                {backgroundImage && (
-                  <button
-                    onClick={() => setBackgroundImage(null)}
-                    className="w-full px-2 py-1 rounded-md bg-red-700 hover:bg-red-600 text-white text-sm"
-                  >
-                    Remove Image
-                  </button>
-                )}
               </div>
-              
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-gray-300 text-sm">Text Elements</h4>
+            )}
+            
+            {activeTab === 'imageBuilder' && selectedTemplate && (
+              <div className="p-3 flex flex-col overflow-auto h-full">
+                <h3 className="text-white font-medium mb-3">Image Editor</h3>
+                
+                <div className="mb-4">
+                  <h4 className="text-gray-300 text-sm mb-2">Template</h4>
+                  <div className="bg-gray-700 rounded p-2 mb-2">
+                    <div className="text-white">{selectedTemplate.name}</div>
+                    <div className="text-gray-400 text-sm">{selectedTemplate.width} x {selectedTemplate.height}</div>
+                  </div>
                   <button
-                    onClick={addNewText}
-                    className="px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm flex items-center"
+                    onClick={() => setActiveTab('templates')}
+                    className="w-full px-3 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-white text-sm"
                   >
-                    <FiType className="mr-1" size={14} />
-                    Add Text
+                    Change Template
                   </button>
                 </div>
                 
-                {textElements.length > 0 ? (
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {textElements.map(text => (
-                      <div 
-                        key={text.id}
-                        className={`px-3 py-2 rounded-md cursor-pointer ${selectedTextId === text.id ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'}`}
-                        onClick={() => setSelectedTextId(text.id)}
-                      >
-                        <div className="text-white text-sm truncate">{text.text}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-gray-400 text-sm p-2">No text elements. Click "Add Text" to create one.</div>
-                )}
-              </div>
-              
-              {selectedTextId && (
                 <div className="mb-4">
-                  <h4 className="text-gray-300 text-sm mb-2">Text Properties</h4>
-                  {textElements.filter(t => t.id === selectedTextId).map(text => (
-                    <div key={text.id} className="space-y-2">
-                      <div>
-                        <label className="block text-gray-400 text-xs mb-1">Text Content</label>
+                  <h4 className="text-gray-300 text-sm mb-2">Background</h4>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="block text-gray-400 text-xs mb-1">Color</label>
+                      <div className="flex items-center">
+                        <input
+                          type="color"
+                          value={backgroundColor}
+                          onChange={(e) => setBackgroundColor(e.target.value)}
+                          className="w-6 h-6 rounded mr-1"
+                        />
                         <input
                           type="text"
-                          value={text.text}
-                          onChange={(e) => updateTextProperty(text.id, 'text', e.target.value)}
+                          value={backgroundColor}
+                          onChange={(e) => setBackgroundColor(e.target.value)}
                           className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
                         />
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-xs mb-1">Image</label>
+                      <button
+                        onClick={uploadBackgroundImage}
+                        className="w-full px-2 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-white text-sm"
+                      >
+                        Upload
+                      </button>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        accept="image/*" 
+                        className="hidden" 
+                      />
+                    </div>
+                  </div>
+                  {backgroundImage && (
+                    <button
+                      onClick={() => setBackgroundImage(null)}
+                      className="w-full px-2 py-1 rounded-md bg-red-700 hover:bg-red-600 text-white text-sm"
+                    >
+                      Remove Image
+                    </button>
+                  )}
+                </div>
+                
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="text-gray-300 text-sm">Text Elements</h4>
+                    <button
+                      onClick={addNewText}
+                      className="px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm flex items-center"
+                    >
+                      <FiType className="mr-1" size={14} />
+                      Add Text
+                    </button>
+                  </div>
+                  
+                  {textElements.length > 0 ? (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {textElements.map(text => (
+                        <div 
+                          key={text.id}
+                          className={`px-3 py-2 rounded-md cursor-pointer ${selectedTextId === text.id ? 'bg-gray-600' : 'bg-gray-700 hover:bg-gray-600'}`}
+                          onClick={() => setSelectedTextId(text.id)}
+                        >
+                          <div className="text-white text-sm truncate">{text.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-gray-400 text-sm p-2">No text elements. Click "Add Text" to create one.</div>
+                  )}
+                </div>
+                
+                {selectedTextId && (
+                  <div className="mb-4">
+                    <h4 className="text-gray-300 text-sm mb-2">Text Properties</h4>
+                    {textElements.filter(t => t.id === selectedTextId).map(text => (
+                      <div key={text.id} className="space-y-2">
                         <div>
-                          <label className="block text-gray-400 text-xs mb-1">Color</label>
-                          <div className="flex items-center">
+                          <label className="block text-gray-400 text-xs mb-1">Text Content</label>
+                          <input
+                            type="text"
+                            value={text.text}
+                            onChange={(e) => updateTextProperty(text.id, 'text', e.target.value)}
+                            className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-gray-400 text-xs mb-1">Color</label>
+                            <div className="flex items-center">
+                              <input
+                                type="color"
+                                value={text.color}
+                                onChange={(e) => updateTextProperty(text.id, 'color', e.target.value)}
+                                className="w-6 h-6 rounded mr-1"
+                              />
+                              <input
+                                type="text"
+                                value={text.color}
+                                onChange={(e) => updateTextProperty(text.id, 'color', e.target.value)}
+                                className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-gray-400 text-xs mb-1">Size</label>
                             <input
-                              type="color"
-                              value={text.color}
-                              onChange={(e) => updateTextProperty(text.id, 'color', e.target.value)}
-                              className="w-6 h-6 rounded mr-1"
-                            />
-                            <input
-                              type="text"
-                              value={text.color}
-                              onChange={(e) => updateTextProperty(text.id, 'color', e.target.value)}
+                              type="number"
+                              value={text.fontSize}
+                              onChange={(e) => updateTextProperty(text.id, 'fontSize', parseInt(e.target.value) || 12)}
                               className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
                             />
                           </div>
                         </div>
                         
                         <div>
-                          <label className="block text-gray-400 text-xs mb-1">Size</label>
-                          <input
-                            type="number"
-                            value={text.fontSize}
-                            onChange={(e) => updateTextProperty(text.id, 'fontSize', parseInt(e.target.value) || 12)}
+                          <label className="block text-gray-400 text-xs mb-1">Font</label>
+                          <select
+                            value={text.fontFamily}
+                            onChange={(e) => updateTextProperty(text.id, 'fontFamily', e.target.value)}
                             className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
-                          />
+                          >
+                            {FONT_FAMILIES.map(font => (
+                              <option key={font} value={font}>{font}</option>
+                            ))}
+                          </select>
                         </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-gray-400 text-xs mb-1">Font</label>
-                        <select
-                          value={text.fontFamily}
-                          onChange={(e) => updateTextProperty(text.id, 'fontFamily', e.target.value)}
-                          className="w-full px-2 py-1 bg-gray-700 rounded text-white text-sm"
+                        
+                        <button
+                          onClick={deleteSelectedText}
+                          className="w-full px-2 py-1 rounded-md bg-red-700 hover:bg-red-600 text-white text-sm mt-2"
                         >
-                          {FONT_FAMILIES.map(font => (
-                            <option key={font} value={font}>{font}</option>
-                          ))}
-                        </select>
+                          Delete Text
+                        </button>
                       </div>
-                      
-                      <button
-                        onClick={deleteSelectedText}
-                        className="w-full px-2 py-1 rounded-md bg-red-700 hover:bg-red-600 text-white text-sm mt-2"
-                      >
-                        Delete Text
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+                
+                <div className="mt-auto">
+                  <button
+                    onClick={handleDownload}
+                    className="w-full px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
+                  >
+                    <FiDownload className="mr-2" />
+                    Export Image
+                  </button>
                 </div>
-              )}
-              
-              <div className="mt-auto">
-                <button
-                  onClick={handleDownload}
-                  className="w-full px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
-                >
-                  <FiDownload className="mr-2" />
-                  Export Image
-                </button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className={`flex-1 overflow-hidden flex flex-col ${activeTab === 'videoBuilder' ? 'w-full' : ''}`}>
           {activeTab === 'templates' && (
             <>
               {selectedTemplate && showTemplateDetails ? (
