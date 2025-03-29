@@ -22,6 +22,7 @@ interface WorkflowModalProps {
   setWorkflowModalMode: (mode: 'create' | 'list') => void;
   setShowWorkflowModal: (show: boolean) => void;
   setCurrentRecording: (recording: WorkflowAction[] | ((prev: WorkflowAction[]) => WorkflowAction[])) => void;
+  handleEditWorkflow: (workflow: Workflow) => void;
 }
 
 const WorkflowModal: React.FC<WorkflowModalProps> = ({
@@ -43,7 +44,8 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
   setWorkflows,
   setWorkflowModalMode,
   setShowWorkflowModal,
-  setCurrentRecording
+  setCurrentRecording,
+  handleEditWorkflow
 }) => {
   const [editingActionIndex, setEditingActionIndex] = useState<number | null>(null);
   
@@ -491,15 +493,42 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedWorkflow(workflow);
-                                // Show variable input form if there are variables
-                                if (workflow.variables.length > 0) {
+                                
+                                // First check for JavaScript actions with content variables
+                                const jsContentVars = workflow.actions
+                                  .filter(a => a.type === ActionType.JAVASCRIPT && a.data?.variableName)
+                                  .map(a => a.data?.variableName)
+                                  .filter(Boolean) as string[];
+                                
+                                // Combine with regular input variables
+                                const allVariables = [
+                                  ...(workflow.variables || []),
+                                  ...jsContentVars
+                                ];
+                                
+                                // Show variable input form if there are any variables
+                                if (allVariables.length > 0) {
+                                  console.log("Workflow has variables:", allVariables);
                                   const varMap: {[key: string]: string} = {};
-                                  workflow.variables.forEach(v => {
+                                  
+                                  // Add regular input variables
+                                  if (workflow.variables) {
+                                    workflow.variables.forEach(v => {
+                                      const action = workflow.actions.find(a => 
+                                        a.type === ActionType.TYPE && a.data?.variableName === v
+                                      );
+                                      varMap[v] = action?.data?.value || '';
+                                    });
+                                  }
+                                  
+                                  // Add JavaScript content variables
+                                  jsContentVars.forEach(v => {
                                     const action = workflow.actions.find(a => 
-                                      a.type === ActionType.TYPE && a.data.variableName === v
+                                      a.type === ActionType.JAVASCRIPT && a.data?.variableName === v
                                     );
-                                    varMap[v] = action?.data.value || '';
+                                    varMap[v] = action?.data?.defaultContent || '';
                                   });
+                                  
                                   setWorkflowVariables(varMap);
                                 } else {
                                   // Play workflow immediately if no variables
@@ -511,6 +540,17 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                               title="Run Workflow"
                             >
                               <FiPlay className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Load workflow for editing
+                                handleEditWorkflow(workflow);
+                              }}
+                              className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              title="Edit Workflow"
+                            >
+                              <FiEdit2 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={(e) => {
@@ -543,14 +583,15 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                 </div>
               )}
               
-              {selectedWorkflow && selectedWorkflow.variables.length > 0 && (
+              {selectedWorkflow && (
                 <div className="mt-4 border-t border-gray-700 pt-4">
                   <h3 className="text-white font-medium mb-3">
                     Run Workflow: {selectedWorkflow.name}
                   </h3>
                   
                   <div className="space-y-3 mb-4">
-                    {selectedWorkflow.variables.map(varName => {
+                    {/* Show regular input variables */}
+                    {selectedWorkflow.variables && selectedWorkflow.variables.map(varName => {
                       const action = selectedWorkflow.actions.find(a => 
                         a.type === ActionType.TYPE && a.data.variableName === varName
                       );
@@ -574,6 +615,33 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                         </div>
                       );
                     })}
+                    
+                    {/* Show JavaScript content variables */}
+                    {selectedWorkflow.actions
+                      .filter(a => a.type === ActionType.JAVASCRIPT && a.data?.variableName)
+                      .map(action => {
+                        const varName = action.data?.variableName;
+                        if (!varName) return null;
+                        
+                        return (
+                          <div key={varName} className="mb-3">
+                            <label className="block text-gray-300 mb-1">
+                              JavaScript Content ({varName})
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full bg-gray-700 px-3 py-2 rounded text-white"
+                              defaultValue={action.data?.defaultContent || ''}
+                              onChange={(e) => {
+                                setWorkflowVariables((prev) => ({
+                                  ...prev,
+                                  [varName]: e.target.value
+                                }));
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
                     
                     <div className="flex justify-end">
                       <button

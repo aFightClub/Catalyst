@@ -127,6 +127,7 @@ export default function App() {
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
   const [workflowVariables, setWorkflowVariables] = useState<{[key: string]: string}>({})
+  const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null)
 
   // UI State for sidebar features
   const [showAIChat, setShowAIChat] = useState(false)
@@ -1277,6 +1278,10 @@ export default function App() {
       return;
     }
     
+    // Check if this is an edit of an existing workflow
+    const existingWorkflowIndex = workflows.findIndex(w => w.id === editingWorkflowId);
+    const isEditing = existingWorkflowIndex !== -1;
+    
     // Analyze recording to extract any variables (inputs)
     const variables: string[] = [];
     currentRecording.forEach(action => {
@@ -1294,28 +1299,47 @@ export default function App() {
       }
     });
     
-    // Create the new workflow
-    const newWorkflow: Workflow = {
-      id: Date.now().toString(),
+    // Also look for JavaScript actions with variables
+    currentRecording.forEach(action => {
+      if (action.type === ActionType.JAVASCRIPT && action.data?.variableName) {
+        // Add to variables list if not already included
+        if (!variables.includes(action.data.variableName)) {
+          variables.push(action.data.variableName);
+        }
+      }
+    });
+    
+    // Create the new workflow or update existing one
+    const workflowToSave: Workflow = {
+      id: isEditing ? workflows[existingWorkflowIndex].id : Date.now().toString(),
       name: newWorkflowName.trim(),
       actions: currentRecording,
       variables: variables,
-      createdAt: new Date().toISOString(),
+      createdAt: isEditing ? workflows[existingWorkflowIndex].createdAt : new Date().toISOString(),
       startUrl: currentRecording.find(a => a.type === ActionType.NAVIGATE)?.data?.url
     };
     
-    // Add to workflows state
-    setWorkflows(prev => [...prev, newWorkflow]);
+    // Update workflows state
+    let updatedWorkflows: Workflow[];
+    if (isEditing) {
+      updatedWorkflows = [...workflows];
+      updatedWorkflows[existingWorkflowIndex] = workflowToSave;
+    } else {
+      updatedWorkflows = [...workflows, workflowToSave];
+    }
+    
+    setWorkflows(updatedWorkflows);
     
     // Save to storage
-    storeService.saveWorkflows([...workflows, newWorkflow])
+    storeService.saveWorkflows(updatedWorkflows)
       .then(() => {
-        console.log('Workflow saved successfully');
-        addToast(`Workflow "${newWorkflowName}" saved successfully`, 'success');
+        console.log(`Workflow ${isEditing ? 'updated' : 'saved'} successfully`);
+        addToast(`Workflow "${newWorkflowName}" ${isEditing ? 'updated' : 'saved'} successfully`, 'success');
         
         // Reset recording state
         setCurrentRecording([]);
         setNewWorkflowName('');
+        setEditingWorkflowId(null);
         
         // Show workflows list
         setWorkflowModalMode('list');
@@ -1968,6 +1992,19 @@ export default function App() {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
+  // Handle editing an existing workflow
+  const handleEditWorkflow = (workflow: Workflow) => {
+    console.log(`Editing workflow: ${workflow.name}`);
+    // Set the editing workflow ID to know we're editing not creating new
+    setEditingWorkflowId(workflow.id);
+    // Load workflow data into the editor
+    setNewWorkflowName(workflow.name);
+    // Clone the actions to avoid modifying the original
+    setCurrentRecording([...workflow.actions]);
+    // Switch to create mode for editing UI
+    setWorkflowModalMode('create');
+  };
+
   return (
     <div className="h-screen flex">
       {/* Sidebar Component */}
@@ -2127,6 +2164,7 @@ export default function App() {
         setWorkflowModalMode={setWorkflowModalMode}
         setShowWorkflowModal={setShowWorkflowModal}
         setCurrentRecording={setCurrentRecording}
+        handleEditWorkflow={handleEditWorkflow}
       />
 
       {/* Floating Recording Controls */}
