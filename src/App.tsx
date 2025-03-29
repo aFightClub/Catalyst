@@ -275,6 +275,8 @@ export default function App() {
     setTimeout(() => {
       // Track if the page is loading to avoid duplicate processing
       let isLoading = true;
+      // Keep track of processed URLs to avoid applying plugins multiple times
+      let processedUrls = new Set();
       
       // Set up event listeners for this webview
       webview.addEventListener('dom-ready', async () => {
@@ -400,9 +402,10 @@ export default function App() {
             setUrlInput(url);
           }
           
-          // Only process once per page load
-          if (isLoading) {
+          // Only process once per page load and avoid processing the same URL multiple times
+          if (isLoading && !processedUrls.has(url)) {
             isLoading = false;
+            processedUrls.add(url);
             
             // Apply erased elements CSS first, then plugins
             try {
@@ -874,6 +877,9 @@ export default function App() {
     }
   };
   
+  // Cache for erased elements to avoid reapplying the same CSS
+  const appliedErasedElements = useRef(new Map<string, string>());
+  
   const applyErasedElementsCSS = async (webview: Electron.WebviewTag, url: string, tabId: string) => {
     // Check if dom-ready has fired
     if (!domReadyWebviews.current.has(tabId)) {
@@ -904,6 +910,13 @@ export default function App() {
       const css = erasedElementsForDomain
         .map(element => `${element.selector} { display: none !important; visibility: hidden !important; opacity: 0 !important; }`)
         .join('\n');
+      
+      // Check if this exact CSS has already been applied to this URL
+      const cacheKey = `${url}-${css}`;
+      if (appliedErasedElements.current.get(cacheKey) === css) {
+        console.log(`Erased elements already applied for ${url}, skipping`);
+        return;
+      }
       
       // Apply CSS to webview using executeJavaScript
       await webview.executeJavaScript(`
@@ -1005,7 +1018,9 @@ export default function App() {
           }
         })()
       `);
-
+      
+      // Store in cache after successful application
+      appliedErasedElements.current.set(cacheKey, css);
       console.log('Successfully applied eraser CSS');
     } catch (error) {
       console.error('Error applying erased elements CSS:', error);
@@ -1858,18 +1873,24 @@ export default function App() {
 
   // Update URL input when active tab changes
   useEffect(() => {
-    const activeTab = tabs.find(tab => tab.id === activeTabId)
-    if (activeTab) {
-      setUrlInput(activeTab.url)
-      
+    const activeTab = tabs.find(tab => tab.id === activeTabId);
+    if (!activeTab) return;
+    
+    // Set URL input
+    setUrlInput(activeTab.url);
+    
+    // Add a small delay before applying erased elements to avoid race conditions
+    const timeoutId = setTimeout(() => {
       // Re-apply erased elements when switching to an existing tab
       const webview = webviewRefs.current[activeTabId];
       if (webview && domReadyWebviews.current.has(activeTabId)) {
         console.log(`Reapplying erased elements for tab ${activeTabId}`);
         applyErasedElementsCSS(webview, activeTab.url, activeTabId);
       }
-    }
-  }, [activeTabId, tabs, erasedElements]);
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [activeTabId]); // Only depend on activeTabId
 
   // Listen for layout change events from HeaderNav
   useEffect(() => {
@@ -1932,37 +1953,44 @@ export default function App() {
 
   // Apply plugins when switching workspaces
   useEffect(() => {
-    const applyPluginsToWorkspace = async () => {
-      console.log(`Switching to workspace: ${activeWorkspaceId}, applying plugins to all tabs`);
+    // Create a ref to track already processed tabs
+    const processedTabs = new Set();
+    let isMounted = true;
+    
+    const timeoutId = setTimeout(() => {
+      if (!isMounted) return;
       
-      // Get all tabs in the current workspace
-      const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
-      if (!currentWorkspace) return;
-      
-      // Apply plugins to each ready tab in the workspace
-      for (const tab of currentWorkspace.tabs) {
-        const webview = webviewRefs.current[tab.id];
-        if (webview && tab.isReady) {
-          try {
-            // Check if webview has been properly initialized
-            if (!domReadyWebviews.current.has(tab.id)) {
-              console.log(`Webview for tab ${tab.id} not fully initialized yet - DOM not ready`);
-              continue;
+      const applyPluginsToWorkspace = async () => {
+        console.log(`Switching to workspace: ${activeWorkspaceId}, applying plugins to all tabs`);
+        
+        // Apply plugins to tabs that are ready
+        const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
+        if (!currentWorkspace) return;
+        
+        for (const tab of currentWorkspace.tabs) {
+          // Skip if we've already processed this tab
+          if (processedTabs.has(tab.id)) continue;
+          
+          const webview = webviewRefs.current[tab.id];
+          if (webview && tab.isReady && domReadyWebviews.current.has(tab.id)) {
+            try {
+              processedTabs.add(tab.id);
+              await applyPluginsToWebview(webview);
+            } catch (error) {
+              console.error(`Error applying plugins to tab ${tab.id}:`, error);
             }
-            
-            console.log(`Applying plugins to tab ${tab.id} after workspace switch`);
-            await applyPluginsToWebview(webview);
-          } catch (error) {
-            console.error(`Error applying plugins to tab ${tab.id}:`, error);
           }
         }
-      }
+      };
+      
+      applyPluginsToWorkspace();
+    }, 300); // Add a debounce delay
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
     };
-    
-    // Call the function when activeWorkspaceId changes
-    applyPluginsToWorkspace();
-    
-  }, [activeWorkspaceId, workspaces]);
+  }, [activeWorkspaceId]); // Remove workspaces from dependency array
 
   // Listen for requests to open URLs in new tabs
   useEffect(() => {

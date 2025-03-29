@@ -154,10 +154,8 @@ export const getActivePlugins = (): Plugin[] => {
 
 // Export a function to apply plugins to a webview
 export const applyPluginsToWebview = async (webview: Electron.WebviewTag) => {
-  if (!webview || webview.isLoading()) {
-    console.log(
-      "Webview is not ready or still loading, skipping plugin application"
-    );
+  if (!webview) {
+    console.log("Webview is null, skipping plugin application");
     return;
   }
 
