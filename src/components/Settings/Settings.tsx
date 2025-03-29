@@ -5,6 +5,7 @@ import { pluginManager } from '../../services/pluginManager';
 import { storeService } from '../../services/storeService';
 import { FiKey, FiPackage, FiActivity, FiClock, FiPlay, FiEdit, FiTrash2, FiExternalLink, FiUser, FiMessageCircle, FiPlus, FiX, FiImage, FiSave } from 'react-icons/fi';
 import PluginsManager from '../Plugins/PluginsManager';
+import UpdateChecker from './UpdateChecker';
 
 // Define Workflow and ActionType interfaces since we can't import from App
 interface WorkflowAction {

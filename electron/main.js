@@ -1,6 +1,14 @@
-const { app, BrowserWindow, ipcMain, Menu, MenuItem } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  MenuItem,
+  dialog,
+} = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
+const log = require("electron-log");
 
 let mainWindow;
 
@@ -269,9 +277,12 @@ if (process.platform === "linux" || process.platform === "win32") {
 app.on("ready", () => {
   createWindow();
 
-  // Check for updates after app launch
+  // Check for updates after app launch with a slight delay
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify();
+    // Wait a few seconds to allow the app to fully load
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify();
+    }, 3000);
   }
 });
 
@@ -294,14 +305,23 @@ autoUpdater.on("checking-for-update", () => {
 
 autoUpdater.on("update-available", (info) => {
   console.log("Update available:", info);
+  if (mainWindow) {
+    mainWindow.webContents.send("update-available", info);
+  }
 });
 
 autoUpdater.on("update-not-available", (info) => {
   console.log("Update not available:", info);
+  if (mainWindow) {
+    mainWindow.webContents.send("update-not-available", info);
+  }
 });
 
 autoUpdater.on("error", (err) => {
   console.log("Error in auto-updater:", err);
+  if (mainWindow) {
+    mainWindow.webContents.send("update-error", err);
+  }
 });
 
 autoUpdater.on("download-progress", (progressObj) => {
@@ -311,9 +331,11 @@ autoUpdater.on("download-progress", (progressObj) => {
 
 autoUpdater.on("update-downloaded", (info) => {
   console.log("Update downloaded:", info);
+  if (mainWindow) {
+    mainWindow.webContents.send("update-downloaded", info);
+  }
 
   // Notify user and offer to restart
-  const { dialog } = require("electron");
   dialog
     .showMessageBox({
       type: "info",
@@ -330,3 +352,34 @@ autoUpdater.on("update-downloaded", (info) => {
       }
     });
 });
+
+// Check for updates manually
+ipcMain.handle("check-for-updates", async () => {
+  if (!app.isPackaged) {
+    dialog.showMessageBox({
+      type: "info",
+      title: "Development Mode",
+      message: "Auto-updates are only available in production builds.",
+      detail: "This feature is disabled during development.",
+    });
+    return { updateAvailable: false };
+  }
+
+  try {
+    const checkResult = await autoUpdater.checkForUpdatesAndNotify();
+    return { updateAvailable: !!checkResult };
+  } catch (error) {
+    console.error("Error checking for updates:", error);
+    return { updateAvailable: false, error: error.message };
+  }
+});
+
+// Install update now
+ipcMain.handle("install-update", () => {
+  autoUpdater.quitAndInstall(false, true);
+  return true;
+});
+
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = "info";
+log.info("App starting...");

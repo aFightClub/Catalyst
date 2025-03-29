@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   FiHome, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, 
   FiGlobe, FiDollarSign, FiClock, FiSettings, FiPlus, 
@@ -6,7 +6,8 @@ import {
 } from 'react-icons/fi';
 import { Workspace, Tab } from '../../types';
 
-const appVersion = import.meta.env.VITE_APP_VERSION || '1.0.0';
+// Hardcoded version as a last resort
+const appVersion = '1.0.3'; // Update this manually when you change package.json
 
 interface SidebarProps {
   workspaces: Workspace[];
@@ -93,6 +94,29 @@ const Sidebar: React.FC<SidebarProps> = ({
   closeTab,
   setEditName
 }) => {
+  const [version, setVersion] = useState('1.0.0');
+  
+  useEffect(() => {
+    // Try to get version from electron on component mount
+    const electronVersion = (window as any).electron?.appInfo?.version;
+    if (electronVersion) {
+      setVersion(electronVersion);
+      console.log('Updated version from electron:', electronVersion);
+    } else {
+      // If running in dev mode, try to fetch package.json directly
+      fetch('/package.json')
+        .then(response => response.json())
+        .then(data => {
+          console.log('Fetched package.json:', data);
+          if (data.version) {
+            setVersion(data.version);
+            console.log('Updated version from package.json:', data.version);
+          }
+        })
+        .catch(err => console.error('Failed to fetch package.json:', err));
+    }
+  }, []);
+
   return (
     <aside 
       className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-8"
@@ -121,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <FiHome className="w-5 h-5" />
           <div className="flex flex-col items-start">
             <span>Dashboard</span>
-            <span className="text-xs opacity-70">Catalyst v{appVersion}</span>
+            <span className="text-xs opacity-70">Catalyst v{version}</span>
           </div>
         </button>
       </div>

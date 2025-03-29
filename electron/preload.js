@@ -1,4 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
+const path = require("path");
+const fs = require("fs");
 
 // Try to load electron-store with a fallback
 let Store;
@@ -33,6 +35,14 @@ try {
     },
   };
 }
+
+// Get version from package.json
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "../package.json"), "utf8")
+);
+const version = packageJson.version;
+
+console.log("PRELOAD SCRIPT - App version from package.json:", version);
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -75,6 +85,22 @@ contextBridge.exposeInMainWorld("electron", {
       }
     },
   },
+  // Add version information
+  appInfo: {
+    version: version,
+  },
+  // Add update methods
+  updater: {
+    checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+    onUpdateAvailable: (callback) =>
+      ipcRenderer.on("update-available", callback),
+    onUpdateDownloaded: (callback) =>
+      ipcRenderer.on("update-downloaded", callback),
+    onUpdateNotAvailable: (callback) =>
+      ipcRenderer.on("update-not-available", callback),
+    onUpdateError: (callback) => ipcRenderer.on("update-error", callback),
+    installUpdate: () => ipcRenderer.invoke("install-update"),
+  },
   // Add other IPC methods as needed
   send: (channel, data) => {
     // whitelist channels
@@ -98,3 +124,5 @@ contextBridge.exposeInMainWorld("electron", {
     }
   },
 });
+
+console.log("PRELOAD SCRIPT - Exposed electron API with version:", version);
