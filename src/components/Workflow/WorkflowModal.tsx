@@ -474,120 +474,22 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
             </>
           ) : (
             <>
-              {workflows.length > 0 ? (
+              {selectedWorkflow ? (
                 <div>
-                  <h3 className="text-white font-medium mb-2">Saved Workflows</h3>
-                  <div className="space-y-3 mb-4">
-                    {workflows.map(workflow => (
-                      <div 
-                        key={workflow.id} 
-                        className="bg-gray-700 rounded p-3 hover:bg-gray-600 cursor-pointer"
-                        onClick={() => setSelectedWorkflow(workflow)}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="text-white font-medium">
-                            {workflow.name}
-                          </span>
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedWorkflow(workflow);
-                                
-                                // First check for JavaScript actions with content variables
-                                const jsContentVars = workflow.actions
-                                  .filter(a => a.type === ActionType.JAVASCRIPT && a.data?.variableName)
-                                  .map(a => a.data?.variableName)
-                                  .filter(Boolean) as string[];
-                                
-                                // Combine with regular input variables
-                                const allVariables = [
-                                  ...(workflow.variables || []),
-                                  ...jsContentVars
-                                ];
-                                
-                                // Show variable input form if there are any variables
-                                if (allVariables.length > 0) {
-                                  console.log("Workflow has variables:", allVariables);
-                                  const varMap: {[key: string]: string} = {};
-                                  
-                                  // Add regular input variables
-                                  if (workflow.variables) {
-                                    workflow.variables.forEach(v => {
-                                      const action = workflow.actions.find(a => 
-                                        a.type === ActionType.TYPE && a.data?.variableName === v
-                                      );
-                                      varMap[v] = action?.data?.value || '';
-                                    });
-                                  }
-                                  
-                                  // Add JavaScript content variables
-                                  jsContentVars.forEach(v => {
-                                    const action = workflow.actions.find(a => 
-                                      a.type === ActionType.JAVASCRIPT && a.data?.variableName === v
-                                    );
-                                    varMap[v] = action?.data?.defaultContent || '';
-                                  });
-                                  
-                                  setWorkflowVariables(varMap);
-                                } else {
-                                  // Play workflow immediately if no variables
-                                  playWorkflow(workflow, {});
-                                  setShowWorkflowModal(false);
-                                }
-                              }}
-                              className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
-                              title="Run Workflow"
-                            >
-                              <FiPlay className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Load workflow for editing
-                                handleEditWorkflow(workflow);
-                              }}
-                              className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                              title="Edit Workflow"
-                            >
-                              <FiEdit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWorkflows(workflows.filter(w => w.id !== workflow.id));
-                              }}
-                              className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
-                              title="Delete Workflow"
-                            >
-                              <FiTrash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          {workflow.actions.length} actions
-                          {workflow.variables.length > 0 && ` • ${workflow.variables.length} variables`}
-                          {workflow.startUrl && (
-                            <div className="mt-1 truncate">
-                              <span className="text-gray-500">URL:</span> {workflow.startUrl}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center mb-4">
+                    <button
+                      onClick={() => setSelectedWorkflow(null)}
+                      className="bg-gray-600 text-white px-3 py-1 rounded flex items-center hover:bg-gray-500 mr-3"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      Back
+                    </button>
+                    <h3 className="text-white font-medium">
+                      Run Workflow: {selectedWorkflow.name}
+                    </h3>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-400">
-                  No workflows saved yet. Create one to get started.
-                </div>
-              )}
-              
-              {selectedWorkflow && (
-                <div className="mt-4 border-t border-gray-700 pt-4">
-                  <h3 className="text-white font-medium mb-3">
-                    Run Workflow: {selectedWorkflow.name}
-                  </h3>
                   
                   <div className="space-y-3 mb-4">
                     {/* Show regular input variables */}
@@ -657,6 +559,116 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                     </div>
                   </div>
                 </div>
+              ) : (
+                <>
+                  {workflows.length > 0 ? (
+                    <div>
+                      <div className="space-y-3 mb-4">
+                        {workflows.map(workflow => (
+                          <div 
+                            key={workflow.id} 
+                            className="bg-gray-700 rounded p-3 hover:bg-gray-600 cursor-pointer"
+                            onClick={() => setSelectedWorkflow(workflow)}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">
+                                {workflow.name}
+                              </span>
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedWorkflow(workflow);
+                                    
+                                    // First check for JavaScript actions with content variables
+                                    const jsContentVars = workflow.actions
+                                      .filter(a => a.type === ActionType.JAVASCRIPT && a.data?.variableName)
+                                      .map(a => a.data?.variableName)
+                                      .filter(Boolean) as string[];
+                                    
+                                    // Combine with regular input variables
+                                    const allVariables = [
+                                      ...(workflow.variables || []),
+                                      ...jsContentVars
+                                    ];
+                                    
+                                    // Show variable input form if there are any variables
+                                    if (allVariables.length > 0) {
+                                      console.log("Workflow has variables:", allVariables);
+                                      const varMap: {[key: string]: string} = {};
+                                      
+                                      // Add regular input variables
+                                      if (workflow.variables) {
+                                        workflow.variables.forEach(v => {
+                                          const action = workflow.actions.find(a => 
+                                            a.type === ActionType.TYPE && a.data?.variableName === v
+                                          );
+                                          varMap[v] = action?.data?.value || '';
+                                        });
+                                      }
+                                      
+                                      // Add JavaScript content variables
+                                      jsContentVars.forEach(v => {
+                                        const action = workflow.actions.find(a => 
+                                          a.type === ActionType.JAVASCRIPT && a.data?.variableName === v
+                                        );
+                                        varMap[v] = action?.data?.defaultContent || '';
+                                      });
+                                      
+                                      setWorkflowVariables(varMap);
+                                    } else {
+                                      // Play workflow immediately if no variables
+                                      playWorkflow(workflow, {});
+                                      setShowWorkflowModal(false);
+                                    }
+                                  }}
+                                  className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
+                                  title="Run Workflow"
+                                >
+                                  <FiPlay className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Load workflow for editing
+                                    handleEditWorkflow(workflow);
+                                  }}
+                                  className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                  title="Edit Workflow"
+                                >
+                                  <FiEdit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setWorkflows(workflows.filter(w => w.id !== workflow.id));
+                                  }}
+                                  className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                                  title="Delete Workflow"
+                                >
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              {workflow.actions.length} actions
+                              {workflow.variables.length > 0 && ` • ${workflow.variables.length} variables`}
+                              {workflow.startUrl && (
+                                <div className="mt-1 truncate">
+                                  <span className="text-gray-500">URL:</span> {workflow.startUrl}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      No workflows saved yet. Create one to get started.
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
