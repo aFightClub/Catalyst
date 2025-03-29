@@ -39,7 +39,7 @@ interface SidebarProps {
   setIsAddingWorkspace: (isAdding: boolean) => void;
   setNewWorkspaceName: (name: string) => void;
   addWorkspace: () => void;
-  addTab: () => void;
+  addTab?: () => void;
   setActiveWorkspaceId: (id: string) => void;
   setActiveTabId: (id: string) => void;
   startEditingWorkspace: (id: string) => void;
@@ -403,9 +403,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 
                 {/* Add New Tab button */}
                 <button
-                  onClick={addTab}
+                  onClick={() => addTab && addTab()}
                   className="w-full mt-1 px-2 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-600 rounded flex items-center"
                   style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
+                  disabled={!addTab}
                 >
                   <FiPlus className="mr-1 w-3 h-3" />
                   <span>New Tab</span>

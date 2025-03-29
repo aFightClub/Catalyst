@@ -111,6 +111,7 @@ export default function App() {
   
   const webviewRefs = useRef<{ [key: string]: Electron.WebviewTag }>({})
   const initialLoadCompleted = useRef<Set<string>>(new Set())
+  const domReadyWebviews = useRef<Set<string>>(new Set())
   const [showPluginPanel, setShowPluginPanel] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showLayoutDropdown, setShowLayoutDropdown] = useState(false)
@@ -277,7 +278,8 @@ export default function App() {
       
       // Set up event listeners for this webview
       webview.addEventListener('dom-ready', async () => {
-        // This event fires before page content is fully loaded
+        // Mark webview as DOM-initialized in a ref
+        domReadyWebviews.current.add(tabId);
         console.log(`Webview DOM ready for tab ${tabId}`);
         // Apply plugins as soon as DOM is ready to ensure they work properly
         try {
@@ -405,7 +407,7 @@ export default function App() {
             // Apply erased elements CSS first, then plugins
             try {
               console.log(`Tab ${tabId} loaded URL: ${url}`);
-              await applyErasedElementsCSS(webview, url);
+              await applyErasedElementsCSS(webview, url, tabId);
               await applyPluginsToTab(tabId);
             } catch (error) {
               console.error(`Error applying addons to tab ${tabId}:`, error);
@@ -635,8 +637,8 @@ export default function App() {
     }
     
     // Ensure webview is ready
-    if (webview.isLoading()) {
-      console.log(`Tab ${tabId} is still loading, delaying plugin application`);
+    if (!domReadyWebviews.current.has(tabId)) {
+      console.log(`Tab ${tabId} is not DOM-ready yet, delaying plugin application`);
       return;
     }
     
@@ -872,7 +874,13 @@ export default function App() {
     }
   };
   
-  const applyErasedElementsCSS = async (webview: Electron.WebviewTag, url: string) => {
+  const applyErasedElementsCSS = async (webview: Electron.WebviewTag, url: string, tabId: string) => {
+    // Check if dom-ready has fired
+    if (!domReadyWebviews.current.has(tabId)) {
+      console.log(`Skipping apply for tab ${tabId} - DOM not ready`);
+      return;
+    }
+    
     try {
       // Skip if webview is not valid
       if (!webview || !url) return;
@@ -1856,12 +1864,11 @@ export default function App() {
       
       // Re-apply erased elements when switching to an existing tab
       const webview = webviewRefs.current[activeTabId];
-      if (webview && activeTab.isReady) {
-        console.log(`Reapplying erased elements for tab ${activeTabId} on tab switch`);
-        applyErasedElementsCSS(webview, activeTab.url);
+      if (webview && domReadyWebviews.current.has(activeTabId)) {
+        console.log(`Reapplying erased elements for tab ${activeTabId}`);
+        applyErasedElementsCSS(webview, activeTab.url, activeTabId);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, tabs, erasedElements]);
 
   // Listen for layout change events from HeaderNav
@@ -1897,7 +1904,7 @@ export default function App() {
       
       // Apply plugins to the current active tab first
       const activeWebview = webviewRefs.current[activeTabId];
-      if (activeWebview && !activeWebview.isLoading()) {
+      if (activeWebview && domReadyWebviews.current.has(activeTabId)) {
         applyPluginsToWebview(activeWebview)
           .then(() => console.log(`Applied plugins to active tab: ${activeTabId}`))
           .catch(error => console.error(`Error applying plugins to active tab: ${activeTabId}`, error));
@@ -1907,7 +1914,7 @@ export default function App() {
       tabs.forEach(tab => {
         if (tab.id !== activeTabId) {
           const webview = webviewRefs.current[tab.id];
-          if (webview && !webview.isLoading()) {
+          if (webview && domReadyWebviews.current.has(tab.id)) {
             applyPluginsToWebview(webview)
               .then(() => console.log(`Applied plugins to tab: ${tab.id}`))
               .catch(error => console.error(`Error applying plugins to tab: ${tab.id}`, error));
@@ -1935,8 +1942,14 @@ export default function App() {
       // Apply plugins to each ready tab in the workspace
       for (const tab of currentWorkspace.tabs) {
         const webview = webviewRefs.current[tab.id];
-        if (webview && tab.isReady && !webview.isLoading()) {
+        if (webview && tab.isReady) {
           try {
+            // Check if webview has been properly initialized
+            if (!domReadyWebviews.current.has(tab.id)) {
+              console.log(`Webview for tab ${tab.id} not fully initialized yet - DOM not ready`);
+              continue;
+            }
+            
             console.log(`Applying plugins to tab ${tab.id} after workspace switch`);
             await applyPluginsToWebview(webview);
           } catch (error) {
@@ -2056,7 +2069,8 @@ export default function App() {
         setIsAddingWorkspace={setIsAddingWorkspace}
         newWorkspaceName={newWorkspaceName}
         setNewWorkspaceName={setNewWorkspaceName}
-        handleCreateWorkspace={addWorkspace}
+        addWorkspace={addWorkspace}
+        addTab={addTab}
         editingWorkspaceId={editingWorkspaceId}
         setEditingWorkspaceId={setEditingWorkspaceId}
         editName={editName}

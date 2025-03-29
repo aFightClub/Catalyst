@@ -99,6 +99,19 @@ ipcMain.on("eraser-element-selected", (event, selector) => {
 // Register webview protocol handlers
 app.on("web-contents-created", (e, contents) => {
   if (contents.getType() === "webview") {
+    // Set a consistent user agent
+    contents.setUserAgent(contents.getUserAgent() + " YourAppName/1.0");
+
+    // Configure webview-specific settings
+    contents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Access-Control-Allow-Origin": ["*"],
+        },
+      });
+    });
+
     // Handle webview events and security
     contents.on("will-navigate", (e, url) => {
       console.log(`Navigating to: ${url}`);
