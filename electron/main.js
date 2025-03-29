@@ -20,6 +20,9 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      enableRemoteModule: true,
+      nodeIntegrationInSubframes: true,
+      nodeIntegrationInWorker: true,
       webviewTag: true,
       webSecurity: false, // This disables same-origin policy for the browser window
     },

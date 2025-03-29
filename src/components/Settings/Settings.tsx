@@ -29,6 +29,7 @@ enum SettingsPage {
   API_KEYS = 'api_keys',
   PLUGINS = 'plugins',
   WORKFLOWS = 'workflows',
+  UPDATES = 'updates',
   DATA_BACKUP = 'data_backup',
 }
 
@@ -598,6 +599,15 @@ const Settings: React.FC = () => {
           <span>Workflows</span>
         </button>
         <button 
+          onClick={() => setCurrentPage(SettingsPage.UPDATES)}
+          className={`w-full flex items-center p-2 rounded-lg ${
+            currentPage === SettingsPage.UPDATES ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+          }`}
+        >
+          <FiClock className="mr-2" />
+          <span>Updates</span>
+        </button>
+        <button 
           onClick={() => setCurrentPage(SettingsPage.DATA_BACKUP)}
           className={`w-full flex items-center p-2 rounded-lg ${
             currentPage === SettingsPage.DATA_BACKUP ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
@@ -1146,6 +1156,17 @@ const Settings: React.FC = () => {
     </div>
   );
 
+  const renderUpdatesPage = () => (
+    <div className="p-6 bg-gray-900">
+      <h3 className="text-xl font-bold mb-6 text-white">Software Updates</h3>
+      <p className="text-gray-400 mb-6">
+        Check for and install updates to the latest version of the application.
+      </p>
+      
+      <UpdateChecker />
+    </div>
+  );
+
   const renderDataBackupPage = () => {
     return (
       <div className="p-6 bg-gray-900 text-white">
@@ -1408,6 +1429,8 @@ const Settings: React.FC = () => {
         return renderPluginsPage();
       case SettingsPage.WORKFLOWS:
         return renderWorkflowsPage();
+      case SettingsPage.UPDATES:
+        return renderUpdatesPage();
       case SettingsPage.DATA_BACKUP:
         return renderDataBackupPage();
       default:
