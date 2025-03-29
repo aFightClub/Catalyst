@@ -449,6 +449,8 @@ export const storeService = {
       importProjects?: boolean;
       importAutomations?: boolean;
       importWorkflowVariables?: boolean;
+      importApiKeys?: boolean;
+      importUserContext?: boolean;
     } = {}
   ): Promise<{ success: boolean; message: string }> => {
     try {
@@ -694,6 +696,51 @@ export const storeService = {
           }
 
           await s.set("workflowVariables", mergedVars);
+        }
+      }
+
+      // Import API Keys
+      if (options.importApiKeys !== false && data.apiKeys) {
+        if (options.overwrite) {
+          await s.set("apiKeys", data.apiKeys);
+        } else {
+          const currentApiKeys = (await s.get("apiKeys")) as Record<
+            string,
+            string | undefined
+          >;
+          const mergedApiKeys = { ...currentApiKeys };
+
+          // Only add keys that don't exist or are empty in the current store
+          for (const [key, value] of Object.entries(data.apiKeys)) {
+            if (!mergedApiKeys[key] || mergedApiKeys[key] === "") {
+              mergedApiKeys[key] = value as string | undefined;
+            }
+          }
+
+          await s.set("apiKeys", mergedApiKeys);
+        }
+      }
+
+      // Import User Context
+      if (options.importUserContext !== false && data.userContext) {
+        if (options.overwrite) {
+          await s.set("userContext", data.userContext);
+        } else {
+          const currentContext = (await s.get("userContext")) as Record<
+            string,
+            string
+          >;
+          const mergedContext = { ...currentContext };
+
+          // Merge user context
+          for (const [key, value] of Object.entries(data.userContext)) {
+            // Only override empty values unless overwrite is true
+            if (!mergedContext[key] || mergedContext[key] === "") {
+              mergedContext[key] = value as string;
+            }
+          }
+
+          await s.set("userContext", mergedContext);
         }
       }
 

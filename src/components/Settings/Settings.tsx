@@ -108,7 +108,9 @@ const Settings: React.FC = () => {
     importDocuments: true,
     importProjects: true,
     importAutomations: true,
-    importWorkflowVariables: true
+    importWorkflowVariables: true,
+    importApiKeys: true,
+    importUserContext: true
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1265,6 +1267,26 @@ const Settings: React.FC = () => {
                       className="mr-2"
                     />
                     <span className="text-sm">Workflow Variables</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importApiKeys}
+                      onChange={() => toggleOption('importApiKeys')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">API Keys</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importUserContext}
+                      onChange={() => toggleOption('importUserContext')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">User Context</span>
                   </label>
                 </div>
               </div>
