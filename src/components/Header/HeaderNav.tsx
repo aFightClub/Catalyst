@@ -126,7 +126,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({
               className="w-full text-left p-2 rounded-lg hover:bg-gray-700 flex items-center"
             >
               <FiList className="mr-2" />
-              View Workflows
+              Workflows
             </button>
           </div>
         )}

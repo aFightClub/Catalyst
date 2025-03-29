@@ -19,11 +19,19 @@ import {
   HeaderNav,
   LayoutDropdown,
   BrowserLayout,
-  WorkflowModal
+  WorkflowModal,
+  ToastContainer
 } from './components'
 
 // Temporary type extension to handle isCustomNamed until types.ts changes are applied
 type ExtendedTab = Tab & { isCustomNamed?: boolean };
+
+// Add toast interface right after the imports
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
 
 export default function App() {
   // Initialize store and migrate data from localStorage on first render
@@ -135,6 +143,9 @@ export default function App() {
   
   // Track pending workflow runs
   const [pendingWorkflowRun, setPendingWorkflowRun] = useState<{tabId: string, workflow: Workflow, variables: {[key: string]: string}} | null>(null);
+  
+  // Add toast state near the other state declarations
+  const [toasts, setToasts] = useState<Toast[]>([]);
   
   // Load workspaces from store
   useEffect(() => {
@@ -447,6 +458,64 @@ export default function App() {
               return workspace;
             })
           );
+        }
+      });
+      
+      // Handle URL changes when navigating within the webview
+      webview.addEventListener('did-navigate', (event: any) => {
+        const newUrl = event.url;
+        if (newUrl) {
+          // Update URL in workspace state
+          setWorkspaces(prevWorkspaces => 
+            prevWorkspaces.map(workspace => {
+              const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+              if (tabExists) {
+                return {
+                  ...workspace,
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === tabId 
+                      ? { ...tab, url: newUrl } 
+                      : tab
+                  )
+                };
+              }
+              return workspace;
+            })
+          );
+          
+          // Update URL input box if this is the active tab
+          if (tabId === activeTabId) {
+            setUrlInput(newUrl);
+          }
+        }
+      });
+      
+      // Also handle in-page navigation (e.g. hash changes)
+      webview.addEventListener('did-navigate-in-page', (event: any) => {
+        const newUrl = event.url;
+        if (newUrl) {
+          // Update URL in workspace state
+          setWorkspaces(prevWorkspaces => 
+            prevWorkspaces.map(workspace => {
+              const tabExists = workspace.tabs.some(tab => tab.id === tabId);
+              if (tabExists) {
+                return {
+                  ...workspace,
+                  tabs: workspace.tabs.map(tab => 
+                    tab.id === tabId 
+                      ? { ...tab, url: newUrl } 
+                      : tab
+                  )
+                };
+              }
+              return workspace;
+            })
+          );
+          
+          // Update URL input box if this is the active tab
+          if (tabId === activeTabId) {
+            setUrlInput(newUrl);
+          }
         }
       });
       
@@ -1012,27 +1081,506 @@ export default function App() {
   };
   
   const startRecording = () => {
-    // Implementation here
+    console.log('Starting workflow recording');
+    setIsRecording(true);
+    setCurrentRecording([]);
+    
+    // Get the current active tab for recording
+    const activeTab = tabs.find(tab => tab.id === activeTabId);
+    if (!activeTab) {
+      console.warn('No active tab found for recording');
+      return;
+    }
+    
+    // Get the webview for the active tab
+    const webview = webviewRefs.current[activeTabId];
+    if (!webview || !activeTab.isReady) {
+      console.warn('Active tab webview not ready for recording');
+      return;
+    }
+    
+    // Set up recording by injecting script into the webview
+    webview.executeJavaScript(`
+      (function() {
+        console.log('Setting up workflow recording in page');
+        
+        // Store original URL for workflow context
+        window._workflowStartUrl = window.location.href;
+        
+        // Track click events
+        window._recordClick = function(event) {
+          const target = event.target;
+          let selector = '';
+          let text = '';
+          
+          // Try to get a useful selector or text for the element
+          if (target.id) {
+            selector = '#' + target.id;
+          } else if (target.className && typeof target.className === 'string') {
+            selector = '.' + target.className.split(' ')[0];
+          } else {
+            selector = target.tagName.toLowerCase();
+          }
+          
+          // Get text content if available
+          text = target.textContent ? target.textContent.trim().substring(0, 50) : '';
+          
+          // Send the click event data back to the app
+          console.log('WORKFLOW_ACTION:' + JSON.stringify({
+            type: 'click',
+            data: {
+              selector,
+              text,
+              timestamp: new Date().toISOString()
+            }
+          }));
+          
+          // Let the click proceed normally
+        };
+        
+        // Track input events
+        window._recordInput = function(event) {
+          const target = event.target;
+          if (target.tagName.toLowerCase() === 'input' || 
+              target.tagName.toLowerCase() === 'textarea') {
+            
+            // Send the input event data back to the app
+            console.log('WORKFLOW_ACTION:' + JSON.stringify({
+              type: 'input',
+              data: {
+                selector: target.id || target.name || target.tagName.toLowerCase(),
+                value: target.value,
+                placeholder: target.placeholder || 'Input field',
+                timestamp: new Date().toISOString()
+              }
+            }));
+          }
+        };
+        
+        // Track contenteditable changes
+        window._recordContentEditable = function(event) {
+          const target = event.target;
+          if (target.getAttribute && target.getAttribute('contenteditable') === 'true') {
+            // Send the contenteditable data back to the app
+            console.log('WORKFLOW_ACTION:' + JSON.stringify({
+              type: 'input',
+              data: {
+                selector: target.id || 
+                         (target.classList.length > 0 ? '.' + target.classList[0] : target.tagName.toLowerCase()),
+                value: target.innerHTML,
+                isContentEditable: true,
+                timestamp: new Date().toISOString()
+              }
+            }));
+          }
+        };
+        
+        // Add event listeners
+        document.addEventListener('click', window._recordClick, true);
+        document.addEventListener('change', window._recordInput, true);
+        document.addEventListener('input', window._recordContentEditable, true); // For contenteditable
+        
+        // Also record initial page navigation
+        console.log('WORKFLOW_ACTION:' + JSON.stringify({
+          type: 'navigate',
+          data: {
+            url: window.location.href,
+            timestamp: new Date().toISOString()
+          }
+        }));
+        
+        return true;
+      })();
+    `)
+    .then(() => {
+      console.log('Recording script injected successfully');
+      
+      // Set up console message listener to capture recorded actions
+      webview.addEventListener('console-message', handleWorkflowConsoleMessage);
+    })
+    .catch(error => {
+      console.error('Failed to inject recording script:', error);
+      setIsRecording(false);
+    });
   };
   
   const stopRecording = () => {
-    // Implementation here
-  };
-  
-  const processWorkflowVariables = () => {
-    // Implementation here
+    console.log('Stopping workflow recording');
+    setIsRecording(false);
+    
+    // Get the webview for the active tab
+    const webview = webviewRefs.current[activeTabId];
+    if (webview) {
+      // Remove recording script
+      webview.executeJavaScript(`
+        (function() {
+          try {
+            // Remove event listeners
+            if (window._recordClick) {
+              document.removeEventListener('click', window._recordClick, true);
+              window._recordClick = null;
+            }
+            if (window._recordInput) {
+              document.removeEventListener('change', window._recordInput, true);
+              window._recordInput = null;
+            }
+            if (window._recordContentEditable) {
+              document.removeEventListener('input', window._recordContentEditable, true);
+              window._recordContentEditable = null;
+            }
+            console.log('Workflow recording stopped');
+            return true;
+          } catch (error) {
+            console.error('Error removing recording scripts:', error);
+            return false;
+          }
+        })();
+      `);
+      
+      // Remove console message listener
+      webview.removeEventListener('console-message', handleWorkflowConsoleMessage);
+    }
+    
+    // Open workflow modal to save the recording
+    setShowWorkflowModal(true);
+    setWorkflowModalMode('create');
   };
   
   const handleWorkflowConsoleMessage = (event: any) => {
-    // Implementation here
+    const message = event.message;
+    if (message.startsWith('WORKFLOW_ACTION:')) {
+      try {
+        const actionData = JSON.parse(message.substring('WORKFLOW_ACTION:'.length));
+        console.log('Workflow action recorded:', actionData);
+        
+        // Create a workflow action from the data
+        const newAction: WorkflowAction = {
+          id: Date.now().toString(),
+          type: actionData.type as ActionType,
+          target: actionData.data.selector,
+          value: actionData.data.value,
+          timestamp: actionData.data.timestamp,
+          data: actionData.data  // Store the raw data for display
+        };
+        
+        // Add to the current recording
+        setCurrentRecording(prev => [...prev, newAction]);
+      } catch (error) {
+        console.error('Error parsing workflow action:', error);
+      }
+    }
   };
   
   const saveWorkflow = () => {
-    // Implementation here
+    if (currentRecording.length === 0 || !newWorkflowName.trim()) {
+      addToast('Please provide a name and record some actions for this workflow', 'error');
+      return;
+    }
+    
+    // Analyze recording to extract any variables (inputs)
+    const variables: string[] = [];
+    currentRecording.forEach(action => {
+      if (action.type === ActionType.INPUT && action.data?.value) {
+        // Generate a variable name based on the field
+        const varName = `input_${variables.length + 1}`;
+        
+        // Add variable name to the action
+        action.variableName = varName;
+        
+        // Add to variables list
+        if (!variables.includes(varName)) {
+          variables.push(varName);
+        }
+      }
+    });
+    
+    // Create the new workflow
+    const newWorkflow: Workflow = {
+      id: Date.now().toString(),
+      name: newWorkflowName.trim(),
+      actions: currentRecording,
+      variables: variables,
+      createdAt: new Date().toISOString(),
+      startUrl: currentRecording.find(a => a.type === ActionType.NAVIGATE)?.data?.url
+    };
+    
+    // Add to workflows state
+    setWorkflows(prev => [...prev, newWorkflow]);
+    
+    // Save to storage
+    storeService.saveWorkflows([...workflows, newWorkflow])
+      .then(() => {
+        console.log('Workflow saved successfully');
+        addToast(`Workflow "${newWorkflowName}" saved successfully`, 'success');
+        
+        // Reset recording state
+        setCurrentRecording([]);
+        setNewWorkflowName('');
+        
+        // Show workflows list
+        setWorkflowModalMode('list');
+      })
+      .catch(error => {
+        console.error('Failed to save workflow:', error);
+        addToast('Failed to save workflow. Please try again.', 'error');
+      });
   };
   
   const playWorkflow = async (workflow: Workflow, variables: {[key: string]: string}) => {
-    // Implementation here
+    try {
+      console.log(`Playing workflow: ${workflow.name} with ${Object.keys(variables).length} variables`);
+      
+      // Hide the workflow modal
+      setShowWorkflowModal(false);
+      
+      // First navigate to the starting URL if available
+      if (workflow.startUrl) {
+        console.log(`Navigating to workflow start URL: ${workflow.startUrl}`);
+        navigateToUrl(workflow.startUrl);
+        
+        // Wait for navigation to complete and page to load
+        await new Promise<void>((resolve) => {
+          const loadListener = () => {
+            console.log('Page loaded, continuing workflow');
+            webviewRefs.current[activeTabId]?.removeEventListener('did-stop-loading', loadListener);
+            // Additional wait to ensure page is fully interactive
+            setTimeout(resolve, 1000);
+          };
+          
+          // Set a fallback timeout in case the event doesn't fire
+          const timeout = setTimeout(() => {
+            console.log('Navigation timeout, continuing workflow');
+            webviewRefs.current[activeTabId]?.removeEventListener('did-stop-loading', loadListener);
+            resolve();
+          }, 5000);
+          
+          webviewRefs.current[activeTabId]?.addEventListener('did-stop-loading', loadListener);
+        });
+      }
+      
+      // Get the webview for the active tab
+      const webview = webviewRefs.current[activeTabId];
+      if (!webview) {
+        throw new Error('No webview found for active tab, cannot run workflow');
+      }
+      
+      // Process actions sequentially
+      for (const action of workflow.actions) {
+        try {
+          console.log(`Executing action: ${action.type}`, action);
+          
+          // Skip the initial navigate action since we already navigated
+          if (action.type === ActionType.NAVIGATE && action.data?.url === workflow.startUrl) {
+            console.log('Skipping initial navigation action');
+            continue;
+          }
+          
+          // Process each action type
+          switch (action.type) {
+            case ActionType.CLICK:
+              await webview.executeJavaScript(`
+                (function() {
+                  try {
+                    console.log('Executing click action on: ${action.target}');
+                    // Try different selector strategies
+                    let element = document.querySelector('${action.target}');
+                    
+                    // If not found directly, try additional strategies
+                    if (!element) {
+                      // Try finding by text content
+                      const textMatch = '${action.data?.text || ""}';
+                      if (textMatch) {
+                        // Find elements with matching text
+                        const allElements = document.querySelectorAll('a, button, [role="button"], input[type="submit"], input[type="button"]');
+                        for (const el of allElements) {
+                          if (el.textContent && el.textContent.trim().includes(textMatch)) {
+                            element = el;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                    
+                    if (element) {
+                      console.log('Found clickable element, clicking...');
+                      element.click();
+                      return true;
+                    } else {
+                      console.error('Clickable element not found: ${action.target}');
+                      return false;
+                    }
+                  } catch (error) {
+                    console.error('Error executing click action:', error);
+                    return false;
+                  }
+                })()
+              `);
+              break;
+              
+            case ActionType.INPUT:
+            case ActionType.TYPE:
+              // Use variable value if available, otherwise use the original value
+              const inputValue = action.variableName && variables[action.variableName] 
+                ? variables[action.variableName]
+                : action.value || '';
+                
+              console.log(`Setting input value (${action.target}): "${inputValue}"`);
+                
+              await webview.executeJavaScript(`
+                (function() {
+                  try {
+                    // Try multiple ways to find the element
+                    let element = document.querySelector('${action.target}');
+                    
+                    // If not found by direct selector, try by name, id, or placeholder
+                    if (!element) {
+                      element = document.querySelector('input[name="${action.target}"]') || 
+                               document.querySelector('input[id="${action.target}"]') ||
+                               document.querySelector('input[placeholder="${action.target}"]') ||
+                               document.querySelector('textarea[name="${action.target}"]') ||
+                               document.querySelector('textarea[id="${action.target}"]') ||
+                               document.querySelector('textarea[placeholder="${action.target}"]') ||
+                               document.querySelector('[contenteditable="true"][id="${action.target}"]') ||
+                               document.querySelector('[contenteditable="true"]${action.target.startsWith('.') ? action.target : ''}');
+                    }
+                    
+                    if (element) {
+                      console.log('Found input element:', element.tagName, 
+                        element.getAttribute('contenteditable') === 'true' ? '(contenteditable)' : '');
+                      
+                      const valueToSet = '${inputValue.replace(/'/g, "\\'")}';
+                      console.log('Raw value to set:', valueToSet);
+                      
+                      // Check if this is a contenteditable element
+                      if (${!!action.data?.isContentEditable} || element.getAttribute('contenteditable') === 'true') {
+                        console.log('Handling as contenteditable');
+                        // For contenteditable elements
+                        // Focus the element first
+                        element.focus();
+                        
+                        // Set content directly
+                        element.innerHTML = valueToSet;
+                        console.log('Set contenteditable innerHTML:', element.innerHTML);
+                        
+                        // Trigger input events for contenteditable
+                        element.dispatchEvent(new Event('input', { bubbles: true }));
+                        element.dispatchEvent(new Event('change', { bubbles: true }));
+                        
+                        // Blur the element to trigger any blur handlers
+                        setTimeout(() => {
+                          element.blur();
+                          console.log('Contenteditable element blurred');
+                        }, 100);
+                      } else {
+                        console.log('Handling as standard input/textarea');
+                        // For standard input elements
+                        element.focus();
+                        
+                        try {
+                          // First try direct assignment
+                          element.value = valueToSet;
+                          console.log('After direct value assignment:', element.value);
+                          
+                          // Skip native setter if direct assignment worked
+                          if (element.value !== valueToSet) {
+                            console.log('Direct assignment failed, trying native setter');
+                            // Try native setter as backup
+                            const prototype = element.tagName === 'TEXTAREA' 
+                              ? HTMLTextAreaElement.prototype 
+                              : HTMLInputElement.prototype;
+                            
+                            const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+                            if (descriptor && descriptor.set) {
+                              descriptor.set.call(element, valueToSet);
+                              console.log('After native setter:', element.value);
+                            }
+                          }
+                        } catch(e) {
+                          console.error('Error setting value:', e);
+                          // Last resort - use execCommand
+                          try {
+                            element.select();
+                            document.execCommand('insertText', false, valueToSet);
+                            console.log('Used execCommand as fallback');
+                          } catch(e2) {
+                            console.error('execCommand fallback failed:', e2);
+                          }
+                        }
+                        
+                        // Trigger events
+                        element.dispatchEvent(new Event('input', { bubbles: true }));
+                        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Process' }));
+                        element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Process' }));
+                        element.dispatchEvent(new Event('change', { bubbles: true }));
+                        
+                        // Blur with delay
+                        setTimeout(() => {
+                          element.blur();
+                          console.log('Input element blurred');
+                        }, 100);
+                      }
+                      
+                      return true;
+                    } else {
+                      console.error('Input element not found:', '${action.target}');
+                      return false;
+                    }
+                  } catch (error) {
+                    console.error('Error setting input value:', error);
+                    return false;
+                  }
+                })()
+              `);
+              
+              // Wait a bit after input to ensure changes are processed
+              await new Promise(resolve => setTimeout(resolve, 800));
+              break;
+              
+            case ActionType.SUBMIT:
+              await webview.executeJavaScript(`
+                (function() {
+                  try {
+                    const form = document.querySelector('${action.target}');
+                    if (form) {
+                      form.submit();
+                      return true;
+                    } else {
+                      console.error('Form not found: ${action.target}');
+                      return false;
+                    }
+                  } catch (error) {
+                    console.error('Error executing submit action:', error);
+                    return false;
+                  }
+                })()
+              `);
+              break;
+              
+            case ActionType.WAIT:
+              // Wait for specified milliseconds
+              const waitTime = action.value ? parseInt(action.value) : 1000;
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              break;
+              
+            default:
+              console.log(`Unsupported action type: ${action.type}`);
+          }
+          
+          // Default delay between actions
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+        } catch (error) {
+          console.error(`Error executing workflow action: ${action.type}`, error);
+          // Continue with next action instead of failing the whole workflow
+        }
+      }
+      
+      console.log(`Workflow ${workflow.name} completed successfully`);
+      addToast(`Workflow "${workflow.name}" completed successfully`, 'success');
+    } catch (error) {
+      console.error('Error executing workflow:', error);
+      addToast(`Error executing workflow: ${error.message || 'Unknown error'}`, 'error');
+    }
   };
   
   const addWorkspace = () => {
@@ -1359,6 +1907,21 @@ export default function App() {
     }
   }, [activeWorkspaceId]);
 
+  // Add a toast helper function
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const newToast = {
+      id: Date.now().toString(),
+      message,
+      type
+    };
+    setToasts(prev => [...prev, newToast]);
+  };
+
+  // Add a remove toast function
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
   return (
     <div className="h-screen flex">
       {/* Sidebar Component */}
@@ -1517,6 +2080,7 @@ export default function App() {
         setWorkflows={setWorkflows}
         setWorkflowModalMode={setWorkflowModalMode}
         setShowWorkflowModal={setShowWorkflowModal}
+        setCurrentRecording={setCurrentRecording}
       />
 
       {/* Floating Recording Controls */}
@@ -1538,6 +2102,12 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* Toast Notification Component */}
+      <ToastContainer 
+        toasts={toasts}
+        removeToast={removeToast}
+      />
     </div>
   );
 } 

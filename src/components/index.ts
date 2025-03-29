@@ -19,3 +19,7 @@ export { default as Automations } from "./Automations/Automations";
 // New Plugin components
 export { default as PluginEditor } from "./PluginEditor";
 export { default as PluginsManager } from "./Plugins/PluginsManager";
+
+// Update this file to export your new Toast components
+export { default as Toast } from "./Toast/Toast";
+export { default as ToastContainer } from "./Toast/ToastContainer";

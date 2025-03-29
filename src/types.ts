@@ -17,8 +17,12 @@ export enum ActionType {
   NAVIGATE = "navigate",
   CLICK = "click",
   INPUT = "input",
+  TYPE = "type", // Keep for backward compatibility
   WAIT = "wait",
   EXTRACT = "extract",
+  KEYPRESS = "keypress",
+  SUBMIT = "submit",
+  JAVASCRIPT = "javascript", // Add JavaScript action type
 }
 
 export interface Workspace {
@@ -40,6 +44,8 @@ export interface WorkflowAction {
   target?: string;
   value?: string;
   variableName?: string;
+  timestamp?: string;
+  data?: any; // For storing UI-specific data
 }
 
 export interface Workflow {
@@ -47,4 +53,6 @@ export interface Workflow {
   name: string;
   actions: WorkflowAction[];
   createdAt: string;
+  variables?: string[];
+  startUrl?: string;
 }

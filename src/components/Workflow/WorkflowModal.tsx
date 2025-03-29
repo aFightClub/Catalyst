@@ -1,5 +1,5 @@
-import React from 'react';
-import { FiPlay, FiTrash2 } from 'react-icons/fi';
+import React, { useState } from 'react';
+import { FiPlay, FiTrash2, FiArrowUp, FiArrowDown, FiEdit2 } from 'react-icons/fi';
 import { ActionType, Workflow, WorkflowAction } from '../../types';
 
 interface WorkflowModalProps {
@@ -21,6 +21,7 @@ interface WorkflowModalProps {
   setWorkflows: (updaterFn: Workflow[] | ((prev: Workflow[]) => Workflow[])) => void;
   setWorkflowModalMode: (mode: 'create' | 'list') => void;
   setShowWorkflowModal: (show: boolean) => void;
+  setCurrentRecording: (recording: WorkflowAction[] | ((prev: WorkflowAction[]) => WorkflowAction[])) => void;
 }
 
 const WorkflowModal: React.FC<WorkflowModalProps> = ({
@@ -41,8 +42,11 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
   playWorkflow,
   setWorkflows,
   setWorkflowModalMode,
-  setShowWorkflowModal
+  setShowWorkflowModal,
+  setCurrentRecording
 }) => {
+  const [editingActionIndex, setEditingActionIndex] = useState<number | null>(null);
+  
   if (!showWorkflowModal) return null;
 
   return (
@@ -97,54 +101,239 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                               <span className="text-blue-400">
                                 {action.type.toUpperCase()}
                               </span>
-                              <span className="text-gray-500 text-sm">
-                                {new Date(action.timestamp).toLocaleTimeString()}
-                              </span>
-                            </div>
-                            {action.type === ActionType.CLICK && (
-                              <div className="text-gray-300 text-sm">
-                                Clicked: {action.data.text || action.data.selector}
-                              </div>
-                            )}
-                            {action.type === ActionType.TYPE && (
-                              <div className="text-gray-300 text-sm">
-                                Typed: 
-                                <input
-                                  type="text"
-                                  className="ml-2 bg-gray-700 px-2 py-1 rounded text-white w-4/5"
-                                  defaultValue={action.data.value}
-                                  placeholder={action.data.placeholder}
-                                  onChange={(e) => {
-                                    const varName = action.data.variableName;
-                                    if (varName) {
-                                      setWorkflowVariables((prev) => ({
-                                        ...prev,
-                                        [varName]: e.target.value
-                                      }));
-                                    }
+                              <div className="flex items-center">
+                                <span className="text-gray-500 text-sm mr-2">
+                                  {new Date(action.timestamp).toLocaleTimeString()}
+                                </span>
+                                <button
+                                  onClick={() => setEditingActionIndex(index)}
+                                  className="text-blue-400 hover:text-blue-300 p-1 ml-1"
+                                  title="Edit action"
+                                >
+                                  <FiEdit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    // Remove this action from the recording
+                                    setCurrentRecording(prev => 
+                                      prev.filter((_, i) => i !== index)
+                                    );
                                   }}
-                                />
+                                  className="text-red-400 hover:text-red-300 p-1"
+                                  title="Remove action"
+                                >
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                                {index > 0 && (
+                                  <button
+                                    onClick={() => {
+                                      // Move this action up
+                                      setCurrentRecording(prev => {
+                                        const newRecording = [...prev];
+                                        [newRecording[index-1], newRecording[index]] = 
+                                        [newRecording[index], newRecording[index-1]];
+                                        return newRecording;
+                                      });
+                                    }}
+                                    className="text-blue-400 hover:text-blue-300 p-1 ml-1"
+                                    title="Move up"
+                                  >
+                                    <FiArrowUp className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {index < currentRecording.length - 1 && (
+                                  <button
+                                    onClick={() => {
+                                      // Move this action down
+                                      setCurrentRecording(prev => {
+                                        const newRecording = [...prev];
+                                        [newRecording[index], newRecording[index+1]] = 
+                                        [newRecording[index+1], newRecording[index]];
+                                        return newRecording;
+                                      });
+                                    }}
+                                    className="text-blue-400 hover:text-blue-300 p-1 ml-1"
+                                    title="Move down"
+                                  >
+                                    <FiArrowDown className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
-                            )}
-                            {action.type === ActionType.NAVIGATE && (
-                              <div className="text-gray-300 text-sm">
-                                Navigated to: {action.data.url}
+                            </div>
+                            {editingActionIndex === index ? (
+                              <div className="bg-gray-700 p-2 mt-2 rounded">
+                                <h4 className="text-white text-sm font-medium mb-2">Edit Action</h4>
+                                
+                                {action.type === ActionType.CLICK && (
+                                  <div className="mb-2">
+                                    <label className="text-gray-300 text-xs block mb-1">Selector</label>
+                                    <input
+                                      type="text"
+                                      className="w-full bg-gray-600 text-white text-sm rounded px-2 py-1"
+                                      value={action.target || ''}
+                                      onChange={(e) => {
+                                        const updatedAction = {...action, target: e.target.value};
+                                        setCurrentRecording(prev => {
+                                          const newRecording = [...prev];
+                                          newRecording[index] = updatedAction;
+                                          return newRecording;
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                
+                                {(action.type === ActionType.INPUT || action.type === ActionType.TYPE) && (
+                                  <>
+                                    <div className="mb-2">
+                                      <label className="text-gray-300 text-xs block mb-1">Selector</label>
+                                      <input
+                                        type="text"
+                                        className="w-full bg-gray-600 text-white text-sm rounded px-2 py-1"
+                                        value={action.target || ''}
+                                        onChange={(e) => {
+                                          const updatedAction = {...action, target: e.target.value};
+                                          setCurrentRecording(prev => {
+                                            const newRecording = [...prev];
+                                            newRecording[index] = updatedAction;
+                                            return newRecording;
+                                          });
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="mb-2">
+                                      <label className="text-gray-300 text-xs block mb-1">Value</label>
+                                      <input
+                                        type="text"
+                                        className="w-full bg-gray-600 text-white text-sm rounded px-2 py-1"
+                                        value={action.value || ''}
+                                        onChange={(e) => {
+                                          const updatedAction = {...action, value: e.target.value};
+                                          if (action.data) {
+                                            updatedAction.data = {...action.data, value: e.target.value};
+                                          }
+                                          setCurrentRecording(prev => {
+                                            const newRecording = [...prev];
+                                            newRecording[index] = updatedAction;
+                                            return newRecording;
+                                          });
+                                        }}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                                
+                                {action.type === ActionType.WAIT && (
+                                  <div className="mb-2">
+                                    <label className="text-gray-300 text-xs block mb-1">Wait time (ms)</label>
+                                    <input
+                                      type="number"
+                                      min="100"
+                                      step="100"
+                                      className="w-full bg-gray-600 text-white text-sm rounded px-2 py-1"
+                                      value={action.value || '1000'}
+                                      onChange={(e) => {
+                                        const updatedAction = {...action, value: e.target.value};
+                                        setCurrentRecording(prev => {
+                                          const newRecording = [...prev];
+                                          newRecording[index] = updatedAction;
+                                          return newRecording;
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                
+                                <div className="flex justify-end mt-3">
+                                  <button
+                                    onClick={() => setEditingActionIndex(null)}
+                                    className="bg-blue-500 text-white text-xs rounded px-3 py-1 hover:bg-blue-600"
+                                  >
+                                    Done
+                                  </button>
+                                </div>
                               </div>
-                            )}
-                            {action.type === ActionType.KEYPRESS && (
-                              <div className="text-gray-300 text-sm">
-                                Key pressed: {action.data.key}
-                              </div>
-                            )}
-                            {action.type === ActionType.SUBMIT && (
-                              <div className="text-gray-300 text-sm">
-                                Form submitted: {action.data.selector}
-                              </div>
+                            ) : (
+                              <>
+                                {action.type === ActionType.CLICK && (
+                                  <div className="text-gray-300 text-sm">
+                                    Clicked: {action.data.text || action.data.selector}
+                                  </div>
+                                )}
+                                {action.type === ActionType.TYPE && (
+                                  <div className="text-gray-300 text-sm">
+                                    Typed: 
+                                    <input
+                                      type="text"
+                                      className="ml-2 bg-gray-700 px-2 py-1 rounded text-white w-4/5"
+                                      defaultValue={action.data.value}
+                                      placeholder={action.data.placeholder}
+                                      onChange={(e) => {
+                                        const varName = action.data.variableName;
+                                        if (varName) {
+                                          setWorkflowVariables((prev) => ({
+                                            ...prev,
+                                            [varName]: e.target.value
+                                          }));
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                {action.type === ActionType.NAVIGATE && (
+                                  <div className="text-gray-300 text-sm">
+                                    Navigated to: {action.data.url}
+                                  </div>
+                                )}
+                                {action.type === ActionType.KEYPRESS && (
+                                  <div className="text-gray-300 text-sm">
+                                    Key pressed: {action.data.key}
+                                  </div>
+                                )}
+                                {action.type === ActionType.SUBMIT && (
+                                  <div className="text-gray-300 text-sm">
+                                    Form submitted: {action.data.selector}
+                                  </div>
+                                )}
+                                {action.type === ActionType.WAIT && (
+                                  <div className="text-gray-300 text-sm">
+                                    Wait: {action.value || 1000}ms
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         ))}
                       </div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          onClick={() => {
+                            setCurrentRecording([]);
+                            setNewWorkflowName('');
+                          }}
+                          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Discard Recording
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Add a new JavaScript action to the recording
+                            const newAction: WorkflowAction = {
+                              type: ActionType.JAVASCRIPT,
+                              timestamp: new Date().toISOString(),
+                              data: {
+                                code: '// Add your JavaScript code here\n// Use {{content}} as a placeholder for dynamic content',
+                                placeholder: '{{content}}'
+                              }
+                            };
+                            setCurrentRecording(prev => [...prev, newAction]);
+                            // Set this new action as the one being edited
+                            setEditingActionIndex(currentRecording.length);
+                          }}
+                          className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                        >
+                          Add JavaScript
+                        </button>
                         <button
                           onClick={saveWorkflow}
                           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -159,7 +348,10 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                         Click "Start Recording" to begin capturing actions.
                       </p>
                       <button
-                        onClick={startRecording}
+                        onClick={() => {
+                          startRecording();
+                          setShowWorkflowModal(false);
+                        }}
                         className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                       >
                         Start Recording
@@ -203,6 +395,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                                 } else {
                                   // Play workflow immediately if no variables
                                   playWorkflow(workflow, {});
+                                  setShowWorkflowModal(false);
                                 }
                               }}
                               className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
@@ -278,6 +471,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                         onClick={() => {
                           playWorkflow(selectedWorkflow, workflowVariables);
                           setSelectedWorkflow(null);
+                          setShowWorkflowModal(false);
                         }}
                         className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                       >
