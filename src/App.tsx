@@ -22,6 +22,9 @@ import {
   WorkflowModal
 } from './components'
 
+// Temporary type extension to handle isCustomNamed until types.ts changes are applied
+type ExtendedTab = Tab & { isCustomNamed?: boolean };
+
 export default function App() {
   // Initialize store and migrate data from localStorage on first render
   const isInitialized = useRef(false);
@@ -78,7 +81,7 @@ export default function App() {
     { 
       id: 'default', 
       name: 'Default Workspace',
-      tabs: [{ id: '1', title: 'Google', url: 'https://google.com', isReady: false }],
+      tabs: [{ id: '1', title: 'Google', url: 'https://google.com', isReady: false } as ExtendedTab],
       createdAt: new Date().toISOString()
     }
   ]);
@@ -283,7 +286,7 @@ export default function App() {
         // Set tab to loading state
         setLoadingTabs(prev => new Set([...prev, tabId]));
         
-        // Update tab title to show loading
+        // Update tab title to show loading, unless it's custom named
         setWorkspaces(prevWorkspaces => 
           prevWorkspaces.map(workspace => {
             const tabExists = workspace.tabs.some(tab => tab.id === tabId);
@@ -292,7 +295,14 @@ export default function App() {
                 ...workspace,
                 tabs: workspace.tabs.map(tab => 
                   tab.id === tabId 
-                    ? { ...tab, title: 'Loading...', isReady: false } 
+                    ? { 
+                        ...tab, 
+                        // Keep custom name, otherwise show loading
+                        title: (tab as ExtendedTab).isCustomNamed 
+                          ? tab.title 
+                          : 'Loading...', 
+                        isReady: false 
+                      } 
                     : tab
                 )
               };
@@ -355,7 +365,8 @@ export default function App() {
                     tab.id === tabId 
                       ? { 
                           ...tab, 
-                          title: title || url.replace(/^https?:\/\//, '').split('/')[0],
+                          // Only update title if not custom named
+                          title: (tab as ExtendedTab).isCustomNamed ? tab.title : (title || url.replace(/^https?:\/\//, '').split('/')[0]),
                           url, 
                           favicon, 
                           isReady: true 
@@ -424,7 +435,11 @@ export default function App() {
                   ...workspace,
                   tabs: workspace.tabs.map(tab => 
                     tab.id === tabId 
-                      ? { ...tab, title: newTitle } 
+                      ? { 
+                          ...tab, 
+                          // Only update title if not custom named
+                          title: (tab as ExtendedTab).isCustomNamed ? tab.title : newTitle 
+                        } 
                       : tab
                   )
                 };
@@ -922,8 +937,9 @@ export default function App() {
       id: Date.now().toString(),
       title: 'New Tab',
       url: 'https://google.com',
-      isReady: false
-    };
+      isReady: false,
+      isCustomNamed: false
+    } as ExtendedTab;
     
     setWorkspaces(prevWorkspaces => {
       const updatedWorkspaces = prevWorkspaces.map(workspace => 
@@ -963,7 +979,14 @@ export default function App() {
                 ...workspace, 
                 tabs: workspace.tabs.map(tab => 
                   tab.id === activeTabId 
-                    ? { ...tab, url: processedUrl, title: 'Loading...' } 
+                    ? { 
+                        ...tab, 
+                        url: processedUrl, 
+                        // Keep custom name, otherwise show loading
+                        title: (tab as ExtendedTab).isCustomNamed 
+                          ? tab.title 
+                          : 'Loading...' 
+                      } 
                     : tab
                 ) 
               }
@@ -1024,7 +1047,7 @@ export default function App() {
     const newWorkspace: Workspace = {
       id: workspaceId,
       name: newWorkspaceName.trim(),
-      tabs: [{ id: tabId, title: 'New Tab', url: 'https://google.com', isReady: false }],
+      tabs: [{ id: tabId, title: 'New Tab', url: 'https://google.com', isReady: false } as ExtendedTab],
       createdAt: new Date().toISOString()
     };
     
@@ -1118,7 +1141,7 @@ export default function App() {
               ...workspace, 
               tabs: workspace.tabs.map(tab => 
                 tab.id === editingTabId
-                  ? { ...tab, title: editName.trim() }
+                  ? { ...tab, title: editName.trim(), isCustomNamed: true }
                   : tab
               ) 
             }
