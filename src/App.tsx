@@ -1600,35 +1600,54 @@ export default function App() {
                   contentValue = action.data.defaultContent;
                 }
                 
-                // Replace {{content}} with the actual content
+                console.log(`Executing JavaScript with content: "${contentValue}"`);
+                
+                // Generate a unique ID for this script execution
+                const scriptId = `workflow-js-${Date.now()}`;
+                
+                // Replace content placeholders in the code
                 const processedCode = jsCode.replace(/{{content}}/g, JSON.stringify(contentValue));
                 
-                console.log(`Executing custom JavaScript: ${processedCode.substring(0, 100)}...`);
-                
-                // Execute the JavaScript in the webview
+                // Execute using the plugin approach (appending script element) which works with CSP
                 await webview.executeJavaScript(`
                   (function() {
                     try {
-                      // Define the content value as a variable to avoid injection issues
-                      const contentValue = ${JSON.stringify(contentValue)};
+                      // Check if a script with this ID already exists and remove it
+                      const existingScript = document.getElementById('${scriptId}');
+                      if (existingScript) existingScript.remove();
                       
-                      // Execute the custom code with access to the content variable
-                      const code = ${JSON.stringify(jsCode)};
-                      // Replace the placeholder with actual content variable reference
-                      const processedCode = code.replace(/{{content}}/g, 'contentValue');
+                      // Create a script element
+                      const script = document.createElement('script');
+                      script.id = '${scriptId}';
                       
-                      // Execute with eval in a controlled scope
-                      const result = eval(processedCode);
-                      console.log('JavaScript execution result:', result);
+                      // Add code that includes proper JSON-stringified content
+                      script.textContent = ${JSON.stringify(processedCode)};
+                      
+                      // Add script to page to execute it
+                      document.head.appendChild(script);
+                      
+                      console.log('Successfully executed workflow JavaScript');
+                      setTimeout(() => {
+                        alert('JavaScript executed successfully');
+                        
+                        // Optional cleanup
+                        const scriptElement = document.getElementById('${scriptId}');
+                        if (scriptElement) scriptElement.remove();
+                      }, 100);
+                      
                       return true;
                     } catch (error) {
-                      console.error('Error executing custom JavaScript:', error);
+                      console.error('Error executing JavaScript:', error);
+                      alert('JavaScript Error: ' + error.message);
                       return false;
                     }
-                  })()
+                  })();
                 `);
+                
+                addToast('JavaScript executed successfully', 'success');
               } catch (error) {
-                console.error('Error setting up JavaScript execution:', error);
+                console.error('Error executing JavaScript:', error);
+                addToast('Failed to execute JavaScript: ' + (error instanceof Error ? error.message : String(error)), 'error');
               }
               break;
               
