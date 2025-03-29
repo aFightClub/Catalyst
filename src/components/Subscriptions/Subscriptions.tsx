@@ -321,43 +321,33 @@ const Subscriptions: React.FC = () => {
         </div>
       </div>
       
-      {/* Category filter */}
-      <div className="mb-6">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedCategory === null ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
+      {/* Category filter and Add button in one row */}
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+        <div className="w-full sm:w-auto">
+          <select
+            value={selectedCategory || ''}
+            onChange={(e) => setSelectedCategory(e.target.value === '' ? null : e.target.value)}
+            className="w-full min-w-[200px] px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
-            All
-          </button>
-          {getCategories().map(category => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-3 py-1 rounded-full text-sm ${
-                selectedCategory === category ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+            <option value="">All Categories</option>
+            {getCategories().map(category => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
-      
-      {/* Add new subscription button */}
-      {!isAddingNew && (
-        <div className="mb-6">
+        
+        {!isAddingNew && (
           <button
             onClick={() => setIsAddingNew(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700 h-[38px] mt-auto"
           >
             <FiPlus className="mr-2" />
             Add Subscription
           </button>
-        </div>
-      )}
+        )}
+      </div>
       
       {/* Add new subscription form */}
       {isAddingNew && (

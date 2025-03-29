@@ -225,7 +225,7 @@ const Websites: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900 text-white p-6 overflow-y-auto">
-      <h1 className="text-2xl font-bold mb-6">My Websites</h1>
+      <h1 className="text-2xl font-bold mb-6">Websites</h1>
       
       {/* Stats overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -266,46 +266,33 @@ const Websites: React.FC = () => {
         </div>
       </div>
       
-      
-      
-      {/* Category filter */}
-      <div className="mb-6">
-        <h3 className="text-sm text-gray-400 mb-2">Filter by Category</h3>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={`px-3 py-1 rounded-full text-sm ${
-              selectedCategory === null ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
+      {/* Category filter and Add button in one row */}
+      <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+        <div className="w-full sm:w-auto">
+          <select
+            value={selectedCategory || ''}
+            onChange={(e) => setSelectedCategory(e.target.value === '' ? null : e.target.value)}
+            className="w-full min-w-[200px] px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
-            All
-          </button>
-          {getCategories().map(category => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-3 py-1 rounded-full text-sm ${
-                selectedCategory === category ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+            <option value="">All Categories</option>
+            {getCategories().map(category => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
-      
-      {/* Add new website button */}
-      {!isAddingNew && (
-        <div className="mb-6">
+        
+        {!isAddingNew && (
           <button
             onClick={() => setIsAddingNew(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700"
+            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700 h-[38px] mt-auto"
           >
             <FiPlus className="mr-2" />
             Add Website
           </button>
-        </div>
-      )}
+        )}
+      </div>
       
       {/* Add new website form */}
       {isAddingNew && (

@@ -436,7 +436,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiMessageSquare className="w-5 h-5" />
-          <span>AI Chat</span>
+          <span>Chat</span>
         </button>
         
         <button 
@@ -455,7 +455,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiEdit className="w-5 h-5" />
-          <span>Writer</span>
+          <span>Write</span>
         </button>
         
         <button 
@@ -474,27 +474,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiCheckSquare className="w-5 h-5" />
-          <span>Tasks</span>
+          <span>Plan</span>
         </button>
         
-        <button 
-          onClick={() => {
-            setShowImages(true)
-            setShowDashboard(false)
-            setShowSettings(false)
-            setShowAIChat(false)
-            setShowWriter(false)
-            setShowTasks(false)
-            setShowSubscriptions(false)
-            setShowWebsites(false)
-            setShowAutomations(false)
-          }}
-          className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
-          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
-        >
-          <FiImage className="w-5 h-5" />
-          <span>Media</span>
-        </button>
         
         <button 
           onClick={() => {

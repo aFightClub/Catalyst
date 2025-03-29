@@ -468,7 +468,7 @@ const Dashboard: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-2">
               <FiClock className="text-purple-500 mr-2" />
-              <h3 className="text-white font-medium">Time Tracker</h3>
+              <h3 className="text-white font-medium">Tasks</h3>
             </div>
             <div className="flex items-center justify-center h-full">
               <p className="text-gray-400 text-lg">Coming soon</p>

@@ -620,7 +620,7 @@ const Writer: React.FC = () => {
     return (
       <div className="flex flex-col h-full bg-gray-900">
         <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">Writer</h2>
+          <h2 className="text-xl font-bold text-white">Write</h2>
         </div>
         <div className="flex flex-1 items-center justify-center">
           <p className="text-gray-400">Loading documents...</p>
@@ -632,7 +632,7 @@ const Writer: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-gray-900">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
-        <h2 className="text-xl font-bold text-white">Writer</h2>
+        <h2 className="text-xl font-bold text-white">Write</h2>
         <div className="flex space-x-2">
           <button 
             onClick={() => setShowDocList(!showDocList)}
