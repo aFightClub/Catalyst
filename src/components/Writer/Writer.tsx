@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiList, FiFolder, FiFile, FiMoreVertical, FiEdit, FiX } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiList, FiFolder, FiFile, FiMoreVertical, FiEdit, FiX, FiSave } from 'react-icons/fi';
 import EditorJS from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 import List from '@editorjs/list';
@@ -9,6 +9,279 @@ import Marker from '@editorjs/marker';
 import Checklist from '@editorjs/checklist';
 import Table from '@editorjs/table';
 import { storeService } from '../../services/storeService';
+
+// OpenAI Tool for EditorJS
+interface OpenAIToolData {
+  prompt?: string;
+  result?: string;
+}
+
+interface OpenAIToolAPI {
+  blocks: {
+    getCurrentBlockIndex: () => number;
+    insert: (type: string, data: any, options: any, position?: number, replace?: boolean) => void;
+    delete: (index: number) => void;
+  };
+}
+
+// Storage keys matching those in AIChat
+const STORAGE_KEYS = {
+  API_KEY: 'openai_api_key',
+};
+
+class OpenAITool {
+  api: OpenAIToolAPI;
+  data: OpenAIToolData;
+  container!: HTMLDivElement;
+  promptInput!: HTMLTextAreaElement;
+  resultOutput!: HTMLDivElement;
+
+  static get toolbox() {
+    return {
+      title: 'AI Writer',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M3 10h2v4H3v-4z" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>'
+    };
+  }
+
+  constructor({ data, api }: { data: OpenAIToolData; api: OpenAIToolAPI }) {
+    this.api = api;
+    this.data = {
+      prompt: data.prompt || '',
+      result: data.result || '',
+    };
+  }
+
+  render() {
+    this.container = document.createElement('div');
+    this.container.classList.add('openai-tool');
+    
+    const promptWrapper = document.createElement('div');
+    promptWrapper.classList.add('openai-prompt-wrapper');
+    
+    const promptLabel = document.createElement('div');
+    promptLabel.classList.add('openai-prompt-label');
+    promptLabel.innerHTML = 'Ask OpenAI:';
+    
+    this.promptInput = document.createElement('textarea');
+    this.promptInput.classList.add('openai-prompt-input');
+    this.promptInput.placeholder = 'Enter your prompt here...';
+    this.promptInput.value = this.data.prompt || '';
+    
+    const promptButton = document.createElement('button');
+    promptButton.classList.add('openai-prompt-button');
+    promptButton.innerHTML = 'Generate';
+    promptButton.addEventListener('click', this.generateContent.bind(this));
+    
+    promptWrapper.appendChild(promptLabel);
+    promptWrapper.appendChild(this.promptInput);
+    promptWrapper.appendChild(promptButton);
+    
+    this.resultOutput = document.createElement('div');
+    this.resultOutput.classList.add('openai-result');
+    if (this.data.result) {
+      this.resultOutput.innerHTML = this.data.result;
+    }
+    
+    this.container.appendChild(promptWrapper);
+    this.container.appendChild(this.resultOutput);
+    
+    return this.container;
+  }
+  
+  async generateContent() {
+    const prompt = this.promptInput.value.trim();
+    if (!prompt) return;
+    
+    // Show loading indicator
+    this.resultOutput.innerHTML = `
+      <div class="openai-loading">
+        <span>Generating</span>
+        <div class="dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+    `;
+    
+    try {
+      // Get API key from localStorage (same as in AIChat)
+      const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+      
+      if (!apiKey) {
+        throw new Error('OpenAI API key is missing. Please set it in AI Chat settings.');
+      }
+      
+      // Make direct request to OpenAI API (similar to AIChat implementation)
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a helpful writing assistant.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.7
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to fetch response from OpenAI');
+      }
+      
+      const data = await response.json();
+      const result = data.choices[0]?.message?.content || 'No response from OpenAI';
+      
+      this.data.result = result;
+      
+      // Insert the AI response into the editor immediately without showing in the tool
+      this.insertResponseIntoEditor(result);
+      
+    } catch (error) {
+      console.error('Error generating content:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate content';
+      this.resultOutput.innerHTML = `
+        <div class="openai-error">
+          <strong>Error:</strong> ${errorMessage}
+        </div>
+        <div class="mt-2 text-sm">
+          <p>Make sure you have set up your OpenAI API key in the AI Chat settings section.</p>
+        </div>
+      `;
+    }
+  }
+  
+  insertResponseIntoEditor(content: string) {
+    try {
+      // Get current block index
+      const currentBlockIndex = this.api.blocks.getCurrentBlockIndex();
+      
+      // Split content by paragraphs
+      const paragraphs = content.split('\n\n');
+      
+      // Track the number of blocks added
+      let blocksAdded = 0;
+      
+      // For each paragraph, determine its type and insert appropriate block
+      paragraphs.forEach((paragraph, index) => {
+        const paragraphText = paragraph.trim();
+        
+        if (!paragraphText) return;
+        
+        // Detect if this might be a header (starts with # or ##)
+        const headerMatch = paragraphText.match(/^(#{1,6})\s+(.+)$/);
+        
+        // Detect if this might be a list (starts with -, *, or 1.)
+        const listItemRegex = /^\s*[-*•]\s+(.+)$/gm;
+        const numberedListItemRegex = /^\s*\d+\.\s+(.+)$/gm;
+        const isListItem = listItemRegex.test(paragraphText) || numberedListItemRegex.test(paragraphText);
+        
+        if (headerMatch) {
+          // This is a header, determine level (1-6 based on number of #)
+          const level = Math.min(headerMatch[1].length, 6);
+          const text = headerMatch[2].trim();
+          
+          this.api.blocks.insert(
+            'header',
+            { text, level },
+            {},
+            currentBlockIndex + blocksAdded + (index === 0 ? 0 : 1),
+            index === 0 // Replace the OpenAI block only with the first item
+          );
+          blocksAdded++;
+        } 
+        else if (isListItem) {
+          // Reset regex state
+          listItemRegex.lastIndex = 0;
+          numberedListItemRegex.lastIndex = 0;
+          
+          // Determine list type (unordered or ordered)
+          const isOrdered = numberedListItemRegex.test(paragraphText);
+          
+          // Parse list items (either - or 1. format)
+          const items = paragraphText
+            .split('\n')
+            .map(line => {
+              const bulletMatch = line.match(/^\s*[-*•]\s+(.+)$/);
+              const numberMatch = line.match(/^\s*\d+\.\s+(.+)$/);
+              return bulletMatch ? bulletMatch[1] : numberMatch ? numberMatch[1] : line;
+            })
+            .filter(item => item.trim());
+          
+          this.api.blocks.insert(
+            'list',
+            { 
+              style: isOrdered ? 'ordered' : 'unordered',
+              items 
+            },
+            {},
+            currentBlockIndex + blocksAdded + (index === 0 ? 0 : 1),
+            index === 0 // Replace the OpenAI block only with the first item
+          );
+          blocksAdded++;
+        }
+        else {
+          // Regular paragraph
+          this.api.blocks.insert(
+            'paragraph',
+            { text: paragraphText.replace(/\n/g, ' ') },
+            {},
+            currentBlockIndex + blocksAdded + (index === 0 ? 0 : 1),
+            index === 0 // Replace the OpenAI block only with the first item
+          );
+          blocksAdded++;
+        }
+      });
+      
+      // If no blocks were added or the first block didn't replace the tool,
+      // make sure we still remove the OpenAI tool block
+      if (blocksAdded === 0 || paragraphs.length === 0) {
+        this.api.blocks.insert(
+          'paragraph',
+          { text: content || 'No content generated.' },
+          {},
+          currentBlockIndex,
+          true // Replace the current block
+        );
+      } 
+      // If we added more than one block, but the first one didn't replace the tool
+      else if (blocksAdded > 1 && paragraphs[0].trim() === '') {
+        // Remove the original OpenAI block if it wasn't replaced
+        setTimeout(() => {
+          this.api.blocks.delete(currentBlockIndex);
+        }, 50);
+      }
+    } catch (error) {
+      console.error('Error inserting AI response into editor:', error);
+      
+      // In case of error, show error message and don't remove the block
+      this.resultOutput.innerHTML = `
+        <div class="openai-error">
+          <strong>Error:</strong> Failed to insert content into the editor.
+        </div>
+      `;
+    }
+  }
+
+  save() {
+    return {
+      prompt: this.promptInput.value,
+      result: this.data.result
+    };
+  }
+}
 
 interface Document {
   id: string;
@@ -74,7 +347,6 @@ const Writer: React.FC = () => {
   const [newProjectColor, setNewProjectColor] = useState(COLORS[0]);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showProjectActions, setShowProjectActions] = useState<string | null>(null);
-  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const editorInstance = useRef<any>(null);
 
   // Load documents and projects from store on component mount
@@ -187,45 +459,209 @@ const Writer: React.FC = () => {
         padding: 0.5em 0;
       }
       
-      /* Specific header level styling */
-      .codex-editor .ce-header[data-level="1"] {
-        font-size: 2.5em;
+      /* Specific header level styling with LARGER text */
+      .codex-editor h1.ce-header {
+        font-size: 3em;
         margin: 0.67em 0;
         border-bottom: 1px solid #374151;
         padding-bottom: 0.3em;
+        font-weight: 800;
+        line-height: 1.2;
       }
-      .codex-editor .ce-header[data-level="2"] {
-        font-size: 2em;
+
+      .codex-editor h2.ce-header {
+        font-size: 2.5em;
         margin: 0.83em 0;
         border-bottom: 1px solid #374151;
         padding-bottom: 0.3em;
+        font-weight: 700;
+        line-height: 1.3;
       }
-      .codex-editor .ce-header[data-level="3"] {
-        font-size: 1.5em;
+
+      .codex-editor h3.ce-header {
+        font-size: 2em;
         margin: 1em 0;
+        font-weight: 600;
+        line-height: 1.4;
       }
-      .codex-editor .ce-header[data-level="4"] {
-        font-size: 1.25em;
+
+      .codex-editor h4.ce-header {
+        font-size: 1.5em;
         margin: 1.33em 0;
+        font-weight: 600;
+        line-height: 1.4;
       }
-      .codex-editor .ce-header[data-level="5"] {
-        font-size: 1.1em;
+
+      .codex-editor h5.ce-header {
+        font-size: 1.25em;
         margin: 1.67em 0;
+        font-weight: 600;
+        line-height: 1.4;
       }
-      .codex-editor .ce-header[data-level="6"] {
-        font-size: 1em;
+
+      .codex-editor h6.ce-header {
+        font-size: 1.1em;
         margin: 2.33em 0;
+        font-weight: 600;
+        line-height: 1.4;
       }
       
+      /* Alternative header styling with data attributes */
+      .codex-editor .ce-header[data-level="1"] {
+        font-size: 3em;
+        margin: 0.67em 0;
+        border-bottom: 1px solid #374151;
+        padding-bottom: 0.3em;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+      
+      .codex-editor .ce-header[data-level="2"] {
+        font-size: 2.5em;
+        margin: 0.83em 0;
+        border-bottom: 1px solid #374151;
+        padding-bottom: 0.3em;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+      
+      .codex-editor .ce-header[data-level="3"] {
+        font-size: 2em;
+        margin: 1em 0;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      
+      .codex-editor .ce-header[data-level="4"] {
+        font-size: 1.5em;
+        margin: 1.33em 0;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      
+      .codex-editor .ce-header[data-level="5"] {
+        font-size: 1.25em;
+        margin: 1.67em 0;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      
+      .codex-editor .ce-header[data-level="6"] {
+        font-size: 1.1em;
+        margin: 2.33em 0;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      
+      /* OpenAI Tool Styles */
+      .openai-tool {
+        padding: 15px;
+        background-color: #1a202c;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        border: 1px solid #374151;
+      }
+      
+      .openai-prompt-wrapper {
+        margin-bottom: 10px;
+      }
+      
+      .openai-prompt-label {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #e2e8f0;
+      }
+      
+      .openai-prompt-input {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 4px;
+        background-color: #2d3748;
+        color: #e2e8f0;
+        border: 1px solid #4a5568;
+        margin-bottom: 8px;
+        min-height: 80px;
+        resize: vertical;
+      }
+      
+      .openai-prompt-button {
+        padding: 6px 12px;
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      
+      .openai-prompt-button:hover {
+        background-color: #2563eb;
+      }
+      
+      .openai-result {
+        padding: 12px;
+        background-color: #2d3748;
+        border-radius: 4px;
+        color: #e2e8f0;
+        white-space: pre-wrap;
+        min-height: 20px;
+        line-height: 1.5;
+      }
+      
+      .openai-loading {
+        display: flex;
+        align-items: center;
+        color: #60a5fa;
+        font-size: 0.9em;
+      }
+      
+      .openai-loading .dots {
+        display: flex;
+        margin-left: 5px;
+      }
+      
+      .openai-loading .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #60a5fa;
+        margin: 0 2px;
+        opacity: 0.8;
+        animation: pulse 1.5s infinite ease-in-out;
+      }
+      
+      .openai-loading .dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      .openai-loading .dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      
+      .openai-error {
+        color: #f87171;
+        border-left: 3px solid #f87171;
+        padding-left: 10px;
+        background-color: rgba(248, 113, 113, 0.1);
+      }
+      
+      @keyframes pulse {
+        0%, 100% {
+          transform: scale(0.8);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.2);
+          opacity: 1;
+        }
+      }
+      
+      /* Rest of existing styles */
       .codex-editor--narrow .ce-toolbar__plus,
       .codex-editor .ce-toolbar__plus,
       .codex-editor .ce-toolbar__settings-btn {
         background-color: #4b5563 !important;
         color: #e2e8f0 !important;
-      }
-      .codex-editor .ce-toolbar__plus:hover,
-      .codex-editor .ce-toolbar__settings-btn:hover {
-        background-color: #6b7280 !important;
       }
       .codex-editor .ce-inline-toolbar {
         background-color: #1f2937 !important;
@@ -367,9 +803,6 @@ const Writer: React.FC = () => {
 
     // Initialize editor with the current document's content
     initializeEditor(currentDoc.content);
-    
-    // Set up autosave
-    setupAutoSave();
   }, [currentDocId, documents, isLoading]);
 
   const initializeEditor = (initialData: any = {}) => {
@@ -414,22 +847,14 @@ const Writer: React.FC = () => {
         table: {
           class: Table,
           inlineToolbar: true,
+        },
+        openai: {
+          class: OpenAITool,
         }
       },
       data: initialData,
       autofocus: true,
       placeholder: 'Let\'s write something awesome!',
-      onChange: () => {
-        // Trigger save when content changes
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-        }
-        // Set a new timer to save after 2 seconds of inactivity
-        const timer = setTimeout(() => {
-          saveCurrentDocument();
-        }, 2000);
-        setAutoSaveTimer(timer as unknown as NodeJS.Timeout);
-      }
     });
   };
 
@@ -532,37 +957,6 @@ const Writer: React.FC = () => {
     }
   };
   
-  // Auto-save setup
-  const setupAutoSave = () => {
-    if (autoSaveTimer) {
-      clearInterval(autoSaveTimer);
-    }
-    
-    // Set up periodic backup autosave every 30 seconds for safety
-    const timer = setInterval(() => {
-      if (editorInstance.current) {
-        saveCurrentDocument();
-      }
-    }, 30000);
-    
-    setAutoSaveTimer(timer);
-    
-    return () => {
-      if (autoSaveTimer) {
-        clearInterval(autoSaveTimer);
-      }
-    };
-  };
-  
-  // Clean up autosave on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimer) {
-        clearInterval(autoSaveTimer);
-      }
-    };
-  }, [autoSaveTimer]);
-
   // Save current document
   const saveCurrentDocument = async () => {
     if (!currentDocId || !editorInstance.current) return;
@@ -586,7 +980,7 @@ const Writer: React.FC = () => {
       });
       
       setDocuments(updatedDocs);
-      console.log('Document auto-saved.');
+      console.log('Document saved.');
     } catch (error) {
       console.error('Error saving document:', error);
     } finally {
@@ -634,6 +1028,17 @@ const Writer: React.FC = () => {
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
         <h2 className="text-xl font-bold text-white">Write</h2>
         <div className="flex space-x-2">
+          {currentDocId && (
+            <button 
+              onClick={saveCurrentDocument}
+              className={`p-2 rounded-lg hover:bg-gray-700 flex items-center ${isSaving ? 'opacity-50' : ''}`}
+              title="Save Document"
+              disabled={isSaving}
+            >
+              <FiSave className="w-5 h-5 mr-1" />
+              <span className="text-sm">{isSaving ? 'Saving...' : 'Save'}</span>
+            </button>
+          )}
           <button 
             onClick={() => setShowDocList(!showDocList)}
             className={`p-2 rounded-lg hover:bg-gray-700 ${showDocList ? 'bg-gray-700' : ''}`}

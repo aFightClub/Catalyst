@@ -119,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside 
-      className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-8"
+      className="w-64 bg-gray-900 border-r border-gray-700 flex flex-col pt-8"
       style={{ '-webkit-app-region': 'drag' } as React.CSSProperties}
     >
       <div className="flex flex-col px-3">
@@ -151,7 +151,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div 
-        className="text-sm font-medium text-gray-400 px-4 py-2 flex justify-between items-center"
+        className="text-sm font-medium text-gray-400 px-4 py-2 flex justify-between items-center bg-gray-800 border-t border-gray-700"
         style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
       >
         <span>Workspaces</span>
@@ -166,7 +166,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
       
       {isAddingWorkspace && (
-        <div className="px-4 py-2 mb-2">
+        <div className="px-4 py-2 mb-2 ">
           <div className="bg-gray-700 p-2 rounded">
             <input
               type="text"
@@ -199,13 +199,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
       
       <div 
-        className="flex-1 overflow-y-auto mb-2"
+        className="flex-1 overflow-y-auto bg-gray-800 "
         style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
       >
         {workspaces.map(workspace => (
           <div
             key={workspace.id}
-            className={`mb-2 ${activeWorkspaceId === workspace.id ? 'bg-gray-700' : ''}`}
+            className={`mb-2 ${activeWorkspaceId === workspace.id ? 'bg-gray-800' : ''}`}
             style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
           >
             <div 
