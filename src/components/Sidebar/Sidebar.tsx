@@ -144,8 +144,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <FiHome className="w-5 h-5" />
           <div className="flex flex-col items-start">
-            <span>Dashboard</span>
-            <span className="text-xs opacity-70">Catalyst v{version}</span>
+            <span>Catalyst</span>
+            <span className="text-xs opacity-70">v{version}</span>
           </div>
         </button>
       </div>

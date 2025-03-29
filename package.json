@@ -1,6 +1,6 @@
 {
   "name": "catalyst-browser",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "The secondary web browser of digital creatives.",
   "main": "electron/main.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "vite build",
     "electron:dev": "concurrently \"vite\" \"electron .\"",
     "electron:build": "vite build && electron-builder",
-    "publish": "electron-builder build --mac --publish always"
+    "publish": "vite build && electron-builder build --mac --publish always"
   },
   "build": {
     "appId": "com.catalystbrowser.app",
