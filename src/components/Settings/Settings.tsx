@@ -31,6 +31,7 @@ enum SettingsPage {
   WORKFLOWS = 'workflows',
   UPDATES = 'updates',
   DATA_BACKUP = 'data_backup',
+  CATEGORIES = 'categories',
 }
 
 // Define ApiKeys interface with index signature
@@ -114,11 +115,20 @@ const Settings: React.FC = () => {
     importAutomations: true,
     importWorkflowVariables: true,
     importApiKeys: true,
-    importUserContext: true
+    importUserContext: true,
+    importWebsiteCategories: true,
+    importSubscriptionCategories: true
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputBackupRef = useRef<HTMLInputElement>(null);
+
+  const [websiteCategories, setWebsiteCategories] = useState<string[]>([]);
+  const [subscriptionCategories, setSubscriptionCategories] = useState<string[]>([]);
+  const [newWebsiteCategory, setNewWebsiteCategory] = useState('');
+  const [newSubscriptionCategory, setNewSubscriptionCategory] = useState('');
+  const [editingWebsiteCategory, setEditingWebsiteCategory] = useState<{index: number, value: string} | null>(null);
+  const [editingSubscriptionCategory, setEditingSubscriptionCategory] = useState<{index: number, value: string} | null>(null);
 
   useEffect(() => {
     setPlugins(pluginManager.getPlugins());
@@ -183,10 +193,28 @@ const Settings: React.FC = () => {
       }
     };
     
+    // Load categories
+    const loadCategories = async () => {
+      try {
+        const storedWebsiteCategories = await storeService.getWebsiteCategories();
+        if (storedWebsiteCategories && Array.isArray(storedWebsiteCategories)) {
+          setWebsiteCategories(storedWebsiteCategories);
+        }
+        
+        const storedSubscriptionCategories = await storeService.getSubscriptionCategories();
+        if (storedSubscriptionCategories && Array.isArray(storedSubscriptionCategories)) {
+          setSubscriptionCategories(storedSubscriptionCategories);
+        }
+      } catch (error) {
+        console.error('Failed to load categories:', error);
+      }
+    };
+    
     loadApiKeys();
     loadWorkflows();
     loadUserContext();
     loadAssistants();
+    loadCategories();
   }, []);
 
   // Function to run a workflow in a new tab
@@ -411,41 +439,85 @@ const Settings: React.FC = () => {
 
   // Handle import button click
   const handleImportClick = async () => {
-    // Check if we're in Electron environment
-    if (window.electron?.invoke) {
-      try {
-        setImportStatus("Choosing file to import...");
-        
-        // Use native Electron open dialog
-        const result = await window.electron.invoke('import-data-from-file');
-        
-        if (result.success) {
-          setImportStatus("Reading file...");
-          const content = result.content;
+    if (!fileInputBackupRef.current?.files?.length) {
+      setImportStatus("No file selected");
+      return;
+    }
+    
+    try {
+      const file = fileInputBackupRef.current.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const fileContent = e.target?.result as string;
+          if (!fileContent) throw new Error("Failed to read file content");
           
-          // Import the data
-          const importResult = await storeService.importFromJSON(content, importOptions);
+          setImportStatus("Importing data...");
           
-          if (importResult.success) {
-            setImportStatus("Data imported successfully! Refreshing...");
-            
-            // Reload the page after a short delay to apply changes
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
+          // If we're using Electron, we can use the more robust import via IPC
+          if (window.electron) {
+            try {
+              const result = await window.electron.invoke('import-data', {
+                jsonData: fileContent,
+                options: importOptions
+              });
+              
+              if (result.success) {
+                setImportStatus("Import successful! Reloading...");
+                // Reload the app after 1 second to apply changes
+                setTimeout(() => window.location.reload(), 1000);
+              } else {
+                setImportStatus(`Import failed: ${result.message}`);
+              }
+            } catch (error) {
+              console.error('IPC import failed:', error);
+              setImportStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
           } else {
-            setImportStatus(`Import failed: ${importResult.message}`);
+            // Browser-based import
+            const result = await storeService.importFromJSON(fileContent, {
+              overwrite: importOptions.overwrite,
+              importWorkspaces: importOptions.importWorkspaces,
+              importWorkflows: importOptions.importWorkflows,
+              importTasks: importOptions.importTasks,
+              importSubscriptions: importOptions.importSubscriptions,
+              importErasedElements: importOptions.importErasedElements,
+              importAssistants: importOptions.importAssistants,
+              importChats: importOptions.importChats,
+              importWebsites: importOptions.importWebsites,
+              importDocuments: importOptions.importDocuments,
+              importProjects: importOptions.importProjects,
+              importAutomations: importOptions.importAutomations,
+              importWorkflowVariables: importOptions.importWorkflowVariables,
+              importApiKeys: importOptions.importApiKeys,
+              importUserContext: importOptions.importUserContext,
+              importWebsiteCategories: importOptions.importWebsiteCategories,
+              importSubscriptionCategories: importOptions.importSubscriptionCategories
+            });
+            
+            if (result.success) {
+              setImportStatus("Import successful! Reloading...");
+              // Reload the app after 1 second to apply changes
+              setTimeout(() => window.location.reload(), 1000);
+            } else {
+              setImportStatus(`Import failed: ${result.message}`);
+            }
           }
-        } else {
-          setImportStatus(`Import canceled: ${result.message}`);
+        } catch (error) {
+          console.error('Import processing error:', error);
+          setImportStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
         }
-      } catch (error) {
-        console.error("Error importing data:", error);
-        setImportStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    } else {
-      // Browser environment fallback
-      fileInputBackupRef.current?.click();
+      };
+      
+      reader.onerror = () => {
+        setImportStatus("Error reading file");
+      };
+      
+      reader.readAsText(file);
+    } catch (error) {
+      console.error('File handling error:', error);
+      setImportStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -549,71 +621,188 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Categories management functions
+  const addWebsiteCategory = async () => {
+    if (!newWebsiteCategory.trim()) return;
+    
+    // Check for duplicates
+    if (websiteCategories.includes(newWebsiteCategory.trim())) {
+      alert('Category already exists');
+      return;
+    }
+    
+    const updatedCategories = [...websiteCategories, newWebsiteCategory.trim()];
+    setWebsiteCategories(updatedCategories);
+    setNewWebsiteCategory('');
+    
+    try {
+      await storeService.saveWebsiteCategories(updatedCategories);
+    } catch (error) {
+      console.error('Failed to save website categories:', error);
+    }
+  };
+  
+  const updateWebsiteCategory = async (index: number, newValue: string) => {
+    if (!newValue.trim()) return;
+    
+    // Check for duplicates (excluding the current index)
+    const otherCategories = websiteCategories.filter((_, i) => i !== index);
+    if (otherCategories.includes(newValue.trim())) {
+      alert('Category already exists');
+      return;
+    }
+    
+    const updatedCategories = [...websiteCategories];
+    updatedCategories[index] = newValue.trim();
+    setWebsiteCategories(updatedCategories);
+    setEditingWebsiteCategory(null);
+    
+    try {
+      await storeService.saveWebsiteCategories(updatedCategories);
+    } catch (error) {
+      console.error('Failed to update website categories:', error);
+    }
+  };
+  
+  const deleteWebsiteCategory = async (index: number) => {
+    if (confirm('Are you sure you want to delete this category? This may affect websites that use it.')) {
+      const updatedCategories = [...websiteCategories];
+      updatedCategories.splice(index, 1);
+      setWebsiteCategories(updatedCategories);
+      
+      try {
+        await storeService.saveWebsiteCategories(updatedCategories);
+      } catch (error) {
+        console.error('Failed to delete website category:', error);
+      }
+    }
+  };
+  
+  const addSubscriptionCategory = async () => {
+    if (!newSubscriptionCategory.trim()) return;
+    
+    // Check for duplicates
+    if (subscriptionCategories.includes(newSubscriptionCategory.trim())) {
+      alert('Category already exists');
+      return;
+    }
+    
+    const updatedCategories = [...subscriptionCategories, newSubscriptionCategory.trim()];
+    setSubscriptionCategories(updatedCategories);
+    setNewSubscriptionCategory('');
+    
+    try {
+      await storeService.saveSubscriptionCategories(updatedCategories);
+    } catch (error) {
+      console.error('Failed to save subscription categories:', error);
+    }
+  };
+  
+  const updateSubscriptionCategory = async (index: number, newValue: string) => {
+    if (!newValue.trim()) return;
+    
+    // Check for duplicates (excluding the current index)
+    const otherCategories = subscriptionCategories.filter((_, i) => i !== index);
+    if (otherCategories.includes(newValue.trim())) {
+      alert('Category already exists');
+      return;
+    }
+    
+    const updatedCategories = [...subscriptionCategories];
+    updatedCategories[index] = newValue.trim();
+    setSubscriptionCategories(updatedCategories);
+    setEditingSubscriptionCategory(null);
+    
+    try {
+      await storeService.saveSubscriptionCategories(updatedCategories);
+    } catch (error) {
+      console.error('Failed to update subscription categories:', error);
+    }
+  };
+  
+  const deleteSubscriptionCategory = async (index: number) => {
+    if (confirm('Are you sure you want to delete this category? This may affect subscriptions that use it.')) {
+      const updatedCategories = [...subscriptionCategories];
+      updatedCategories.splice(index, 1);
+      setSubscriptionCategories(updatedCategories);
+      
+      try {
+        await storeService.saveSubscriptionCategories(updatedCategories);
+      } catch (error) {
+        console.error('Failed to delete subscription category:', error);
+      }
+    }
+  };
+
   const renderNavigation = () => (
-    <div className="w-64 bg-gray-900 h-full border-r border-gray-700 p-4 flex flex-col overflow-y-auto">
-      <h2 className="text-xl font-bold mb-6 text-white">Settings</h2>
-      <div className="space-y-2">
+    <div className="flex flex-col h-full border-r border-gray-700 bg-gray-800 w-64 overflow-y-auto">
+      <div className="p-4 border-b border-gray-700">
+        <h2 className="text-xl font-semibold text-white">Settings</h2>
+      </div>
+      
+      {/* Navigation Items */}
+      <div className="flex-1 overflow-y-auto py-2">
         <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.CONTEXT ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.CONTEXT)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.CONTEXT ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
         >
-          <FiUser className="mr-2" />
-          <span>Context</span>
+          <FiUser className="mr-3" />
+          <span>User Context</span>
         </button>
+        
         <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.ASSISTANTS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.ASSISTANTS)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.ASSISTANTS ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
         >
-          <FiMessageCircle className="mr-2" />
+          <FiMessageCircle className="mr-3" />
           <span>Assistants</span>
         </button>
+        
         <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.API_KEYS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.API_KEYS)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.API_KEYS ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
         >
-          <FiKey className="mr-2" />
+          <FiKey className="mr-3" />
           <span>API Keys</span>
         </button>
+        
         <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.PLUGINS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.PLUGINS)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.PLUGINS ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
         >
-          <FiPackage className="mr-2" />
+          <FiPackage className="mr-3" />
           <span>Plugins</span>
         </button>
+        
         <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.WORKFLOWS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.WORKFLOWS)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.WORKFLOWS ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
         >
-          <FiActivity className="mr-2" />
+          <FiActivity className="mr-3" />
           <span>Workflows</span>
         </button>
+
         <button 
-          onClick={() => setCurrentPage(SettingsPage.UPDATES)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.UPDATES ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.CATEGORIES ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+          onClick={() => setCurrentPage(SettingsPage.CATEGORIES)}
         >
-          <FiClock className="mr-2" />
+          <FiActivity className="mr-3" />
+          <span>Categories</span>
+        </button>
+        
+        <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.UPDATES ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+          onClick={() => setCurrentPage(SettingsPage.UPDATES)}
+        >
+          <FiActivity className="mr-3" />
           <span>Updates</span>
         </button>
+        
         <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.DATA_BACKUP ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.DATA_BACKUP)}
-          className={`w-full flex items-center p-2 rounded-lg ${
-            currentPage === SettingsPage.DATA_BACKUP ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
-          }`}
         >
-          <FiSave className="mr-2" />
+          <FiActivity className="mr-3" />
           <span>Data Backup</span>
         </button>
       </div>
@@ -1169,197 +1358,268 @@ const Settings: React.FC = () => {
 
   const renderDataBackupPage = () => {
     return (
-      <div className="p-6 bg-gray-900 text-white">
-        <h3 className="text-xl font-bold mb-6">Data Backup & Restore</h3>
+      <div className="flex-1 overflow-y-auto p-6 bg-gray-900 text-white">
+        <h2 className="text-2xl font-bold mb-6">Data Backup & Restore</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Export Section */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h4 className="text-lg font-medium mb-4">Export Data</h4>
-            <p className="text-gray-400 mb-4">
-              Export all your workspaces, tabs, workflows, and settings to a JSON file for backup purposes.
-            </p>
-            
+        {/* Export Section */}
+        <div className="bg-gray-800 p-6 rounded-lg mb-6">
+          <h3 className="text-xl font-semibold mb-4">Export Data</h3>
+          <p className="text-gray-400 mb-4">
+            Export all your data to a JSON file that you can save and import later.
+          </p>
+          
+          <div className="flex items-center">
             <button
               onClick={handleExportData}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+              disabled={!!exportStatus && exportStatus.includes('Exporting')}
             >
-              <FiExternalLink className="mr-2" />
-              Export to JSON File
+              <FiSave className="mr-2" />
+              Export All Data
             </button>
-            
             {exportStatus && (
-              <div className={`mt-3 p-2 rounded text-sm ${exportStatus.includes('Error') ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>
-                {exportStatus}
-              </div>
+              <span className="ml-3 text-sm text-gray-300">{exportStatus}</span>
             )}
           </div>
+        </div>
+        
+        {/* Import Section */}
+        <div className="bg-gray-800 p-6 rounded-lg mb-6">
+          <h3 className="text-xl font-semibold mb-4">Import Data</h3>
+          <p className="text-gray-400 mb-4">
+            Import previously exported data from a JSON file.
+          </p>
           
-          {/* Import Section */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h4 className="text-lg font-medium mb-4">Import Data</h4>
-            <p className="text-gray-400 mb-4">
-              Restore your data from a previously exported JSON file.
-            </p>
+          <div className="mb-4">
+            <label className="font-semibold mb-2 block">Import Options</label>
             
-            <div className="mb-4">
-              <label className="block text-gray-300 text-sm font-medium mb-2">Import Options</label>
+            <div className="bg-gray-700 p-4 rounded-lg mb-4">
+              <div className="flex items-center mb-3">
+                <input 
+                  type="checkbox"
+                  id="overwrite"
+                  checked={importOptions.overwrite}
+                  onChange={() => toggleOption('overwrite')}
+                  className="mr-2"
+                />
+                <label htmlFor="overwrite" className="cursor-pointer">
+                  Overwrite existing data (instead of merging)
+                </label>
+              </div>
               
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="flex items-center">
+                  <input 
                     type="checkbox"
-                    checked={importOptions.overwrite}
-                    onChange={() => toggleOption('overwrite')}
+                    id="importWorkspaces"
+                    checked={importOptions.importWorkspaces}
+                    onChange={() => toggleOption('importWorkspaces')}
                     className="mr-2"
                   />
-                  <span className="text-sm">Overwrite existing data (instead of merging)</span>
-                </label>
+                  <label htmlFor="importWorkspaces" className="cursor-pointer">
+                    Workspaces
+                  </label>
+                </div>
                 
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importWorkspaces}
-                      onChange={() => toggleOption('importWorkspaces')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Workspaces</span>
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importWorkflows"
+                    checked={importOptions.importWorkflows}
+                    onChange={() => toggleOption('importWorkflows')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importWorkflows" className="cursor-pointer">
+                    Workflows
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importWorkflows}
-                      onChange={() => toggleOption('importWorkflows')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Workflows</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importTasks"
+                    checked={importOptions.importTasks}
+                    onChange={() => toggleOption('importTasks')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importTasks" className="cursor-pointer">
+                    Tasks
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importTasks}
-                      onChange={() => toggleOption('importTasks')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Tasks</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importProjects"
+                    checked={importOptions.importProjects}
+                    onChange={() => toggleOption('importProjects')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importProjects" className="cursor-pointer">
+                    Projects
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importSubscriptions}
-                      onChange={() => toggleOption('importSubscriptions')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Subscriptions</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importSubscriptions"
+                    checked={importOptions.importSubscriptions}
+                    onChange={() => toggleOption('importSubscriptions')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importSubscriptions" className="cursor-pointer">
+                    Subscriptions
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importErasedElements}
-                      onChange={() => toggleOption('importErasedElements')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Erased Elements</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importWebsites"
+                    checked={importOptions.importWebsites}
+                    onChange={() => toggleOption('importWebsites')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importWebsites" className="cursor-pointer">
+                    Websites
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importAssistants}
-                      onChange={() => toggleOption('importAssistants')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Assistants</span>
+                </div>
+
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importWebsiteCategories"
+                    checked={importOptions.importWebsiteCategories}
+                    onChange={() => toggleOption('importWebsiteCategories')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importWebsiteCategories" className="cursor-pointer">
+                    Website Categories
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importWebsites}
-                      onChange={() => toggleOption('importWebsites')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Websites</span>
+                </div>
+
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importSubscriptionCategories"
+                    checked={importOptions.importSubscriptionCategories}
+                    onChange={() => toggleOption('importSubscriptionCategories')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importSubscriptionCategories" className="cursor-pointer">
+                    Subscription Categories
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importChats}
-                      onChange={() => toggleOption('importChats')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Chats</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importChats"
+                    checked={importOptions.importChats}
+                    onChange={() => toggleOption('importChats')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importChats" className="cursor-pointer">
+                    Chats
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importDocuments}
-                      onChange={() => toggleOption('importDocuments')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Documents</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importAssistants"
+                    checked={importOptions.importAssistants}
+                    onChange={() => toggleOption('importAssistants')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importAssistants" className="cursor-pointer">
+                    Assistants
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importProjects}
-                      onChange={() => toggleOption('importProjects')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Projects</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importDocuments"
+                    checked={importOptions.importDocuments}
+                    onChange={() => toggleOption('importDocuments')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importDocuments" className="cursor-pointer">
+                    Documents
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importAutomations}
-                      onChange={() => toggleOption('importAutomations')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Automations</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importErasedElements"
+                    checked={importOptions.importErasedElements}
+                    onChange={() => toggleOption('importErasedElements')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importErasedElements" className="cursor-pointer">
+                    Erased Elements
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importWorkflowVariables}
-                      onChange={() => toggleOption('importWorkflowVariables')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">Workflow Variables</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importAutomations"
+                    checked={importOptions.importAutomations}
+                    onChange={() => toggleOption('importAutomations')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importAutomations" className="cursor-pointer">
+                    Automations
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importApiKeys}
-                      onChange={() => toggleOption('importApiKeys')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">API Keys</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importWorkflowVariables"
+                    checked={importOptions.importWorkflowVariables}
+                    onChange={() => toggleOption('importWorkflowVariables')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importWorkflowVariables" className="cursor-pointer">
+                    Workflow Variables
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={importOptions.importUserContext}
-                      onChange={() => toggleOption('importUserContext')}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">User Context</span>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importApiKeys"
+                    checked={importOptions.importApiKeys}
+                    onChange={() => toggleOption('importApiKeys')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importApiKeys" className="cursor-pointer">
+                    API Keys
+                  </label>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importUserContext"
+                    checked={importOptions.importUserContext}
+                    onChange={() => toggleOption('importUserContext')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importUserContext" className="cursor-pointer">
+                    User Context
                   </label>
                 </div>
               </div>
             </div>
-            
+          </div>
+          
+          <div className="flex items-center">
             <input
               ref={fileInputBackupRef}
               type="file"
@@ -1367,55 +1627,261 @@ const Settings: React.FC = () => {
               onChange={handleFileChange}
               className="hidden"
             />
-            
             <button
-              onClick={handleImportClick}
-              className="w-full px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center"
+              onClick={() => fileInputBackupRef.current?.click()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
             >
-              <FiPlus className="mr-2" />
-              Import from JSON File
+              <FiSave className="mr-2" />
+              Choose JSON File
             </button>
-            
             {importStatus && (
-              <div className={`mt-3 p-2 rounded text-sm ${importStatus.includes('Error') || importStatus.includes('failed') ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
-                {importStatus}
-              </div>
+              <span className="ml-3 text-sm text-gray-300">{importStatus}</span>
             )}
           </div>
         </div>
         
-        <div className="mt-6 bg-blue-900 bg-opacity-20 p-4 rounded border border-blue-800">
-          <h4 className="text-lg font-medium mb-2 text-blue-300">About Data Backup</h4>
+        {/* Delete Data Section */}
+        <div className="bg-gray-800 p-6 rounded-lg">
+          <h3 className="text-xl font-semibold mb-4 text-red-500">Delete All Data</h3>
           <p className="text-gray-400 mb-4">
-            Your data is stored locally in your browser or application. Exporting allows you to create a backup 
-            file that contains all your workspaces, workflows, and settings. This file can be used to restore your 
-            data in case of data loss or when moving to a new device.
+            This will permanently delete all your data and cannot be undone.
+            Make sure to export a backup first if you want to save your data.
           </p>
           
-          <div className="bg-red-900 bg-opacity-20 p-4 rounded border border-red-800 mt-6">
-            <h4 className="text-lg font-medium mb-2 text-red-300">Danger Zone</h4>
-            <p className="text-gray-400 mb-4">
-              Delete all your data permanently. This action cannot be undone. Please export a backup first if you may need your data later.
-            </p>
-            
+          {!showDeleteConfirm ? (
             <button
-              onClick={handleDeleteAllData}
-              className="w-full px-4 py-3 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
             >
               <FiTrash2 className="mr-2" />
               Delete All Data
             </button>
-            
-            {deleteStatus && (
-              <div className={`mt-3 p-2 rounded text-sm ${deleteStatus.includes('Error') ? 'bg-red-900 text-red-200' : 'bg-red-900 text-red-200'}`}>
-                {deleteStatus}
+          ) : (
+            <div>
+              <p className="text-red-400 font-semibold mb-3">
+                Are you absolutely sure? This cannot be undone!
+              </p>
+              <div className="flex items-center">
+                <button
+                  onClick={handleDeleteAllData}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center mr-3"
+                >
+                  <FiTrash2 className="mr-2" />
+                  Yes, Delete Everything
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+          
+          {deleteStatus && (
+            <p className="mt-3 text-sm text-gray-300">{deleteStatus}</p>
+          )}
         </div>
       </div>
     );
   };
+
+  const renderCategoriesPage = () => (
+    <div className="flex-1 overflow-y-auto p-6 bg-gray-900 text-white">
+      <h2 className="text-2xl font-bold mb-6">Categories Management</h2>
+      
+      {/* Website Categories */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-semibold">Website Categories</h3>
+          <div className="flex items-center">
+            <input
+              type="text"
+              value={newWebsiteCategory}
+              onChange={(e) => setNewWebsiteCategory(e.target.value)}
+              placeholder="New category"
+              className="px-3 py-2 mr-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={addWebsiteCategory}
+              disabled={!newWebsiteCategory.trim()}
+              className={`px-4 py-2 rounded flex items-center ${!newWebsiteCategory.trim() ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+              <FiPlus className="mr-2" />
+              Add
+            </button>
+          </div>
+        </div>
+        
+        <div className="bg-gray-800 rounded-lg overflow-hidden">
+          {websiteCategories.length === 0 ? (
+            <div className="p-6 text-center text-gray-400">
+              No categories found. Add your first website category.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-700">
+              {websiteCategories.map((category, index) => (
+                <div key={index} className="flex items-center justify-between p-4 hover:bg-gray-700">
+                  {editingWebsiteCategory && editingWebsiteCategory.index === index ? (
+                    <input
+                      type="text"
+                      value={editingWebsiteCategory.value}
+                      onChange={(e) => setEditingWebsiteCategory({...editingWebsiteCategory, value: e.target.value})}
+                      className="flex-1 px-3 py-2 mr-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          updateWebsiteCategory(index, editingWebsiteCategory.value);
+                        } else if (e.key === 'Escape') {
+                          setEditingWebsiteCategory(null);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span>{category}</span>
+                  )}
+                  
+                  <div className="flex items-center">
+                    {editingWebsiteCategory && editingWebsiteCategory.index === index ? (
+                      <>
+                        <button
+                          onClick={() => updateWebsiteCategory(index, editingWebsiteCategory.value)}
+                          className="p-2 text-blue-400 hover:text-blue-300"
+                          title="Save"
+                        >
+                          <FiSave />
+                        </button>
+                        <button
+                          onClick={() => setEditingWebsiteCategory(null)}
+                          className="p-2 text-gray-400 hover:text-gray-300"
+                          title="Cancel"
+                        >
+                          <FiX />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setEditingWebsiteCategory({index, value: category})}
+                          className="p-2 text-gray-400 hover:text-white"
+                          title="Edit"
+                        >
+                          <FiEdit />
+                        </button>
+                        <button
+                          onClick={() => deleteWebsiteCategory(index)}
+                          className="p-2 text-gray-400 hover:text-red-500"
+                          title="Delete"
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Subscription Categories */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-semibold">Subscription Categories</h3>
+          <div className="flex items-center">
+            <input
+              type="text"
+              value={newSubscriptionCategory}
+              onChange={(e) => setNewSubscriptionCategory(e.target.value)}
+              placeholder="New category"
+              className="px-3 py-2 mr-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={addSubscriptionCategory}
+              disabled={!newSubscriptionCategory.trim()}
+              className={`px-4 py-2 rounded flex items-center ${!newSubscriptionCategory.trim() ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+              <FiPlus className="mr-2" />
+              Add
+            </button>
+          </div>
+        </div>
+        
+        <div className="bg-gray-800 rounded-lg overflow-hidden">
+          {subscriptionCategories.length === 0 ? (
+            <div className="p-6 text-center text-gray-400">
+              No categories found. Add your first subscription category.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-700">
+              {subscriptionCategories.map((category, index) => (
+                <div key={index} className="flex items-center justify-between p-4 hover:bg-gray-700">
+                  {editingSubscriptionCategory && editingSubscriptionCategory.index === index ? (
+                    <input
+                      type="text"
+                      value={editingSubscriptionCategory.value}
+                      onChange={(e) => setEditingSubscriptionCategory({...editingSubscriptionCategory, value: e.target.value})}
+                      className="flex-1 px-3 py-2 mr-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          updateSubscriptionCategory(index, editingSubscriptionCategory.value);
+                        } else if (e.key === 'Escape') {
+                          setEditingSubscriptionCategory(null);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span>{category}</span>
+                  )}
+                  
+                  <div className="flex items-center">
+                    {editingSubscriptionCategory && editingSubscriptionCategory.index === index ? (
+                      <>
+                        <button
+                          onClick={() => updateSubscriptionCategory(index, editingSubscriptionCategory.value)}
+                          className="p-2 text-blue-400 hover:text-blue-300"
+                          title="Save"
+                        >
+                          <FiSave />
+                        </button>
+                        <button
+                          onClick={() => setEditingSubscriptionCategory(null)}
+                          className="p-2 text-gray-400 hover:text-gray-300"
+                          title="Cancel"
+                        >
+                          <FiX />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setEditingSubscriptionCategory({index, value: category})}
+                          className="p-2 text-gray-400 hover:text-white"
+                          title="Edit"
+                        >
+                          <FiEdit />
+                        </button>
+                        <button
+                          onClick={() => deleteSubscriptionCategory(index)}
+                          className="p-2 text-gray-400 hover:text-red-500"
+                          title="Delete"
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -1433,8 +1899,10 @@ const Settings: React.FC = () => {
         return renderUpdatesPage();
       case SettingsPage.DATA_BACKUP:
         return renderDataBackupPage();
+      case SettingsPage.CATEGORIES:
+        return renderCategoriesPage();
       default:
-        return renderContextPage();
+        return <div>Unknown page</div>;
     }
   };
 

@@ -23,21 +23,10 @@ interface Website {
   createdAt: string;
 }
 
-const DEFAULT_CATEGORIES = [
-  'Entertainment',
-  'Productivity',
-  'Utilities',
-  'Social Media',
-  'Shopping',
-  'News',
-  'Music',
-  'Gaming',
-  'Other'
-];
-
 const Subscriptions: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [newSubscription, setNewSubscription] = useState<Subscription>({
     id: '',
     name: '',
@@ -75,10 +64,40 @@ const Subscriptions: React.FC = () => {
           console.warn("Websites data is not an array, using empty array", storedWebsites);
           setWebsites([]);
         }
+        
+        // Load categories
+        const storedCategories = await storeService.getSubscriptionCategories();
+        if (Array.isArray(storedCategories) && storedCategories.length > 0) {
+          setCategories(storedCategories);
+        } else {
+          console.warn("Subscription categories not found, using default");
+          setCategories([
+            "Entertainment",
+            "Productivity",
+            "Utilities",
+            "Social Media",
+            "Shopping",
+            "News",
+            "Music",
+            "Gaming",
+            "Other"
+          ]);
+        }
       } catch (error) {
         console.error("Failed to load data:", error);
         setSubscriptions([]);
         setWebsites([]);
+        setCategories([
+          "Entertainment",
+          "Productivity",
+          "Utilities",
+          "Social Media",
+          "Shopping",
+          "News",
+          "Music",
+          "Gaming",
+          "Other"
+        ]);
       } finally {
         setIsLoading(false);
       }
@@ -225,9 +244,8 @@ const Subscriptions: React.FC = () => {
   };
 
   const getCategories = () => {
-    const existingCategories = new Set(subscriptions.map(sub => sub.category));
-    const allCategories = new Set([...DEFAULT_CATEGORIES, ...existingCategories]);
-    return Array.from(allCategories);
+    // Use the categories from state
+    return categories;
   };
 
   // Filter subscriptions by category

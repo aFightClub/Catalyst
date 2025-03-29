@@ -71,9 +71,36 @@ const schema = {
     type: "array",
     default: [],
   },
+  websiteCategories: {
+    type: "array",
+    default: [
+      "Personal",
+      "Business",
+      "Blog",
+      "E-commerce",
+      "Portfolio",
+      "Social Media",
+      "Education",
+      "Other",
+    ],
+  },
   subscriptions: {
     type: "array",
     default: [],
+  },
+  subscriptionCategories: {
+    type: "array",
+    default: [
+      "Entertainment",
+      "Productivity",
+      "Utilities",
+      "Social Media",
+      "Shopping",
+      "News",
+      "Music",
+      "Gaming",
+      "Other",
+    ],
   },
   userContext: {
     type: "object",
@@ -334,6 +361,16 @@ export const storeService = {
     return s.set("websites", websites);
   },
 
+  // Website Categories
+  getWebsiteCategories: async () => {
+    const s = await ensureStore();
+    return s.get("websiteCategories") as string[];
+  },
+  saveWebsiteCategories: async (categories: string[]) => {
+    const s = await ensureStore();
+    return s.set("websiteCategories", categories);
+  },
+
   // Subscriptions
   getSubscriptions: async () => {
     const s = await ensureStore();
@@ -342,6 +379,16 @@ export const storeService = {
   saveSubscriptions: async (subscriptions: any[]) => {
     const s = await ensureStore();
     return s.set("subscriptions", subscriptions);
+  },
+
+  // Subscription Categories
+  getSubscriptionCategories: async () => {
+    const s = await ensureStore();
+    return s.get("subscriptionCategories") as string[];
+  },
+  saveSubscriptionCategories: async (categories: string[]) => {
+    const s = await ensureStore();
+    return s.set("subscriptionCategories", categories);
   },
 
   // User Context
@@ -419,7 +466,9 @@ export const storeService = {
       erasedElements: await s.get("erasedElements"),
       apiKeys: await s.get("apiKeys"),
       websites: await s.get("websites"),
+      websiteCategories: await s.get("websiteCategories"),
       subscriptions: await s.get("subscriptions"),
+      subscriptionCategories: await s.get("subscriptionCategories"),
       userContext: await s.get("userContext"),
       assistants: await s.get("assistants"),
       chats: await s.get("chats"),
@@ -451,6 +500,8 @@ export const storeService = {
       importWorkflowVariables?: boolean;
       importApiKeys?: boolean;
       importUserContext?: boolean;
+      importWebsiteCategories?: boolean;
+      importSubscriptionCategories?: boolean;
     } = {}
   ): Promise<{ success: boolean; message: string }> => {
     try {
@@ -741,6 +792,39 @@ export const storeService = {
           }
 
           await s.set("userContext", mergedContext);
+        }
+      }
+
+      if (options.importWebsiteCategories !== false && data.websiteCategories) {
+        if (options.overwrite) {
+          await s.set("websiteCategories", data.websiteCategories);
+        } else {
+          const currentCategories = (await s.get(
+            "websiteCategories"
+          )) as string[];
+          // Merge categories, avoiding duplicates
+          const mergedCategories = Array.from(
+            new Set([...currentCategories, ...data.websiteCategories])
+          );
+          await s.set("websiteCategories", mergedCategories);
+        }
+      }
+
+      if (
+        options.importSubscriptionCategories !== false &&
+        data.subscriptionCategories
+      ) {
+        if (options.overwrite) {
+          await s.set("subscriptionCategories", data.subscriptionCategories);
+        } else {
+          const currentCategories = (await s.get(
+            "subscriptionCategories"
+          )) as string[];
+          // Merge categories, avoiding duplicates
+          const mergedCategories = Array.from(
+            new Set([...currentCategories, ...data.subscriptionCategories])
+          );
+          await s.set("subscriptionCategories", mergedCategories);
         }
       }
 

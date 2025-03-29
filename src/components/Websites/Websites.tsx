@@ -12,17 +12,6 @@ interface Website {
   status: 'active' | 'idea' | 'archived';
 }
 
-const DEFAULT_CATEGORIES = [
-  'Personal',
-  'Business',
-  'Blog',
-  'E-commerce',
-  'Portfolio',
-  'Social Media',
-  'Education',
-  'Other'
-];
-
 const STATUS_LABELS = {
   active: 'Active Websites',
   idea: 'Side Ideas',
@@ -31,6 +20,7 @@ const STATUS_LABELS = {
 
 const Websites: React.FC = () => {
   const [websites, setWebsites] = useState<Website[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [newWebsite, setNewWebsite] = useState<Website>({
     id: '',
     name: '',
@@ -48,7 +38,7 @@ const Websites: React.FC = () => {
 
   // Load websites from store
   useEffect(() => {
-    const loadWebsites = async () => {
+    const loadData = async () => {
       setIsLoading(true);
       try {
         const storedWebsites = await storeService.getWebsites();
@@ -65,15 +55,25 @@ const Websites: React.FC = () => {
           console.warn("Websites data is not an array, using empty array", storedWebsites);
           setWebsites([]);
         }
+        
+        // Load categories
+        const storedCategories = await storeService.getWebsiteCategories();
+        if (Array.isArray(storedCategories) && storedCategories.length > 0) {
+          setCategories(storedCategories);
+        } else {
+          console.warn("Website categories not found, using default");
+          setCategories(["Personal", "Business", "Blog", "E-commerce", "Portfolio", "Social Media", "Education", "Other"]);
+        }
       } catch (error) {
-        console.error("Failed to load websites:", error);
+        console.error("Failed to load data:", error);
         setWebsites([]);
+        setCategories(["Personal", "Business", "Blog", "E-commerce", "Portfolio", "Social Media", "Education", "Other"]);
       } finally {
         setIsLoading(false);
       }
     };
     
-    loadWebsites();
+    loadData();
   }, []);
 
   // Save websites when they change
@@ -158,9 +158,8 @@ const Websites: React.FC = () => {
   };
 
   const getCategories = () => {
-    const existingCategories = new Set(websites.map(site => site.category));
-    const allCategories = new Set([...DEFAULT_CATEGORIES, ...existingCategories]);
-    return Array.from(allCategories);
+    // Use the categories from state
+    return categories;
   };
 
   // Filter websites by category and status
