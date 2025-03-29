@@ -1315,30 +1315,49 @@ export default function App() {
     
   }, [activeWorkspaceId, workspaces]);
 
-  // Add event listener to handle draggable regions
+  // Listen for requests to open URLs in new tabs
   useEffect(() => {
-    try {
-      // Setup window drag handling
-      const handleDrag = (e: MouseEvent) => {
-        // Check if the clicked element has the draggable attribute
-        const target = e.target as HTMLElement;
-        const isDraggable = target.closest('[data-draggable="true"]') && 
-                           !target.closest('[data-draggable="false"]');
-                          
-        if (isDraggable && (window as any).electron) {
-          (window as any).electron.send('window-drag-start', {});
-        }
-      };
-
-      document.addEventListener('mousedown', handleDrag);
-      
-      return () => {
-        document.removeEventListener('mousedown', handleDrag);
-      };
-    } catch (error) {
-      console.error('Failed to set up drag handlers:', error);
+    if ((window as any).electron) {
+      // Listen for open-url-in-new-tab events from webviews
+      (window as any).electron.receive('open-url-in-new-tab', (url: string) => {
+        console.log(`Opening URL in new tab: ${url}`);
+        
+        // Create new tab with the URL
+        const newTab = {
+          id: Date.now().toString(),
+          title: 'Loading...',
+          url: url,
+          isReady: false,
+          isCustomNamed: false
+        } as ExtendedTab;
+        
+        // Add the tab to current workspace
+        setWorkspaces(prevWorkspaces => {
+          const updatedWorkspaces = prevWorkspaces.map(workspace => 
+            workspace.id === activeWorkspaceId
+              ? { ...workspace, tabs: [...workspace.tabs, newTab] }
+              : workspace
+          );
+          
+          return updatedWorkspaces;
+        });
+        
+        // Activate the new tab
+        setActiveTabId(newTab.id);
+        
+        // Make sure we show the browser UI
+        setShowDashboard(false);
+        setShowSettings(false);
+        setShowAIChat(false);
+        setShowWriter(false);
+        setShowTasks(false);
+        setShowImages(false);
+        setShowSubscriptions(false);
+        setShowWebsites(false);
+        setShowAutomations(false);
+      });
     }
-  }, []);
+  }, [activeWorkspaceId]);
 
   return (
     <div className="h-screen flex">

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, MenuItem } = require("electron");
 const path = require("path");
 
 function createWindow() {
@@ -24,20 +24,55 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
+
+  // Add context menu for the window
+  win.webContents.on("context-menu", (event, params) => {
+    const menu = new Menu();
+
+    // Add Cut/Copy/Paste items when text is selected or in an editable field
+    if (params.isEditable || params.selectionText) {
+      if (params.isEditable) {
+        menu.append(
+          new MenuItem({
+            label: "Cut",
+            role: "cut",
+            accelerator: "CmdOrCtrl+X",
+            enabled: params.editFlags.canCut,
+          })
+        );
+      }
+
+      if (params.selectionText) {
+        menu.append(
+          new MenuItem({
+            label: "Copy",
+            role: "copy",
+            accelerator: "CmdOrCtrl+C",
+            enabled: params.editFlags.canCopy,
+          })
+        );
+      }
+
+      if (params.isEditable) {
+        menu.append(
+          new MenuItem({
+            label: "Paste",
+            role: "paste",
+            accelerator: "CmdOrCtrl+V",
+            enabled: params.editFlags.canPaste,
+          })
+        );
+      }
+
+      menu.popup();
+    }
+  });
 }
 
 // Set handlers for IPC messages
 ipcMain.on("eraser-element-selected", (event, selector) => {
   console.log("Eraser element selected:", selector);
   // You can save this to Electron store if needed
-});
-
-// Add handler for window drag operation
-ipcMain.on("window-drag-start", (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
-  if (win) {
-    win.beginWindowDrag();
-  }
 });
 
 // Register webview protocol handlers
@@ -53,6 +88,91 @@ app.on("web-contents-created", (e, contents) => {
       if (input.type === "keyDown" && input.key === "F12") {
         contents.openDevTools();
       }
+    });
+
+    // Add context menu for webviews
+    contents.on("context-menu", (event, params) => {
+      const menu = new Menu();
+
+      // Add standard browser context menu items
+      menu.append(
+        new MenuItem({
+          label: "Back",
+          click: () => contents.goBack(),
+          enabled: contents.canGoBack(),
+        })
+      );
+      menu.append(
+        new MenuItem({
+          label: "Forward",
+          click: () => contents.goForward(),
+          enabled: contents.canGoForward(),
+        })
+      );
+      menu.append(
+        new MenuItem({ label: "Reload", click: () => contents.reload() })
+      );
+      menu.append(new MenuItem({ type: "separator" }));
+
+      // Add Cut/Copy/Paste items when text is selected or in an editable field
+      if (params.isEditable || params.selectionText) {
+        if (params.isEditable) {
+          menu.append(
+            new MenuItem({
+              label: "Cut",
+              role: "cut",
+              accelerator: "CmdOrCtrl+X",
+              enabled: params.editFlags.canCut,
+            })
+          );
+        }
+
+        if (params.selectionText) {
+          menu.append(
+            new MenuItem({
+              label: "Copy",
+              role: "copy",
+              accelerator: "CmdOrCtrl+C",
+              enabled: params.editFlags.canCopy,
+            })
+          );
+        }
+
+        if (params.isEditable) {
+          menu.append(
+            new MenuItem({
+              label: "Paste",
+              role: "paste",
+              accelerator: "CmdOrCtrl+V",
+              enabled: params.editFlags.canPaste,
+            })
+          );
+        }
+      }
+
+      // Add link handling
+      if (params.linkURL) {
+        menu.append(new MenuItem({ type: "separator" }));
+        menu.append(
+          new MenuItem({
+            label: "Open Link in New Tab",
+            click: () => {
+              // Notify the renderer to open a new tab with this URL
+              e.sender.send("open-url-in-new-tab", params.linkURL);
+            },
+          })
+        );
+        menu.append(
+          new MenuItem({
+            label: "Copy Link Address",
+            click: () => {
+              require("electron").clipboard.writeText(params.linkURL);
+            },
+          })
+        );
+      }
+
+      menu.popup();
     });
   }
 });

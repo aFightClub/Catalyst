@@ -82,14 +82,16 @@ contextBridge.exposeInMainWorld("electron", {
       "eraser-element-selected",
       "run-workflow-in-current-window",
       "run-workflow-in-new-tab",
-      "window-drag-start", // Channel for window dragging
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     }
   },
   receive: (channel, func) => {
-    const validChannels = ["run-workflow-in-current-window"];
+    const validChannels = [
+      "run-workflow-in-current-window",
+      "open-url-in-new-tab",
+    ];
     if (validChannels.includes(channel)) {
       // Deliberately strip event as it includes `sender`
       ipcRenderer.on(channel, (event, ...args) => func(...args));

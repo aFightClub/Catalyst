@@ -94,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside 
       className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col pt-8"
-      data-draggable="true"
+      style={{ '-webkit-app-region': 'drag' } as React.CSSProperties}
     >
       <div className="flex flex-col px-3">
         <button 
@@ -113,8 +113,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             ${showDashboard 
               ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
               : 'hover:bg-gradient-to-r hover:from-blue-500/70 hover:to-purple-600/70'
-            } flex items-center justify-center space-x-3`}
-          data-draggable="false"
+            } flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiHome className="w-5 h-5" />
           <span>Dashboard</span>
@@ -123,13 +123,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <div 
         className="text-sm font-medium text-gray-400 px-4 py-2 flex justify-between items-center"
-        data-draggable="false"
+        style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
       >
         <span>Workspaces</span>
         <button 
           onClick={() => setIsAddingWorkspace(true)}
           className="p-1 hover:bg-gray-700 rounded"
           title="Add New Workspace"
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiPlus className="w-4 h-4" />
         </button>
@@ -168,11 +169,15 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
       
-      <div className="flex-1 overflow-y-auto mb-2">
+      <div 
+        className="flex-1 overflow-y-auto mb-2"
+        style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
+      >
         {workspaces.map(workspace => (
           <div
             key={workspace.id}
             className={`mb-2 ${activeWorkspaceId === workspace.id ? 'bg-gray-700' : ''}`}
+            style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
           >
             <div 
               className="px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-700 group"
@@ -191,9 +196,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 setShowWebsites(false);
                 setShowAutomations(false);
               }}
+              style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
             >
               {editingWorkspaceId === workspace.id ? (
-                <div className="flex items-center w-full" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center w-full" onClick={(e) => e.stopPropagation()} style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}>
                   <input
                     type="text"
                     value={editName}
@@ -204,12 +210,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                       if (e.key === 'Enter') saveWorkspaceEdit();
                       if (e.key === 'Escape') cancelEdit();
                     }}
+                    style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                   />
                   <div className="flex ml-2">
                     <button 
                       onClick={saveWorkspaceEdit}
                       className="p-1 text-green-400 hover:text-green-300 rounded"
                       title="Save"
+                      style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -219,6 +227,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       onClick={cancelEdit}
                       className="p-1 text-red-400 hover:text-red-300 rounded"
                       title="Cancel"
+                      style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -241,6 +250,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       }}
                       className="text-gray-400 hover:text-blue-400"
                       title="Edit Workspace Name"
+                      style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -256,6 +266,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         }}
                         className="text-gray-400 hover:text-red-400"
                         title="Delete Workspace"
+                        style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                       >
                         <FiTrash2 className="w-4 h-4" />
                       </button>
@@ -276,9 +287,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                     className={`px-2 py-1 cursor-pointer flex items-center justify-between group ${
                       activeTabId === tab.id ? 'bg-gray-600' : 'hover:bg-gray-600'
                     }`}
+                    style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                   >
                     {editingTabId === tab.id ? (
-                      <div className="flex items-center w-full" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center w-full" onClick={(e) => e.stopPropagation()} style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}>
                         <input
                           type="text"
                           value={editName}
@@ -289,6 +301,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             if (e.key === 'Enter') saveTabEdit(workspace.id);
                             if (e.key === 'Escape') cancelEdit();
                           }}
+                          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                         />
                         <div className="flex ml-2">
                           <button 
@@ -334,6 +347,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                               startEditingTab(workspace.id, tab.id);
                             }}
                             title="Edit Tab Name"
+                            style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -346,6 +360,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                               closeTab(workspace.id, tab.id);
                             }}
                             title="Close Tab"
+                            style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -361,6 +376,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   onClick={addTab}
                   className="w-full mt-1 px-2 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-600 rounded flex items-center"
+                  style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                 >
                   <FiPlus className="mr-1 w-3 h-3" />
                   <span>New Tab</span>
@@ -371,7 +387,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
-      <div className="px-2 pb-2 space-y-2 border-t border-gray-700 pt-2">
+      <div 
+        className="px-2 pb-2 space-y-2 border-t border-gray-700 pt-2"
+        style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
+      >
         <button 
           onClick={() => {
             setShowAIChat(!showAIChat)
@@ -383,7 +402,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
           }}
-          className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiMessageSquare className="w-5 h-5" />
           <span>AI Chat</span>
@@ -400,7 +420,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
           }}
-          className={`w-full p-2 rounded-lg ${showWriter ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showWriter ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiEdit className="w-5 h-5" />
           <span>Writer</span>
@@ -417,7 +438,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
           }}
-          className={`w-full p-2 rounded-lg ${showTasks ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showTasks ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiCheckSquare className="w-5 h-5" />
           <span>Tasks</span>
@@ -434,7 +456,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
           }}
-          className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiImage className="w-5 h-5" />
           <span>Images</span>
@@ -452,7 +475,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiGlobe className="w-5 h-5" />
           <span>Websites</span>
@@ -470,7 +494,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiDollarSign className="w-5 h-5" />
           <span>Subscriptions</span>
@@ -488,7 +513,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowSubscriptions(false)
           }}
-          className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiClock className="w-5 h-5" />
           <span>Automations</span>
@@ -505,7 +531,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
           }}
-          className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center space-x-2`}
+          className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiSettings className="w-5 h-5" />
           <span>Settings</span>
@@ -515,4 +542,4 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-export default Sidebar; 
+export default Sidebar;
