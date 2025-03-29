@@ -1562,6 +1562,52 @@ export default function App() {
               await new Promise(resolve => setTimeout(resolve, waitTime));
               break;
               
+            case ActionType.JAVASCRIPT:
+              // Execute custom JavaScript with content replacement
+              try {
+                const jsCode = action.data?.code || '';
+                // Get the content to inject (from variable or default)
+                let contentValue = '';
+                
+                // Try to get content from variables first, then from defaultContent
+                if (action.data?.variableName && variables[action.data.variableName]) {
+                  contentValue = variables[action.data.variableName];
+                } else if (action.data?.defaultContent) {
+                  contentValue = action.data.defaultContent;
+                }
+                
+                // Replace {{content}} with the actual content
+                const processedCode = jsCode.replace(/{{content}}/g, JSON.stringify(contentValue));
+                
+                console.log(`Executing custom JavaScript: ${processedCode.substring(0, 100)}...`);
+                
+                // Execute the JavaScript in the webview
+                await webview.executeJavaScript(`
+                  (function() {
+                    try {
+                      // Define the content value as a variable to avoid injection issues
+                      const contentValue = ${JSON.stringify(contentValue)};
+                      
+                      // Execute the custom code with access to the content variable
+                      const code = ${JSON.stringify(jsCode)};
+                      // Replace the placeholder with actual content variable reference
+                      const processedCode = code.replace(/{{content}}/g, 'contentValue');
+                      
+                      // Execute with eval in a controlled scope
+                      const result = eval(processedCode);
+                      console.log('JavaScript execution result:', result);
+                      return true;
+                    } catch (error) {
+                      console.error('Error executing custom JavaScript:', error);
+                      return false;
+                    }
+                  })()
+                `);
+              } catch (error) {
+                console.error('Error setting up JavaScript execution:', error);
+              }
+              break;
+              
             default:
               console.log(`Unsupported action type: ${action.type}`);
           }

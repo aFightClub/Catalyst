@@ -244,6 +244,82 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                                   </div>
                                 )}
                                 
+                                {action.type === ActionType.JAVASCRIPT && (
+                                  <>
+                                    <div className="mb-2">
+                                      <label className="text-gray-300 text-xs block mb-1">JavaScript Code</label>
+                                      <textarea
+                                        className="w-full bg-gray-600 text-white text-sm rounded px-2 py-1 font-mono h-32"
+                                        value={action.data?.code || ''}
+                                        onChange={(e) => {
+                                          const updatedAction = {...action};
+                                          if (!updatedAction.data) updatedAction.data = {};
+                                          updatedAction.data.code = e.target.value;
+                                          setCurrentRecording(prev => {
+                                            const newRecording = [...prev];
+                                            newRecording[index] = updatedAction;
+                                            return newRecording;
+                                          });
+                                        }}
+                                        placeholder={"// Add your JavaScript code here\n// Use {{content}} as a placeholder for dynamic content"}
+                                      />
+                                    </div>
+                                    <div className="mb-2">
+                                      <label className="text-gray-300 text-xs block mb-1">Default Content Value (replaces {"{{content}}"})</label>
+                                      <input
+                                        type="text"
+                                        className="w-full bg-gray-600 text-white text-sm rounded px-2 py-1"
+                                        value={action.data?.defaultContent || ''}
+                                        onChange={(e) => {
+                                          const updatedAction = {...action};
+                                          if (!updatedAction.data) updatedAction.data = {};
+                                          updatedAction.data.defaultContent = e.target.value;
+                                          setCurrentRecording(prev => {
+                                            const newRecording = [...prev];
+                                            newRecording[index] = updatedAction;
+                                            return newRecording;
+                                          });
+                                        }}
+                                        placeholder="Default value"
+                                      />
+                                    </div>
+                                    <div className="mb-2">
+                                      <label className="text-gray-300 text-xs block mb-1">
+                                        Make content variable 
+                                        <span className="text-gray-400 ml-1 text-xs">(Allow user to set content when running workflow)</span>
+                                      </label>
+                                      <div className="flex items-center">
+                                        <input
+                                          type="checkbox"
+                                          className="mr-2"
+                                          checked={!!action.data?.variableName}
+                                          onChange={(e) => {
+                                            const updatedAction = {...action};
+                                            if (!updatedAction.data) updatedAction.data = {};
+                                            
+                                            if (e.target.checked) {
+                                              // Generate a variable name
+                                              updatedAction.data.variableName = `js_content_${index}`;
+                                            } else {
+                                              // Remove variable name
+                                              delete updatedAction.data.variableName;
+                                            }
+                                            
+                                            setCurrentRecording(prev => {
+                                              const newRecording = [...prev];
+                                              newRecording[index] = updatedAction;
+                                              return newRecording;
+                                            });
+                                          }}
+                                        />
+                                        <span className="text-gray-300 text-sm">
+                                          {action.data?.variableName || "Not a variable (fixed content)"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                                
                                 <div className="flex justify-end mt-3">
                                   <button
                                     onClick={() => setEditingActionIndex(null)}
@@ -298,6 +374,39 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({
                                 {action.type === ActionType.WAIT && (
                                   <div className="text-gray-300 text-sm">
                                     Wait: {action.value || 1000}ms
+                                  </div>
+                                )}
+                                {action.type === ActionType.JAVASCRIPT && (
+                                  <div className="text-gray-300 text-sm">
+                                    <div>JavaScript: {action.data?.code?.substring(0, 50)}...</div>
+                                    {action.data?.variableName ? (
+                                      <div className="mt-1">
+                                        Variable: {action.data.variableName}
+                                        <input
+                                          type="text"
+                                          className="ml-2 bg-gray-700 px-2 py-1 rounded text-white w-1/2"
+                                          defaultValue={
+                                            (workflowVariables && action.data.variableName in workflowVariables) 
+                                              ? workflowVariables[action.data.variableName] 
+                                              : action.data.defaultContent || ''
+                                          }
+                                          placeholder="Content value"
+                                          onChange={(e) => {
+                                            const varName = action.data.variableName;
+                                            if (varName) {
+                                              setWorkflowVariables((prev) => ({
+                                                ...prev,
+                                                [varName]: e.target.value
+                                              }));
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    ) : action.data?.defaultContent ? (
+                                      <div className="mt-1">
+                                        Default content: {action.data.defaultContent}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 )}
                               </>
