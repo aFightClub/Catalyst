@@ -6,8 +6,7 @@ import {
 } from 'react-icons/fi';
 import { Workspace, Tab } from '../../types';
 
-// Get package version
-const appVersion = require('../../../package.json').version;
+const appVersion = import.meta.env.VITE_APP_VERSION || '1.0.0';
 
 interface SidebarProps {
   workspaces: Workspace[];
