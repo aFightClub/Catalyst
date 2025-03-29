@@ -1287,6 +1287,34 @@ export default function App() {
     };
   }, [activeTabId, tabs]);
 
+  // Apply plugins when switching workspaces
+  useEffect(() => {
+    const applyPluginsToWorkspace = async () => {
+      console.log(`Switching to workspace: ${activeWorkspaceId}, applying plugins to all tabs`);
+      
+      // Get all tabs in the current workspace
+      const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
+      if (!currentWorkspace) return;
+      
+      // Apply plugins to each ready tab in the workspace
+      for (const tab of currentWorkspace.tabs) {
+        const webview = webviewRefs.current[tab.id];
+        if (webview && tab.isReady && !webview.isLoading()) {
+          try {
+            console.log(`Applying plugins to tab ${tab.id} after workspace switch`);
+            await applyPluginsToWebview(webview);
+          } catch (error) {
+            console.error(`Error applying plugins to tab ${tab.id}:`, error);
+          }
+        }
+      }
+    };
+    
+    // Call the function when activeWorkspaceId changes
+    applyPluginsToWorkspace();
+    
+  }, [activeWorkspaceId, workspaces]);
+
   return (
     <div className="h-screen flex">
       {/* Sidebar Component */}

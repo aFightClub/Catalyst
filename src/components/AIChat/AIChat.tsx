@@ -89,30 +89,7 @@ const AIChat: React.FC = () => {
   // Add custom scrollbar styles
   const scrollbarStyles = `
     /* Custom scrollbar for dark mode */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
     
-    ::-webkit-scrollbar-track {
-      background: #1f1f1f;
-      border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-      background: #4b5563;
-      border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-      background: #6b7280;
-    }
-    
-    /* Firefox scrollbar */
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: #4b5563 #1f1f1f;
-    }
   `;
 
   // Available models
