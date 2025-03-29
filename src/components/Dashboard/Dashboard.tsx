@@ -418,8 +418,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Overview Section */}
-      <div className="px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="px-4 pt-6 ">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
           {/* Subscription Stats */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-2">

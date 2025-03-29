@@ -393,7 +393,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       >
         <button 
           onClick={() => {
-            setShowAIChat(!showAIChat)
+            setShowAIChat(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowWriter(false)
@@ -401,6 +401,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
+            setShowAutomations(false)
           }}
           className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -411,7 +412,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowWriter(!showWriter)
+            setShowWriter(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
@@ -419,6 +420,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
+            setShowAutomations(false)
           }}
           className={`w-full p-2 rounded-lg ${showWriter ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -429,7 +431,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowTasks(!showTasks)
+            setShowTasks(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
@@ -437,6 +439,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
+            setShowAutomations(false)
           }}
           className={`w-full p-2 rounded-lg ${showTasks ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -447,7 +450,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowImages(!showImages)
+            setShowImages(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
@@ -455,6 +458,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowTasks(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
+            setShowAutomations(false)
           }}
           className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -465,7 +469,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowWebsites(!showWebsites)
+            setShowWebsites(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
@@ -484,7 +488,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowSubscriptions(!showSubscriptions)
+            setShowSubscriptions(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
@@ -503,7 +507,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowAutomations(!showAutomations)
+            setShowAutomations(true)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
@@ -522,7 +526,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         <button 
           onClick={() => {
-            setShowSettings(!showSettings)
+            setShowSettings(true)
             setShowDashboard(false)
             setShowAIChat(false)
             setShowWriter(false)
@@ -530,6 +534,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
+            setShowAutomations(false)
           }}
           className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}

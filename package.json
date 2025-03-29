@@ -1,7 +1,7 @@
 {
-  "name": "custom-web-browser",
+  "name": "catalyst-browser",
   "version": "1.0.0",
-  "description": "A modern web browser built with Electron and React",
+  "description": "The secondary web browser of digital creatives.",
   "main": "electron/main.js",
   "scripts": {
     "start": "vite",
@@ -10,8 +10,8 @@
     "electron:build": "vite build && electron-builder"
   },
   "build": {
-    "appId": "com.customwebbrowser.app",
-    "productName": "Custom Web Browser",
+    "appId": "com.catalystbrowser.app",
+    "productName": "Catalyst",
     "files": [
       "dist/**/*",
       "electron/**/*"

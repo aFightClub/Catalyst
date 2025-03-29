@@ -785,12 +785,6 @@ const Writer: React.FC = () => {
                 <div className="p-4 text-center text-gray-400">
                   <FiFolder className="w-8 h-8 mx-auto mb-2" />
                   <p>No documents in this project</p>
-                  <button
-                    onClick={() => setIsCreatingDoc(true)}
-                    className="mt-2 px-3 py-1 text-sm rounded bg-blue-600 hover:bg-blue-700"
-                  >
-                    Create document
-                  </button>
                 </div>
               ) : (
                 filteredDocuments.map(doc => (

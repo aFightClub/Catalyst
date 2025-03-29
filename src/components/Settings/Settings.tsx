@@ -103,7 +103,12 @@ const Settings: React.FC = () => {
     importSubscriptions: true,
     importErasedElements: true,
     importAssistants: true,
-    importWebsites: true
+    importWebsites: true,
+    importChats: true,
+    importDocuments: true,
+    importProjects: true,
+    importAutomations: true,
+    importWorkflowVariables: true
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1185,6 +1190,16 @@ const Settings: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
+                      checked={importOptions.importErasedElements}
+                      onChange={() => toggleOption('importErasedElements')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Erased Elements</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
                       checked={importOptions.importAssistants}
                       onChange={() => toggleOption('importAssistants')}
                       className="mr-2"
@@ -1205,11 +1220,51 @@ const Settings: React.FC = () => {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={importOptions.importErasedElements}
-                      onChange={() => toggleOption('importErasedElements')}
+                      checked={importOptions.importChats}
+                      onChange={() => toggleOption('importChats')}
                       className="mr-2"
                     />
-                    <span className="text-sm">Erased Elements</span>
+                    <span className="text-sm">Chats</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importDocuments}
+                      onChange={() => toggleOption('importDocuments')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Documents</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importProjects}
+                      onChange={() => toggleOption('importProjects')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Projects</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importAutomations}
+                      onChange={() => toggleOption('importAutomations')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Automations</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={importOptions.importWorkflowVariables}
+                      onChange={() => toggleOption('importWorkflowVariables')}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">Workflow Variables</span>
                   </label>
                 </div>
               </div>

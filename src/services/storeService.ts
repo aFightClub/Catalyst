@@ -423,6 +423,7 @@ export const storeService = {
       userContext: await s.get("userContext"),
       assistants: await s.get("assistants"),
       chats: await s.get("chats"),
+      automations: await s.get("automations"),
       exportDate: new Date().toISOString(),
       appVersion: "1.0.0", // Add version for future compatibility checks
     };
@@ -444,6 +445,10 @@ export const storeService = {
       importAssistants?: boolean;
       importChats?: boolean;
       importWebsites?: boolean;
+      importDocuments?: boolean;
+      importProjects?: boolean;
+      importAutomations?: boolean;
+      importWorkflowVariables?: boolean;
     } = {}
   ): Promise<{ success: boolean; message: string }> => {
     try {
@@ -583,6 +588,112 @@ export const storeService = {
           }
 
           await s.set("assistants", newAssistants);
+        }
+      }
+
+      if (options.importChats !== false && data.chats) {
+        if (options.overwrite) {
+          await s.set("chats", data.chats);
+        } else {
+          const currentChats = (await s.get("chats")) as any[];
+          const existingIds = new Set(currentChats.map((chat) => chat.id));
+          const newChats = [...currentChats];
+
+          for (const chat of data.chats) {
+            if (!existingIds.has(chat.id)) {
+              newChats.push(chat);
+              existingIds.add(chat.id);
+            }
+          }
+
+          await s.set("chats", newChats);
+        }
+      }
+
+      if (options.importDocuments !== false && data.documents) {
+        if (options.overwrite) {
+          await s.set("documents", data.documents);
+        } else {
+          const currentDocs = (await s.get("documents")) as any[];
+          const existingIds = new Set(currentDocs.map((doc) => doc.id));
+          const newDocs = [...currentDocs];
+
+          for (const doc of data.documents) {
+            if (!existingIds.has(doc.id)) {
+              newDocs.push(doc);
+              existingIds.add(doc.id);
+            }
+          }
+
+          await s.set("documents", newDocs);
+        }
+      }
+
+      if (options.importProjects !== false && data.projects) {
+        if (options.overwrite) {
+          await s.set("projects", data.projects);
+        } else {
+          const currentProjects = (await s.get("projects")) as any[];
+          const existingIds = new Set(currentProjects.map((proj) => proj.id));
+          const newProjects = [...currentProjects];
+
+          for (const project of data.projects) {
+            if (!existingIds.has(project.id)) {
+              newProjects.push(project);
+              existingIds.add(project.id);
+            }
+          }
+
+          await s.set("projects", newProjects);
+        }
+      }
+
+      if (options.importAutomations !== false && data.automations) {
+        if (options.overwrite) {
+          await s.set("automations", data.automations);
+        } else {
+          const currentAutomations = (await s.get("automations")) as any[];
+          const existingIds = new Set(
+            currentAutomations.map((auto) => auto.id)
+          );
+          const newAutomations = [...currentAutomations];
+
+          for (const automation of data.automations) {
+            if (!existingIds.has(automation.id)) {
+              newAutomations.push(automation);
+              existingIds.add(automation.id);
+            }
+          }
+
+          await s.set("automations", newAutomations);
+        }
+      }
+
+      if (options.importWorkflowVariables !== false && data.workflowVariables) {
+        if (options.overwrite) {
+          await s.set("workflowVariables", data.workflowVariables);
+        } else {
+          const currentVars = (await s.get("workflowVariables")) as Record<
+            string,
+            Record<string, string>
+          >;
+          const mergedVars = { ...currentVars };
+
+          // Merge workflow variables
+          for (const [workflowId, variables] of Object.entries(
+            data.workflowVariables
+          )) {
+            if (!mergedVars[workflowId]) {
+              mergedVars[workflowId] = variables as Record<string, string>;
+            } else {
+              mergedVars[workflowId] = {
+                ...mergedVars[workflowId],
+                ...(variables as Record<string, string>),
+              };
+            }
+          }
+
+          await s.set("workflowVariables", mergedVars);
         }
       }
 

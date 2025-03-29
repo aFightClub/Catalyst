@@ -834,13 +834,7 @@ const Automations: React.FC = () => {
               <FiClock className="w-12 h-12 mx-auto mb-4 text-gray-500" />
               <h3 className="text-xl font-semibold mb-2">No Automations Yet</h3>
               <p className="text-gray-400 mb-4">Schedule workflows to run automatically at specific times.</p>
-              <button
-                onClick={() => setIsCreating(true)}
-                className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
-              >
-                <FiPlus className="inline mr-2" />
-                Create Your First Automation
-              </button>
+              
             </div>
           )}
           
