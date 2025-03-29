@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiLoader } from 'react-icons/fi'
+import { FiLoader, FiCode } from 'react-icons/fi'
 import { applyPluginsToWebview } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import { storeService } from './services/storeService'
@@ -23,6 +23,7 @@ import {
   ToastContainer,
   Media
 } from './components'
+import ConsoleViewer from './components/ConsoleViewer'
 
 // Temporary type extension to handle isCustomNamed until types.ts changes are applied
 type ExtendedTab = Tab & { isCustomNamed?: boolean };
@@ -270,6 +271,9 @@ export default function App() {
     
     // Set loading state when webview is attached
     setLoadingTabs(prev => new Set([...prev, tabId]));
+    
+    // Add console log capture
+    captureWebviewConsoleLogs(webview, tabId);
     
     // Use a setTimeout to break the React render cycle
     setTimeout(() => {
@@ -1863,7 +1867,7 @@ export default function App() {
           ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabId)}
           src={url}
           style={{ width: '100%', height: '100%' }}
-          webpreferences="contextIsolation=false,nodeIntegration=true"
+          webpreferences="contextIsolation=false,nodeIntegration=true,allowRunningInsecureContent=true,experimentalFeatures=true"
           allowpopups="true"
           key={`webview-${tabId}`}
         />
@@ -2085,6 +2089,29 @@ export default function App() {
     };
   }, []);
 
+  const openWebviewDevTools = () => {
+    const webview = webviewRefs.current[activeTabId];
+    if (webview) {
+      webview.openDevTools();
+    }
+  };
+
+  // Add this function to your component
+  const captureWebviewConsoleLogs = (webview: Electron.WebviewTag, tabId: string) => {
+    webview.addEventListener('console-message', (event) => {
+      // Skip the known syntax errors about 'as' identifier
+      if (event.message.includes("Unexpected identifier 'as'")) {
+        return;
+      }
+      
+      console.log(`[Tab ${tabId}] Console: ${event.message} (Line: ${event.line}, Source: ${event.sourceId})`);
+      
+      if (event.level === 2) { // Error level
+        console.error(`[Tab ${tabId}] Error: ${event.message}`);
+      }
+    });
+  };
+
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       {/* Sidebar */}
@@ -2176,6 +2203,7 @@ export default function App() {
               setWorkflowModalMode={setWorkflowModalMode}
               setShowLayoutDropdown={setShowLayoutDropdown}
               showLayoutDropdown={showLayoutDropdown}
+              openWebviewDevTools={openWebviewDevTools}
             />
 
             {showPluginPanel && (
@@ -2276,6 +2304,13 @@ export default function App() {
         toasts={toasts}
         removeToast={removeToast}
       />
+      
+      {/* Add the console viewer component */}
+      {!showSettings && !showAIChat && !showWriter && !showTasks && 
+       !showImages && !showDashboard && !showSubscriptions && 
+       !showWebsites && !showAutomations && (
+        <ConsoleViewer activeTabId={activeTabId} webviewRefs={webviewRefs} />
+      )}
     </div>
   );
 } 
