@@ -130,6 +130,11 @@ const Settings: React.FC = () => {
   const [editingWebsiteCategory, setEditingWebsiteCategory] = useState<{index: number, value: string} | null>(null);
   const [editingSubscriptionCategory, setEditingSubscriptionCategory] = useState<{index: number, value: string} | null>(null);
 
+  // Add these new state variables right after the other state declarations
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
   useEffect(() => {
     setPlugins(pluginManager.getPlugins());
     
@@ -734,6 +739,66 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Add this new function before the renderAssistantsPage function
+  const generateProfileImage = async (prompt: string, isNew: boolean) => {
+    if (!apiKeys.openai) {
+      setImageError('OpenAI API key is required for image generation');
+      return;
+    }
+
+    if (!prompt.trim()) {
+      setImageError('Please enter an image prompt');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    setImageError(null);
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKeys.openai}`
+        },
+        body: JSON.stringify({
+          model: 'dall-e-3',
+          prompt: prompt,
+          n: 1,
+          size: '1024x1024',
+          response_format: 'b64_json'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to generate image');
+      }
+
+      const data = await response.json();
+      const imageBase64 = `data:image/png;base64,${data.data[0].b64_json}`;
+      
+      if (isNew) {
+        setNewAssistant(prev => ({
+          ...prev,
+          profileImage: imageBase64
+        }));
+      } else if (editingAssistantId) {
+        const updatedAssistants = assistants.map(a => 
+          a.id === editingAssistantId 
+            ? { ...a, profileImage: imageBase64 } 
+            : a
+        );
+        setAssistants(updatedAssistants);
+      }
+    } catch (error) {
+      console.error('Error generating image:', error);
+      setImageError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   const renderNavigation = () => (
     <div className="flex flex-col h-full border-r border-gray-700 bg-gray-800 w-64 overflow-y-auto">
       <div className="p-4 border-b border-gray-700">
@@ -749,6 +814,14 @@ const Settings: React.FC = () => {
           <FiUser className="mr-3" />
           <span>User Context</span>
         </button>
+
+        <button 
+          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.API_KEYS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+          onClick={() => setCurrentPage(SettingsPage.API_KEYS)}
+        >
+          <FiKey className="mr-3" />
+          <span>OpenAI Key</span>
+        </button>
         
         <button 
           className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.ASSISTANTS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
@@ -758,13 +831,7 @@ const Settings: React.FC = () => {
           <span>Assistants</span>
         </button>
         
-        <button 
-          className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.API_KEYS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
-          onClick={() => setCurrentPage(SettingsPage.API_KEYS)}
-        >
-          <FiKey className="mr-3" />
-          <span>API Keys</span>
-        </button>
+        
         
         <button 
           className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.PLUGINS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
@@ -895,13 +962,13 @@ const Settings: React.FC = () => {
   );
 
   const renderAssistantsPage = () => (
-    <div className="p-6 bg-gray-900">
+    <div className="p-6 bg-gray-900 overflow-y-auto">
       <h3 className="text-xl font-bold mb-6 text-white">AI Assistants</h3>
       <p className="text-gray-400 mb-6">
         Create custom AI assistants with different personalities and expertise by configuring their system prompts.
       </p>
       
-      {!isAddingAssistant && (
+      {!isAddingAssistant && !editingAssistantId && (
         <button
           onClick={() => setIsAddingAssistant(true)}
           className="mb-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
@@ -911,7 +978,7 @@ const Settings: React.FC = () => {
       )}
       
       {isAddingAssistant && (
-        <div className="bg-gray-800 p-4 rounded-lg mb-6">
+        <div className="bg-gray-800 p-6 rounded-lg mb-6">
           <h4 className="text-lg font-semibold mb-4 text-white">Create New Assistant</h4>
           
           <div className="mb-4">
@@ -927,13 +994,13 @@ const Settings: React.FC = () => {
           
           <div className="mb-4">
             <label className="block text-gray-300 mb-2">Profile Image</label>
-            <div className="flex items-center">
+            <div className="flex items-center mb-4">
               {newAssistant.profileImage ? (
                 <div className="relative mr-4">
                   <img 
                     src={newAssistant.profileImage} 
                     alt="Profile" 
-                    className="w-16 h-16 rounded-full object-cover"
+                    className="w-24 h-24 rounded-full object-cover"
                   />
                   <button
                     onClick={() => setNewAssistant({...newAssistant, profileImage: ''})}
@@ -944,10 +1011,10 @@ const Settings: React.FC = () => {
                 </div>
               ) : (
                 <div 
-                  className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 mr-4 cursor-pointer"
+                  className="w-24 h-24 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 mr-4 cursor-pointer"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <FiImage size={24} />
+                  <FiImage size={32} />
                 </div>
               )}
               
@@ -959,14 +1026,39 @@ const Settings: React.FC = () => {
                 onChange={(e) => handleImageUpload(e, true)}
               />
               
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
-              >
-                {newAssistant.profileImage ? 'Change Image' : 'Upload Image'}
-              </button>
+              <div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 mr-2"
+                >
+                  {newAssistant.profileImage ? 'Change Image' : 'Upload Image'}
+                </button>
+                <p className="text-gray-500 text-sm mt-1">Upload an image or generate one with AI</p>
+              </div>
             </div>
-            <p className="text-gray-500 text-sm mt-1">Optional: Upload a profile image for your assistant</p>
+
+            <div className="mb-4 bg-gray-700 p-4 rounded">
+              <label className="block text-gray-300 mb-2">Generate AI Image</label>
+              <textarea
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                className="w-full bg-gray-600 text-white border border-gray-600 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                placeholder="Avatar photo of a man in a suite in pixar style..."
+                rows={2}
+              ></textarea>
+              <div className="flex items-center">
+                <button
+                  onClick={() => generateProfileImage(imagePrompt, true)}
+                  disabled={isGeneratingImage || !imagePrompt.trim()}
+                  className={`px-4 py-2 rounded flex items-center ${
+                    isGeneratingImage || !imagePrompt.trim() ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {isGeneratingImage ? 'Generating...' : 'Generate Image'}
+                </button>
+                {imageError && <p className="ml-3 text-red-400 text-sm">{imageError}</p>}
+              </div>
+            </div>
           </div>
           
           <div className="mb-4">
@@ -982,7 +1074,11 @@ const Settings: React.FC = () => {
           
           <div className="flex justify-end space-x-2">
             <button
-              onClick={() => setIsAddingAssistant(false)}
+              onClick={() => {
+                setIsAddingAssistant(false);
+                setImagePrompt('');
+                setImageError(null);
+              }}
               className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
             >
               Cancel
@@ -998,11 +1094,15 @@ const Settings: React.FC = () => {
         </div>
       )}
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {assistants.map(assistant => (
-          <div key={assistant.id} className="bg-gray-800 rounded-lg overflow-hidden">
-            {editingAssistantId === assistant.id ? (
-              <div className="p-4">
+      {editingAssistantId && (
+        <div className="bg-gray-800 p-6 rounded-lg mb-6">
+          <h4 className="text-lg font-semibold mb-4 text-white">Edit Assistant</h4>
+          {(() => {
+            const assistant = assistants.find(a => a.id === editingAssistantId);
+            if (!assistant) return null;
+            
+            return (
+              <>
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">Assistant Name</label>
                   <input 
@@ -1020,13 +1120,13 @@ const Settings: React.FC = () => {
                 
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">Profile Image</label>
-                  <div className="flex items-center">
+                  <div className="flex items-center mb-4">
                     {assistant.profileImage ? (
                       <div className="relative mr-4">
                         <img 
                           src={assistant.profileImage} 
                           alt="Profile" 
-                          className="w-16 h-16 rounded-full object-cover"
+                          className="w-24 h-24 rounded-full object-cover"
                         />
                         <button
                           onClick={() => {
@@ -1042,10 +1142,10 @@ const Settings: React.FC = () => {
                       </div>
                     ) : (
                       <div 
-                        className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 mr-4 cursor-pointer"
+                        className="w-24 h-24 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 mr-4 cursor-pointer"
                         onClick={() => fileInputRef.current?.click()}
                       >
-                        <FiImage size={24} />
+                        <FiImage size={32} />
                       </div>
                     )}
                     
@@ -1057,12 +1157,38 @@ const Settings: React.FC = () => {
                       onChange={(e) => handleImageUpload(e, false)}
                     />
                     
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600"
-                    >
-                      {assistant.profileImage ? 'Change Image' : 'Upload Image'}
-                    </button>
+                    <div>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 mr-2"
+                      >
+                        {assistant.profileImage ? 'Change Image' : 'Upload Image'}
+                      </button>
+                      <p className="text-gray-500 text-sm mt-1">Upload an image or generate one with AI</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-4 bg-gray-700 p-4 rounded">
+                    <label className="block text-gray-300 mb-2">Generate AI Image</label>
+                    <textarea
+                      value={imagePrompt}
+                      onChange={(e) => setImagePrompt(e.target.value)}
+                      className="w-full bg-gray-600 text-white border border-gray-600 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                      placeholder="Avatar photo of a man in a suite in pixar style..."
+                      rows={2}
+                    ></textarea>
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => generateProfileImage(imagePrompt, false)}
+                        disabled={isGeneratingImage || !imagePrompt.trim()}
+                        className={`px-4 py-2 rounded flex items-center ${
+                          isGeneratingImage || !imagePrompt.trim() ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        {isGeneratingImage ? 'Generating...' : 'Generate Image'}
+                      </button>
+                      {imageError && <p className="ml-3 text-red-400 text-sm">{imageError}</p>}
+                    </div>
                   </div>
                 </div>
                 
@@ -1078,11 +1204,16 @@ const Settings: React.FC = () => {
                     }}
                     className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
                   ></textarea>
+                  <p className="text-gray-500 text-sm mt-1">Set the personality, expertise, and behavior of your assistant</p>
                 </div>
                 
                 <div className="flex justify-end space-x-2">
                   <button
-                    onClick={() => setEditingAssistantId(null)}
+                    onClick={() => {
+                      setEditingAssistantId(null);
+                      setImagePrompt('');
+                      setImageError(null);
+                    }}
                     className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
                   >
                     Cancel
@@ -1094,65 +1225,62 @@ const Settings: React.FC = () => {
                     Save Changes
                   </button>
                 </div>
-              </div>
-            ) : (
-              <>
-                <div className="p-4 flex items-center">
-                  <div className="mr-4 flex-shrink-0">
-                    {assistant.profileImage ? (
-                      <img 
-                        src={assistant.profileImage} 
-                        alt={assistant.name} 
-                        className="w-14 h-14 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                        {assistant.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-lg font-semibold text-white">{assistant.name}</h4>
-                    <div className="text-gray-400 text-sm">
-                      Created {new Date(assistant.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="px-4 pb-3">
-                  <div className="mb-4">
-                    <h5 className="text-sm font-medium text-gray-400 mb-1">System Prompt</h5>
-                    <div className="bg-gray-700 rounded p-3 text-sm text-gray-200 max-h-24 overflow-y-auto">
-                      {assistant.systemPrompt}
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => setEditingAssistantId(assistant.id)}
-                      className="p-2 text-gray-400 hover:text-white rounded hover:bg-gray-700"
-                    >
-                      <FiEdit size={18} />
-                    </button>
-                    <button
-                      onClick={() => deleteAssistant(assistant.id)}
-                      className="p-2 text-gray-400 hover:text-red-500 rounded hover:bg-gray-700"
-                    >
-                      <FiTrash2 size={18} />
-                    </button>
-                  </div>
-                </div>
               </>
-            )}
-          </div>
-        ))}
-      </div>
+            );
+          })()}
+        </div>
+      )}
+      
+      {!isAddingAssistant && !editingAssistantId && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {assistants.map(assistant => (
+            <div key={assistant.id} className="bg-gray-800 rounded-lg overflow-hidden">
+              <div className="p-4 flex items-center">
+                <div className="mr-4 flex-shrink-0">
+                  {assistant.profileImage ? (
+                    <img 
+                      src={assistant.profileImage} 
+                      alt={assistant.name} 
+                      className="w-14 h-14 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                      {assistant.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-semibold text-white">{assistant.name}</h4>
+                  <div className="text-gray-400 text-sm">
+                    Created {new Date(assistant.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="px-4 pb-3 flex justify-end">
+                <button
+                  onClick={() => setEditingAssistantId(assistant.id)}
+                  className="p-2 text-gray-400 hover:text-white rounded hover:bg-gray-700 mr-1"
+                >
+                  <FiEdit size={18} />
+                </button>
+                <button
+                  onClick={() => deleteAssistant(assistant.id)}
+                  className="p-2 text-gray-400 hover:text-red-500 rounded hover:bg-gray-700"
+                >
+                  <FiTrash2 size={18} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
   const renderApiKeysPage = () => (
     <div className="p-6 bg-gray-900">
-      <h3 className="text-xl font-bold mb-6 text-white">API Keys Configuration</h3>
+      <h3 className="text-xl font-bold mb-6 text-white">AI Configuration</h3>
       <div className="mb-6">
         <label className="block text-gray-300 mb-2">OpenAI API Key</label>
         <input 
@@ -1165,8 +1293,8 @@ const Settings: React.FC = () => {
         <p className="text-gray-400 mt-2 text-sm">Your API key is stored locally and never sent to our servers.</p>
       </div>
       <div className="border-t border-gray-700 pt-6">
-        <h4 className="text-white font-medium mb-2">API Usage</h4>
-        <p className="text-gray-400">Configure your API keys to enable AI-powered features in the browser.</p>
+        <h4 className="text-white font-medium mb-2">What about other AI models?</h4>
+        <p className="text-gray-400">In the future we plan to support other models, but right now OpenAI is the only model we support.</p>
       </div>
     </div>
   );
@@ -1599,7 +1727,7 @@ const Settings: React.FC = () => {
                     className="mr-2"
                   />
                   <label htmlFor="importApiKeys" className="cursor-pointer">
-                    API Keys
+                    OpenAI
                   </label>
                 </div>
                 

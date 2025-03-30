@@ -146,20 +146,13 @@ const AIChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Add custom scrollbar styles
-  const scrollbarStyles = `
-    /* Custom scrollbar for dark mode */
-    
-  `;
-
   // Available models
   const availableModels = [
     { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable multimodal model' },
     { id: 'o1-2024-12-17', name: 'o1', description: 'Advanced reasoning capability' },
     { id: 'o3-mini-2025-01-31', name: 'o3-mini', description: 'Efficient smaller model with good capabilities' },
     { id: 'gpt-4.5-preview-2025-02-27', name: 'GPT-4.5', description: 'Premium model with advanced capabilities ($$$$)' },
-    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Most powerful text model' },
-    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast and efficient' }
+    { id: 'gpt-4o-mini-2024-07-18', name: 'o4 Mini', description: 'Cheap, fast model' },
   ];
 
   // Function definitions for function calling
@@ -2055,9 +2048,10 @@ const AIChat: React.FC = () => {
     }
   `;
 
+
+
   return (
     <div className="flex flex-col h-full bg-gray-900">
-      <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
       <style>{loadingIndicatorStyles}</style>
       <style>{markdownStyles}</style>
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
