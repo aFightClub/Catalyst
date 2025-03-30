@@ -65,6 +65,7 @@ const AIChat: React.FC = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [showChatList, setShowChatList] = useState(true);
   const [showAssistantSelect, setShowAssistantSelect] = useState(false);
+  const [showLandingScreen, setShowLandingScreen] = useState(true);
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
   const [newChatTitle, setNewChatTitle] = useState('');
   
@@ -249,9 +250,8 @@ const AIChat: React.FC = () => {
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
           )[0];
           
-          setActiveChatId(mostRecentChat.id);
-          setMessages(mostRecentChat.messages);
-          setShowChatList(false);
+          // Just load chats but show landing screen
+          setShowLandingScreen(true);
         }
       } catch (error) {
         console.error('Failed to load data:', error);
@@ -311,7 +311,7 @@ const AIChat: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Process message content to add formatting
+  // Format message content to add formatting
   const formatMessageContent = (content: string) => {
     if (!content) return '';
     
@@ -388,6 +388,20 @@ const AIChat: React.FC = () => {
     return formattedContent;
   };
 
+  // Render typing indicator
+  const renderTypingIndicator = () => {
+    return (
+      <div className="flex items-center text-blue-400">
+        <span className="mr-2">AI is thinking</span>
+        <div className="flex items-center">
+          <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5"></div>
+          <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+      </div>
+    );
+  };
+
   // Clear chat history
   const clearChatHistory = () => {
     if (!activeChatId) return;
@@ -454,6 +468,20 @@ const AIChat: React.FC = () => {
     setNewChatTitle('');
   };
 
+  // Navigate to new chat screen
+  const navigateToNewChat = () => {
+    setShowLandingScreen(false);
+    setShowAssistantSelect(true);
+    setShowChatList(false);
+  };
+
+  // Navigate to past chats
+  const navigateToPastChats = () => {
+    setShowLandingScreen(false);
+    setShowChatList(true);
+    setShowAssistantSelect(false);
+  };
+
   // Create a new chat with selected assistant
   const createNewChat = (assistantId: string) => {
     const assistant = assistants.find(a => a.id === assistantId);
@@ -474,6 +502,7 @@ const AIChat: React.FC = () => {
     setMessages([]);
     setShowAssistantSelect(false);
     setShowChatList(false);
+    setShowLandingScreen(false);
   };
   
   // Get assistant for current chat
@@ -996,7 +1025,7 @@ const AIChat: React.FC = () => {
     setInput('');
     
     // Add empty message to show the typing indicator
-    const typingMessage: Message = { role: 'assistant' as const, content: '' };
+    const typingMessage: Message = { role: 'assistant', content: '' };
     setMessages([...updatedMessages, typingMessage]);
     
     try {
@@ -1025,7 +1054,7 @@ const AIChat: React.FC = () => {
         });
       }
       
-      // Configure request
+      // Configure request with streaming enabled
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1040,7 +1069,8 @@ const AIChat: React.FC = () => {
             description: fn.description,
             parameters: fn.parameters
           })),
-          function_call: 'auto'
+          function_call: 'auto',
+          stream: true // Enable streaming
         })
       });
       
@@ -1049,56 +1079,129 @@ const AIChat: React.FC = () => {
         throw new Error(errorData.error?.message || 'Failed to fetch response');
       }
       
-      const data = await response.json();
-      const assistantResponse = data.choices[0]?.message;
+      // Process the stream
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Cannot read response stream');
       
-      // Handle function calls
-      if (assistantResponse.function_call) {
-        const functionName = assistantResponse.function_call.name;
-        const functionArgs = JSON.parse(assistantResponse.function_call.arguments);
+      // Initialize our response content
+      let responseContent = '';
+      let functionCallData = '';
+      let isFunctionCall = false;
+      let functionName = '';
+      
+      // Set up a temporary message that will be updated as the stream progresses
+      const streamingMessage: Message = { 
+        role: 'assistant',
+        content: '' 
+      };
+      
+      // Add the temporary message to the chat
+      setMessages([...updatedMessages, streamingMessage]);
+      
+      // Process the stream chunk by chunk
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        const functionCall: FunctionCall = {
-          name: functionName,
-          arguments: functionArgs
+        // Convert the chunk to text
+        const chunk = new TextDecoder().decode(value);
+        
+        // Split the chunk by lines and process each line
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        
+        for (const line of lines) {
+          // Check if it's the end of the stream
+          if (line === 'data: [DONE]') continue;
+          
+          // Remove the "data: " prefix and parse JSON
+          const jsonData = line.replace(/^data: /, '');
+          try {
+            const data = JSON.parse(jsonData);
+            const delta = data.choices[0]?.delta;
+            
+            // Check for function call
+            if (delta.function_call) {
+              isFunctionCall = true;
+              if (delta.function_call.name) {
+                functionName = delta.function_call.name;
+              }
+              if (delta.function_call.arguments) {
+                functionCallData += delta.function_call.arguments;
+              }
+              
+              // Show that we're preparing to call a function
+              streamingMessage.content = `Preparing to call function: ${functionName}...`;
+              streamingMessage.type = 'function_call';
+              setMessages([...updatedMessages, streamingMessage]);
+            } 
+            // Process content delta
+            else if (delta.content) {
+              // Add new content
+              responseContent += delta.content;
+              
+              // Update the streaming message with new content
+              streamingMessage.content = responseContent;
+              
+              // Update messages to show the partial content
+              setMessages([...updatedMessages, { ...streamingMessage }]);
+            }
+          } catch (error) {
+            console.warn('Error parsing streaming JSON:', error);
+          }
+        }
+      }
+      
+      // Once the stream is complete, handle function calls if needed
+      if (isFunctionCall) {
+        try {
+          // Parse the complete function call arguments
+          const functionArgs = JSON.parse(functionCallData);
+          
+          const functionCall: FunctionCall = {
+            name: functionName,
+            arguments: functionArgs
+          };
+          
+          // Execute the function
+          const functionResult = await executeFunction(functionCall);
+          
+          // Create function call and result messages
+          const functionCallMessage: Message = {
+            role: 'assistant',
+            content: `Calling function: ${functionName}...`,
+            type: 'function_call'
+          };
+          
+          const functionResultMessage: Message = {
+            role: 'assistant',
+            content: functionResult,
+            type: 'function_result'
+          };
+          
+          // Update messages with function call and result
+          const newMessages = [...updatedMessages, functionCallMessage, functionResultMessage];
+          setMessages(newMessages);
+          
+          // Update the chat in the chats array
+          const updatedChatsWithFunction = chats.map(chat => 
+            chat.id === activeChatId 
+              ? { ...chat, messages: newMessages, updatedAt: new Date().toISOString() } 
+              : chat
+          );
+          
+          setChats(updatedChatsWithFunction);
+        } catch (error) {
+          console.error('Error executing function:', error);
+        }
+      } else {
+        // Finalize the regular text response
+        const finalMessage: Message = {
+          role: 'assistant',
+          content: responseContent
         };
         
-        // Execute the function
-        const functionResult = await executeFunction(functionCall);
-        
-        // Replace the typing indicator with function call message and result
-        const functionCallMessage: Message = {
-          role: 'assistant' as const,
-          content: `Calling function: ${functionName}...`,
-          type: 'function_call'
-        };
-        
-        const functionResultMessage: Message = {
-          role: 'assistant' as const,
-          content: functionResult,
-          type: 'function_result'
-        };
-        
-        // Remove typing indicator and add function messages
-        const newMessages = [...updatedMessages, functionCallMessage, functionResultMessage];
-        setMessages(newMessages);
-        
-        // Update the chat in the chats array
-        const updatedChatsWithFunction = chats.map(chat => 
-          chat.id === activeChatId 
-            ? { ...chat, messages: newMessages, updatedAt: new Date().toISOString() } 
-            : chat
-        );
-        
-        setChats(updatedChatsWithFunction);
-      } 
-      // Handle normal text response
-      else if (assistantResponse.content) {
-        // Replace the typing indicator with the actual response
-        const newMessages = [...updatedMessages, {
-          role: 'assistant' as const,
-          content: assistantResponse.content
-        }];
-        
+        // Update messages with the complete response
+        const newMessages = [...updatedMessages, finalMessage];
         setMessages(newMessages);
         
         // Update the chat in the chats array
@@ -1131,6 +1234,7 @@ const AIChat: React.FC = () => {
       
       setChats(updatedChatsWithError);
     } finally {
+      // Set loading to false only after everything is complete
       setIsLoading(false);
     }
   };
@@ -1140,16 +1244,20 @@ const AIChat: React.FC = () => {
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center">
-          {!showChatList && (
+          {!showLandingScreen && !showChatList && (
             <button
-              onClick={() => setShowChatList(true)}
+              onClick={() => {
+                setShowLandingScreen(true);
+                setActiveChatId(null);
+                setMessages([]);
+              }}
               className="p-2 rounded-lg hover:bg-gray-700 mr-2"
-              title="Show Chat List"
+              title="Back to Home"
             >
               <FiChevronLeft className="w-5 h-5" />
             </button>
           )}
-          {!showChatList && activeChatId && renamingChatId === activeChatId ? (
+          {!showLandingScreen && !showChatList && activeChatId && renamingChatId === activeChatId ? (
             <div className="flex items-center">
               <input
                 type="text"
@@ -1184,8 +1292,26 @@ const AIChat: React.FC = () => {
                 </button>
               </div>
             </div>
-          ) : !showChatList && activeChatId ? (
+          ) : !showLandingScreen && !showChatList && activeChatId ? (
             <div className="flex items-center">
+              {(() => {
+                const activeAssistant = getActiveAssistant();
+                return activeAssistant ? (
+                  <div className="mr-3">
+                    {activeAssistant.profileImage ? (
+                      <img 
+                        src={activeAssistant.profileImage} 
+                        alt={activeAssistant.name} 
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                        {activeAssistant.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                ) : null;
+              })()}
               <h2 className="text-xl font-bold text-white">
                 {chats.find(c => c.id === activeChatId)?.title || 'AI Chat'}
               </h2>
@@ -1211,7 +1337,7 @@ const AIChat: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2">
-          {!showChatList && messages.length > 0 && (
+          {!showLandingScreen && !showChatList && messages.length > 0 && (
             <>
               <button
                 onClick={clearChatHistory}
@@ -1285,62 +1411,95 @@ const AIChat: React.FC = () => {
         </div>
       ) : null}
 
-      {showChatList ? (
+      {showLandingScreen ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          <div className="max-w-lg w-full space-y-6">
+            <h1 className="text-3xl font-bold text-center text-white mb-8">AI Chat</h1>
+            
+            <button
+              onClick={navigateToNewChat}
+              className="w-full p-6 bg-blue-600 rounded-lg hover:bg-blue-700 flex flex-col items-center justify-center transition-colors"
+            >
+              <FiPlus className="w-8 h-8 mb-2" />
+              <span className="text-xl font-semibold">New Chat</span>
+              <p className="text-sm text-blue-200 mt-1">Start a conversation with an assistant</p>
+            </button>
+            
+            <button
+              onClick={navigateToPastChats}
+              className="w-full p-6 bg-gray-700 rounded-lg hover:bg-gray-600 flex flex-col items-center justify-center transition-colors"
+            >
+              <FiList className="w-8 h-8 mb-2" />
+              <span className="text-xl font-semibold">Past Chats</span>
+              <p className="text-sm text-gray-300 mt-1">Continue a previous conversation</p>
+            </button>
+          </div>
+        </div>
+      ) : showAssistantSelect ? (
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="mb-6">
+          <div className="mb-6 flex gap-2">
+            <button
+              onClick={() => setShowLandingScreen(true)}
+              className="px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 flex items-center justify-center"
+            >
+              <FiChevronLeft className="mr-2" />
+              <span>Back</span>
+            </button>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg p-4 mb-6">
+            <h3 className="text-lg font-semibold mb-4 text-white">Select an Assistant</h3>
+            <div className="space-y-3">
+              {assistants.map(assistant => (
+                <div 
+                  key={assistant.id}
+                  className="flex items-center p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600"
+                  onClick={() => createNewChat(assistant.id)}
+                >
+                  <div className="mr-3">
+                    {assistant.profileImage ? (
+                      <img 
+                        src={assistant.profileImage} 
+                        alt={assistant.name} 
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                        {assistant.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-white">{assistant.name}</h4>
+                    <p className="text-sm text-gray-400 truncate max-w-xs">
+                      {assistant.systemPrompt.length > 50 
+                        ? assistant.systemPrompt.substring(0, 50) + '...' 
+                        : assistant.systemPrompt}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : showChatList ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-6 flex gap-2">
+            <button
+              onClick={() => setShowLandingScreen(true)}
+              className="px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 flex items-center justify-center"
+            >
+              <FiChevronLeft className="mr-2" />
+              <span>Back</span>
+            </button>
             <button
               onClick={() => setShowAssistantSelect(true)}
-              className="w-full px-4 py-3 bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center justify-center"
+              className="flex-1 px-4 py-3 bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center justify-center"
             >
               <FiPlus className="mr-2" />
               <span>New Chat</span>
             </button>
           </div>
-          
-          {showAssistantSelect ? (
-            <div className="bg-gray-800 rounded-lg p-4 mb-6">
-              <h3 className="text-lg font-semibold mb-4 text-white">Select an Assistant</h3>
-              <div className="space-y-3">
-                {assistants.map(assistant => (
-                  <div 
-                    key={assistant.id}
-                    className="flex items-center p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600"
-                    onClick={() => createNewChat(assistant.id)}
-                  >
-                    <div className="mr-3">
-                      {assistant.profileImage ? (
-                        <img 
-                          src={assistant.profileImage} 
-                          alt={assistant.name} 
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                          {assistant.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-white">{assistant.name}</h4>
-                      <p className="text-sm text-gray-400 truncate max-w-xs">
-                        {assistant.systemPrompt.length > 50 
-                          ? assistant.systemPrompt.substring(0, 50) + '...' 
-                          : assistant.systemPrompt}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => setShowAssistantSelect(false)}
-                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : null}
           
           <h3 className="text-lg font-semibold mb-2 text-white">Recent Chats</h3>
           
@@ -1424,6 +1583,7 @@ const AIChat: React.FC = () => {
                       setActiveChatId(chat.id);
                       setMessages(chat.messages);
                       setShowChatList(false);
+                      setShowLandingScreen(false);
                     }}
                   >
                     <div className="mr-3">
@@ -1488,7 +1648,7 @@ const AIChat: React.FC = () => {
                   <p>Send a message to start chatting</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 p-12">
                   {messages
                     .filter(msg => msg.role !== 'system') // Don't show system messages
                     .map((message, index) => (
@@ -1498,7 +1658,7 @@ const AIChat: React.FC = () => {
                     >
                       {message.role === 'user' ? (
                         <div className="self-end max-w-3/4 bg-gray-700 rounded-lg p-3 text-white">
-                          <div className="whitespace-pre-wrap">
+                          <div className="whitespace-pre-wrap user-msg">
                             <div dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }} />
                           </div>
                         </div>
@@ -1518,15 +1678,8 @@ const AIChat: React.FC = () => {
                       ) : (
                         <div className="self-start max-w-3/4 bg-transparent text-white">
                           <div className="whitespace-pre-wrap">
-                            {isLoading && index === messages.length - 1 ? (
-                              <div className="flex items-center text-blue-400">
-                                <span className="mr-2">AI is thinking</span>
-                                <div className="flex items-center">
-                                  <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5"></div>
-                                  <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5" style={{ animationDelay: '0.2s' }}></div>
-                                  <div className="w-2 h-2 rounded-full bg-blue-400 opacity-75 animate-pulse mx-0.5" style={{ animationDelay: '0.4s' }}></div>
-                                </div>
-                              </div>
+                            {isLoading && index === messages.length - 1 && message.content === '' ? (
+                              renderTypingIndicator()
                             ) : (
                               <div dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }} />
                             )}
@@ -1544,13 +1697,32 @@ const AIChat: React.FC = () => {
           <div className="p-4 bg-gray-800 border-t border-gray-700 flex justify-center">
             <div className="max-w-2xl w-full">
               <form onSubmit={handleSubmit} className="flex">
-                <input
-                  type="text"
+                <textarea
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  className="flex-1 px-4 py-2 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // Auto resize
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim() && !isLoading && apiKey) {
+                        handleSubmit(e as any);
+                      }
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-700 rounded-l resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[40px] max-h-[200px]"
                   placeholder="Type your message..."
                   disabled={isLoading || !apiKey}
+                  rows={1}
+                  ref={(el) => {
+                    if (el) {
+                      el.style.height = 'auto';
+                      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+                    }
+                  }}
                 />
                 <button
                   type="submit"
