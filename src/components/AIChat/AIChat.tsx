@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FiSend, FiUser, FiCpu, FiSettings, FiPlus, FiList, FiMessageCircle, FiChevronLeft, FiTrash2 } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+import chatFunctions, { getCapabilitiesSystemPrompt } from '../../services/chatFunctions';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -102,6 +103,659 @@ const AIChat: React.FC = () => {
 
   // Function definitions for function calling
   const functionDefinitions: FunctionDefinition[] = [
+    // Plan & Content Functions
+    {
+      name: 'get_plans',
+      description: 'Get all content plans or details of a specific plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'Optional: ID of a specific plan to retrieve'
+          }
+        }
+      }
+    },
+    {
+      name: 'create_plan',
+      description: 'Create a new content plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Name of the content plan'
+          },
+          description: {
+            type: 'string',
+            description: 'Optional: Description of the content plan'
+          }
+        },
+        required: ['name']
+      }
+    },
+    {
+      name: 'update_plan',
+      description: 'Update an existing content plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'ID of the plan to update'
+          },
+          updates: {
+            type: 'object',
+            description: 'Fields to update',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'New name for the plan'
+              },
+              description: {
+                type: 'string',
+                description: 'New description for the plan'
+              }
+            }
+          }
+        },
+        required: ['planId', 'updates']
+      }
+    },
+    {
+      name: 'delete_plan',
+      description: 'Delete a content plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'ID of the plan to delete'
+          }
+        },
+        required: ['planId']
+      }
+    },
+    {
+      name: 'add_channel',
+      description: 'Add a new channel to a content plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'ID of the plan to add the channel to'
+          },
+          channelData: {
+            type: 'object',
+            description: 'Channel information',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'Name of the channel'
+              },
+              type: {
+                type: 'string',
+                description: 'Type of channel (e.g., facebook, twitter, instagram, blog, email)'
+              },
+              status: {
+                type: 'string',
+                description: 'Status of the channel (draft, scheduled, published)'
+              },
+              description: {
+                type: 'string',
+                description: 'Optional: Description of the channel'
+              },
+              audience: {
+                type: 'string',
+                description: 'Optional: Target audience for the channel'
+              },
+              publishDate: {
+                type: 'string',
+                description: 'Optional: Scheduled publish date (ISO format)'
+              }
+            }
+          }
+        },
+        required: ['planId', 'channelData']
+      }
+    },
+    {
+      name: 'update_channel',
+      description: 'Update an existing channel in a content plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'ID of the plan containing the channel'
+          },
+          channelId: {
+            type: 'string',
+            description: 'ID of the channel to update'
+          },
+          updates: {
+            type: 'object',
+            description: 'Fields to update',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'New name for the channel'
+              },
+              type: {
+                type: 'string',
+                description: 'New type for the channel'
+              },
+              status: {
+                type: 'string',
+                description: 'New status for the channel'
+              },
+              description: {
+                type: 'string',
+                description: 'New description for the channel'
+              },
+              audience: {
+                type: 'string',
+                description: 'New target audience for the channel'
+              },
+              publishDate: {
+                type: 'string',
+                description: 'New publish date for the channel (ISO format)'
+              }
+            }
+          }
+        },
+        required: ['planId', 'channelId', 'updates']
+      }
+    },
+    {
+      name: 'delete_channel',
+      description: 'Delete a channel from a content plan',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'ID of the plan containing the channel'
+          },
+          channelId: {
+            type: 'string',
+            description: 'ID of the channel to delete'
+          }
+        },
+        required: ['planId', 'channelId']
+      }
+    },
+    {
+      name: 'update_channel_document',
+      description: 'Create or update a document for a channel',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: {
+            type: 'string',
+            description: 'ID of the plan containing the channel'
+          },
+          channelId: {
+            type: 'string',
+            description: 'ID of the channel to update the document for'
+          },
+          documentTitle: {
+            type: 'string',
+            description: 'Title of the document'
+          },
+          documentContent: {
+            type: 'string',
+            description: 'Content of the document'
+          }
+        },
+        required: ['planId', 'channelId', 'documentTitle', 'documentContent']
+      }
+    },
+    
+    // Website Functions
+    {
+      name: 'get_websites',
+      description: 'Get all websites or details of a specific website',
+      parameters: {
+        type: 'object',
+        properties: {
+          websiteId: {
+            type: 'string',
+            description: 'Optional: ID of a specific website to retrieve'
+          }
+        }
+      }
+    },
+    {
+      name: 'create_website',
+      description: 'Create a new website',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Name of the website'
+          },
+          url: {
+            type: 'string',
+            description: 'URL of the website'
+          },
+          category: {
+            type: 'string',
+            description: 'Category of the website'
+          },
+          description: {
+            type: 'string',
+            description: 'Optional: Description of the website'
+          },
+          status: {
+            type: 'string',
+            description: 'Optional: Status of the website (active, idea, archived)'
+          }
+        },
+        required: ['name', 'url']
+      }
+    },
+    {
+      name: 'update_website',
+      description: 'Update an existing website',
+      parameters: {
+        type: 'object',
+        properties: {
+          websiteId: {
+            type: 'string',
+            description: 'ID of the website to update'
+          },
+          updates: {
+            type: 'object',
+            description: 'Fields to update',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'New name for the website'
+              },
+              url: {
+                type: 'string',
+                description: 'New URL for the website'
+              },
+              category: {
+                type: 'string',
+                description: 'New category for the website'
+              },
+              description: {
+                type: 'string',
+                description: 'New description for the website'
+              },
+              status: {
+                type: 'string',
+                description: 'New status for the website (active, idea, archived)'
+              }
+            }
+          }
+        },
+        required: ['websiteId', 'updates']
+      }
+    },
+    {
+      name: 'delete_website',
+      description: 'Delete a website',
+      parameters: {
+        type: 'object',
+        properties: {
+          websiteId: {
+            type: 'string',
+            description: 'ID of the website to delete'
+          }
+        },
+        required: ['websiteId']
+      }
+    },
+    {
+      name: 'get_website_categories',
+      description: 'Get all website categories',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    
+    // Subscription Functions
+    {
+      name: 'get_subscriptions',
+      description: 'Get all subscriptions or details of a specific subscription',
+      parameters: {
+        type: 'object',
+        properties: {
+          subscriptionId: {
+            type: 'string',
+            description: 'Optional: ID of a specific subscription to retrieve'
+          }
+        }
+      }
+    },
+    {
+      name: 'create_subscription',
+      description: 'Create a new subscription',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Name of the subscription'
+          },
+          url: {
+            type: 'string',
+            description: 'URL of the subscription'
+          },
+          price: {
+            type: 'number',
+            description: 'Price of the subscription'
+          },
+          billingCycle: {
+            type: 'string',
+            description: 'Billing cycle (monthly, yearly)'
+          },
+          startDate: {
+            type: 'string',
+            description: 'Start date of the subscription (YYYY-MM-DD)'
+          },
+          category: {
+            type: 'string',
+            description: 'Category of the subscription'
+          },
+          notes: {
+            type: 'string',
+            description: 'Optional: Notes about the subscription'
+          },
+          linkedWebsites: {
+            type: 'array',
+            description: 'Optional: IDs of websites linked to this subscription',
+            items: {
+              type: 'string'
+            }
+          }
+        },
+        required: ['name', 'price']
+      }
+    },
+    {
+      name: 'update_subscription',
+      description: 'Update an existing subscription',
+      parameters: {
+        type: 'object',
+        properties: {
+          subscriptionId: {
+            type: 'string',
+            description: 'ID of the subscription to update'
+          },
+          updates: {
+            type: 'object',
+            description: 'Fields to update',
+            properties: {
+              name: {
+                type: 'string',
+                description: 'New name for the subscription'
+              },
+              url: {
+                type: 'string',
+                description: 'New URL for the subscription'
+              },
+              price: {
+                type: 'number',
+                description: 'New price for the subscription'
+              },
+              billingCycle: {
+                type: 'string',
+                description: 'New billing cycle for the subscription'
+              },
+              startDate: {
+                type: 'string',
+                description: 'New start date for the subscription'
+              },
+              category: {
+                type: 'string',
+                description: 'New category for the subscription'
+              },
+              notes: {
+                type: 'string',
+                description: 'New notes for the subscription'
+              },
+              linkedWebsites: {
+                type: 'array',
+                description: 'New linked websites for the subscription',
+                items: {
+                  type: 'string'
+                }
+              }
+            }
+          }
+        },
+        required: ['subscriptionId', 'updates']
+      }
+    },
+    {
+      name: 'delete_subscription',
+      description: 'Delete a subscription',
+      parameters: {
+        type: 'object',
+        properties: {
+          subscriptionId: {
+            type: 'string',
+            description: 'ID of the subscription to delete'
+          }
+        },
+        required: ['subscriptionId']
+      }
+    },
+    {
+      name: 'get_subscription_categories',
+      description: 'Get all subscription categories',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    
+    // Calendar Functions
+    {
+      name: 'get_calendar_events',
+      description: 'Get all calendar events or events in a specific date range',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: {
+            type: 'string',
+            description: 'Optional: Start date for filtering events (YYYY-MM-DD)'
+          },
+          endDate: {
+            type: 'string',
+            description: 'Optional: End date for filtering events (YYYY-MM-DD)'
+          }
+        }
+      }
+    },
+    {
+      name: 'create_calendar_event',
+      description: 'Create a new calendar event or milestone',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Title of the event'
+          },
+          date: {
+            type: 'string',
+            description: 'Date of the event (YYYY-MM-DD)'
+          },
+          time: {
+            type: 'string',
+            description: 'Optional: Time of the event (HH:MM)'
+          },
+          type: {
+            type: 'string',
+            description: 'Type of the event (event, milestone)'
+          },
+          projectId: {
+            type: 'string',
+            description: 'Optional: Project ID if this is a milestone'
+          },
+          color: {
+            type: 'string',
+            description: 'Optional: Color for the event (hex code)'
+          },
+          isRecurring: {
+            type: 'boolean',
+            description: 'Optional: Whether this is a recurring event'
+          },
+          recurrenceType: {
+            type: 'string',
+            description: 'Optional: Type of recurrence (daily, weekly, monthly)'
+          },
+          recurrenceEndDate: {
+            type: 'string',
+            description: 'Optional: End date for recurring events (YYYY-MM-DD)'
+          }
+        },
+        required: ['title', 'date']
+      }
+    },
+    {
+      name: 'update_calendar_event',
+      description: 'Update an existing calendar event',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: {
+            type: 'string',
+            description: 'ID of the event to update'
+          },
+          updates: {
+            type: 'object',
+            description: 'Fields to update',
+            properties: {
+              title: {
+                type: 'string',
+                description: 'New title for the event'
+              },
+              date: {
+                type: 'string',
+                description: 'New date for the event'
+              },
+              time: {
+                type: 'string',
+                description: 'New time for the event'
+              },
+              type: {
+                type: 'string',
+                description: 'New type for the event'
+              },
+              projectId: {
+                type: 'string',
+                description: 'New project ID for the event'
+              },
+              color: {
+                type: 'string',
+                description: 'New color for the event'
+              },
+              isRecurring: {
+                type: 'boolean',
+                description: 'Whether this is a recurring event'
+              },
+              recurrenceType: {
+                type: 'string',
+                description: 'New type of recurrence'
+              },
+              recurrenceEndDate: {
+                type: 'string',
+                description: 'New end date for recurring events'
+              }
+            }
+          }
+        },
+        required: ['eventId', 'updates']
+      }
+    },
+    {
+      name: 'delete_calendar_event',
+      description: 'Delete a calendar event',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: {
+            type: 'string',
+            description: 'ID of the event to delete'
+          }
+        },
+        required: ['eventId']
+      }
+    },
+    {
+      name: 'get_projects',
+      description: 'Get all projects for milestone creation',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    
+    // Reminder Functions
+    {
+      name: 'get_reminders',
+      description: 'Get all content reminders',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    {
+      name: 'create_reminder',
+      description: 'Create a new manual reminder',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Title of the reminder'
+          },
+          type: {
+            type: 'string',
+            description: 'Type of reminder (facebook, twitter, instagram, blog, email, meeting, task, other)'
+          },
+          publishDate: {
+            type: 'string',
+            description: 'Date of the reminder (YYYY-MM-DD)'
+          },
+          time: {
+            type: 'string',
+            description: 'Optional: Time of the reminder (HH:MM)'
+          },
+          notes: {
+            type: 'string',
+            description: 'Optional: Additional notes for the reminder'
+          }
+        },
+        required: ['title', 'publishDate']
+      }
+    },
+    {
+      name: 'delete_reminder',
+      description: 'Delete a manual reminder',
+      parameters: {
+        type: 'object',
+        properties: {
+          reminderId: {
+            type: 'string',
+            description: 'ID of the reminder to delete'
+          }
+        },
+        required: ['reminderId']
+      }
+    },
+    
+    // Legacy function definitions (keeping for backward compatibility)
     {
       name: 'create_task',
       description: 'Create a new task in the task manager',
@@ -156,22 +810,6 @@ const AIChat: React.FC = () => {
       }
     },
     {
-      name: 'get_subscriptions',
-      description: 'Get list of user subscriptions',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    },
-    {
-      name: 'get_websites',
-      description: 'Get list of user saved websites',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    },
-    {
       name: 'get_documents',
       description: 'Get list of documents from the writer',
       parameters: {
@@ -182,6 +820,100 @@ const AIChat: React.FC = () => {
             description: 'Optional: Get a specific document by ID'
           }
         }
+      }
+    },
+    
+    // Search functions for enhanced functionality
+    {
+      name: 'search_plans',
+      description: 'Search for content plans by name or description',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find matching plans'
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'search_channels',
+      description: 'Search for channels by name, type, or document content',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find matching channels'
+          },
+          planId: {
+            type: 'string',
+            description: 'Optional: Limit search to channels in this plan'
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'search_websites',
+      description: 'Search for websites by name, URL, category, or description',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find matching websites'
+          },
+          status: {
+            type: 'string',
+            description: 'Optional: Filter by status (active, idea, archived)'
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'search_subscriptions',
+      description: 'Search for subscriptions by name, category, URL, or notes',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find matching subscriptions'
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'search_calendar_events',
+      description: 'Search for calendar events by title',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find matching calendar events'
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'search_reminders',
+      description: 'Search for reminders by title or notes',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find matching reminders'
+          }
+        },
+        required: ['query']
       }
     }
   ];
@@ -487,10 +1219,16 @@ const AIChat: React.FC = () => {
     const assistant = assistants.find(a => a.id === assistantId);
     if (!assistant) return;
     
+    // Include the capabilities in the system prompt
+    const enhancedAssistant = {
+      ...assistant,
+      systemPrompt: assistant.systemPrompt + '\n\n' + getCapabilitiesSystemPrompt()
+    };
+    
     const newChat: Chat = {
       id: Date.now().toString(),
-      title: `Chat with ${assistant.name}`,
-      assistantId: assistant.id,
+      title: `Chat with ${enhancedAssistant.name}`,
+      assistantId: enhancedAssistant.id,
       messages: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -542,428 +1280,253 @@ const AIChat: React.FC = () => {
 
   // Execute function calls
   const executeFunction = async (functionCall: FunctionCall): Promise<string> => {
+    console.log('Executing function:', functionCall);
+    
     try {
-      if (functionCall.name === 'create_task') {
-        const { title, projectId = 'default' } = functionCall.arguments;
-        
-        // Load existing tasks
-        const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS) || '[]';
-        const tasks = JSON.parse(savedTasks);
-        
-        // Load existing projects to ensure the project exists
-        let projects = [];
-        const savedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-        if (savedProjects) {
-          try {
-            projects = JSON.parse(savedProjects);
-          } catch (e) {
-            console.error('Failed to parse saved projects:', e);
-            // Create default projects if parsing fails
-            projects = [
-              {
-                id: 'default',
-                name: 'General',
-                color: '#3B82F6',
-                createdAt: new Date().toISOString()
-              },
-              {
-                id: 'work',
-                name: 'Work',
-                color: '#EF4444',
-                createdAt: new Date().toISOString()
-              },
-              {
-                id: 'personal',
-                name: 'Personal',
-                color: '#10B981',
-                createdAt: new Date().toISOString()
-              }
-            ];
-            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-          }
-        } else {
-          // Create default projects if none exist
-          projects = [
-            {
-              id: 'default',
-              name: 'General',
-              color: '#3B82F6',
-              createdAt: new Date().toISOString()
-            },
-            {
-              id: 'work',
-              name: 'Work',
-              color: '#EF4444',
-              createdAt: new Date().toISOString()
-            },
-            {
-              id: 'personal',
-              name: 'Personal',
-              color: '#10B981',
-              createdAt: new Date().toISOString()
-            }
-          ];
-          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-        }
-        
-        // Verify project exists, or default to 'default'
-        const validProjectId = projects.some((p: {id: string}) => p.id === projectId) ? projectId : 'default';
-        
-        // Create new task
-        const newTask = {
-          id: Date.now().toString(),
-          title,
-          completed: false,
-          createdAt: new Date().toISOString(),
-          projectId: validProjectId
-        };
-        
-        // Add task and save back to localStorage
-        tasks.push(newTask);
-        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
-        
-        return `Task "${title}" created successfully!`;
+      // Check if function exists in our chatFunctions service
+      const { name, arguments: args } = functionCall;
+      
+      // Create a message to show to the user about the function call
+      let functionMessage = `I'm going to ${name.replace(/_/g, ' ')} for you.`;
+      
+      // Data/Content Plans Functions
+      if (name === 'get_plans') {
+        const planId = args.planId;
+        const result = await chatFunctions.getPlans(planId);
+        return JSON.stringify(result);
       } 
-      else if (functionCall.name === 'create_document') {
-        const { name, content = '' } = functionCall.arguments;
-        
-        // Load existing documents
-        const savedDocs = localStorage.getItem(STORAGE_KEYS.DOCUMENTS) || '[]';
-        const documents = JSON.parse(savedDocs);
-        
-        // Split content by newlines and create paragraph blocks
-        const contentBlocks = [];
-        
-        // Add header block
-        contentBlocks.push({
-          type: 'header',
-          data: {
-            text: name,
-            level: 1
-          }
-        });
-        
-        // Process content into separate paragraph blocks for better formatting
-        if (content) {
-          const paragraphs = content.split('\n\n').filter((p: string) => p.trim());
-          
-          // If no double newlines found, try splitting by single newlines
-          const lines = paragraphs.length > 0 ? 
-            paragraphs : 
-            content.split('\n').filter((p: string) => p.trim());
-          
-          lines.forEach((line: string) => {
-            contentBlocks.push({
-              type: 'paragraph',
-              data: {
-                text: line.trim()
-              }
-            });
-          });
-        } else {
-          // Default empty paragraph
-          contentBlocks.push({
-            type: 'paragraph',
-            data: {
-              text: 'Document content goes here...'
-            }
-          });
+      else if (name === 'create_plan') {
+        const { name, description } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Create a new content plan named "${name}"?`)) {
+          return 'Operation cancelled by user.';
         }
-        
-        // Create new document
-        const newDoc = {
-          id: Date.now().toString(),
-          name,
-          content: {
-            time: new Date().getTime(),
-            blocks: contentBlocks
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        
-        // Add document and save back to localStorage
-        documents.push(newDoc);
-        localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(documents));
-        
-        return `Document "${name}" created successfully!`;
+        const result = await chatFunctions.createPlan(name, description);
+        return JSON.stringify(result);
       }
-      else if (functionCall.name === 'get_tasks') {
-        const { projectId, completed } = functionCall.arguments;
-        const tasks = await storeService.getTasks();
-        
-        if (!tasks || tasks.length === 0) {
-          return "You don't have any tasks yet.";
+      else if (name === 'update_plan') {
+        const { planId, updates } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Update content plan with ID "${planId}"?`)) {
+          return 'Operation cancelled by user.';
         }
-        
-        let filteredTasks = [...tasks];
-        
-        // Apply filters if provided
-        if (projectId !== undefined) {
-          filteredTasks = filteredTasks.filter(task => task.projectId === projectId);
-        }
-        
-        if (completed !== undefined) {
-          filteredTasks = filteredTasks.filter(task => task.completed === completed);
-        }
-        
-        if (filteredTasks.length === 0) {
-          let message = "No tasks found";
-          if (projectId) message += ` in project "${projectId}"`;
-          if (completed !== undefined) message += ` that are ${completed ? "completed" : "incomplete"}`;
-          return message + ".";
-        }
-        
-        // Group tasks by project
-        const tasksByProject: Record<string, any[]> = {};
-        
-        filteredTasks.forEach(task => {
-          const project = task.projectId || 'default';
-          if (!tasksByProject[project]) {
-            tasksByProject[project] = [];
-          }
-          tasksByProject[project].push(task);
-        });
-        
-        // Create a text-based response
-        let response = "Here are your tasks:\n\n";
-        
-        // Add tasks by project
-        Object.keys(tasksByProject).forEach(project => {
-          response += `Project: ${project}\n`;
-          
-          const projectTasks = tasksByProject[project];
-          
-          // Sort tasks: incomplete first, then by created date
-          projectTasks.sort((a, b) => {
-            if (a.completed !== b.completed) return a.completed ? 1 : -1;
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          });
-          
-          projectTasks.forEach(task => {
-            response += `${task.completed ? '✓' : '☐'} ${task.title}\n`;
-            
-            if (task.createdAt) {
-              const date = new Date(task.createdAt);
-              response += `   Created: ${date.toLocaleDateString()}\n`;
-            }
-            
-            response += "\n";
-          });
-        });
-        
-        // Add summary
-        const completedCount = filteredTasks.filter(t => t.completed).length;
-        const pendingCount = filteredTasks.length - completedCount;
-        
-        response += `Summary:\n`;
-        response += `• Total Tasks: ${filteredTasks.length}\n`;
-        response += `• Completed: ${completedCount}\n`;
-        response += `• Pending: ${pendingCount}`;
-        
-        return response;
+        const result = await chatFunctions.updatePlan(planId, updates);
+        return JSON.stringify(result);
       }
-      else if (functionCall.name === 'get_subscriptions') {
-        const subscriptions = await storeService.getSubscriptions();
-        
-        if (!subscriptions || subscriptions.length === 0) {
-          return "You don't have any subscriptions yet.";
+      else if (name === 'delete_plan') {
+        const { planId } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Are you sure you want to delete the content plan? This action cannot be undone.`)) {
+          return 'Operation cancelled by user.';
         }
-        
-        // Create a text-based response
-        let response = "Here are your subscriptions:\n\n";
-        
-        subscriptions.forEach(sub => {
-          // Format price
-          const price = typeof sub.price === 'number' ? sub.price : 0;
-          const priceDisplay = `$${price}${sub.billingCycle === 'monthly' ? '/mo' : '/yr'}`;
-          
-          // Add subscription details
-          response += `📌 ${sub.name}\n`;
-          response += `   Price: ${priceDisplay}\n`;
-          
-          if (sub.url) {
-            response += `   Website: ${sub.url}\n`;
-          }
-          
-          if (sub.billingCycle) {
-            response += `   Billing: ${sub.billingCycle === 'monthly' ? 'Monthly' : 'Yearly'}\n`;
-          }
-          
-          if (sub.startDate) {
-            response += `   Started: ${new Date(sub.startDate).toLocaleDateString()}\n`;
-          }
-          
-          if (sub.notes) {
-            response += `   Notes: ${sub.notes}\n`;
-          }
-          
-          response += "\n";
-        });
-        
-        // Add total cost summary
-        let monthlyCost = 0;
-        let yearlyCost = 0;
-        
-        subscriptions.forEach(sub => {
-          const price = typeof sub.price === 'number' ? sub.price : 0;
-          if (sub.billingCycle === 'monthly') {
-            monthlyCost += price;
-            yearlyCost += price * 12;
-          } else {
-            monthlyCost += price / 12;
-            yearlyCost += price;
-          }
-        });
-        
-        response += `Summary:\n`;
-        response += `• Total Monthly Cost: $${monthlyCost.toFixed(2)}\n`;
-        response += `• Total Yearly Cost: $${yearlyCost.toFixed(2)}\n`;
-        response += `• Number of Subscriptions: ${subscriptions.length}`;
-        
-        return response;
+        const result = await chatFunctions.deletePlan(planId);
+        return JSON.stringify(result);
       }
-      else if (functionCall.name === 'get_websites') {
-        const websites = await storeService.getWebsites();
-        
-        if (!websites || websites.length === 0) {
-          return "You don't have any saved websites yet.";
-        }
-        
-        // Group websites by category
-        const websitesByCategory: Record<string, any[]> = {};
-        
-        websites.forEach(site => {
-          const category = site.category || 'Other';
-          if (!websitesByCategory[category]) {
-            websitesByCategory[category] = [];
-          }
-          websitesByCategory[category].push(site);
-        });
-        
-        // Create a text-based response
-        let response = "Here are your saved websites:\n\n";
-        
-        // Add websites by category
-        Object.keys(websitesByCategory).sort().forEach(category => {
-          response += `Category: ${category}\n`;
-          
-          websitesByCategory[category].forEach(site => {
-            response += `• ${site.name}\n`;
-            
-            if (site.url) {
-              response += `  URL: ${site.url}\n`;
-            }
-            
-            if (site.description) {
-              response += `  Description: ${site.description}\n`;
-            }
-            
-            response += "\n";
-          });
-        });
-        
-        return response;
+      else if (name === 'add_channel') {
+        const { planId, channelData } = args;
+        const result = await chatFunctions.addChannel(planId, channelData);
+        return JSON.stringify(result);
       }
-      else if (functionCall.name === 'get_documents') {
-        const { documentId } = functionCall.arguments;
-        const documents = await storeService.getDocuments();
-        
-        if (!documents || documents.length === 0) {
-          return "You don't have any documents yet.";
+      else if (name === 'update_channel') {
+        const { planId, channelId, updates } = args;
+        const result = await chatFunctions.updateChannel(planId, channelId, updates);
+        return JSON.stringify(result);
+      }
+      else if (name === 'delete_channel') {
+        const { planId, channelId } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Are you sure you want to delete this channel? This action cannot be undone.`)) {
+          return 'Operation cancelled by user.';
         }
-        
-        if (documentId) {
-          // Return specific document if ID is provided
-          const document = documents.find(doc => doc.id === documentId);
-          
-          if (!document) {
-            return `Document with ID ${documentId} not found.`;
-          }
-          
-          // Extract text content from document blocks
-          let textContent = '';
-          
-          if (document.content && document.content.blocks) {
-            document.content.blocks.forEach((block: { type: string; data: { text: string } }) => {
-              if (block.type === 'header') {
-                textContent += `${block.data.text}\n\n`;
-              } else if (block.type === 'paragraph') {
-                textContent += `${block.data.text}\n\n`;
-              }
-            });
-          }
-          
-          // Format the response
-          const createdDate = document.createdAt ? new Date(document.createdAt).toLocaleDateString() : 'Unknown';
-          const updatedDate = document.updatedAt ? new Date(document.updatedAt).toLocaleDateString() : 'Unknown';
-          
-          let response = `📄 Document: ${document.name}\n\n`;
-          response += `Created: ${createdDate}\n`;
-          response += `Last Updated: ${updatedDate}\n\n`;
-          response += `Content:\n\n${textContent.trim()}`;
-          
-          return response;
-        } else {
-          // Return list of all documents
-          let response = "Here are your documents:\n\n";
-          
-          // Sort documents by most recently updated
-          const sortedDocs = [...documents].sort((a, b) => 
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-          );
-          
-          sortedDocs.forEach(doc => {
-            response += `📄 ${doc.name}\n`;
-            
-            if (doc.updatedAt) {
-              response += `   Last Updated: ${new Date(doc.updatedAt).toLocaleDateString()}\n`;
-            }
-            
-            response += `   ID: ${doc.id}\n\n`;
-          });
-          
-          // Add instructions for viewing full documents
-          response += `To view the full content of a document, ask me to "show document {document name}" or use the document ID.`;
-          
-          return response;
-        }
+        const result = await chatFunctions.deleteChannel(planId, channelId);
+        return JSON.stringify(result);
+      }
+      else if (name === 'update_channel_document') {
+        const { planId, channelId, documentTitle, documentContent } = args;
+        const result = await chatFunctions.updateChannelDocument(planId, channelId, documentTitle, documentContent);
+        return JSON.stringify(result);
       }
       
-      return 'Function not implemented';
-    } catch (error) {
+      // Website Functions
+      else if (name === 'get_websites') {
+        const websiteId = args.websiteId;
+        const result = await chatFunctions.getWebsites(websiteId);
+        return JSON.stringify(result);
+      }
+      else if (name === 'create_website') {
+        const websiteData = args;
+        // Ask for confirmation
+        if (!window.confirm(`Create a new website named "${websiteData.name}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.createWebsite(websiteData);
+        return JSON.stringify(result);
+      }
+      else if (name === 'update_website') {
+        const { websiteId, updates } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Update website with ID "${websiteId}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.updateWebsite(websiteId, updates);
+        return JSON.stringify(result);
+      }
+      else if (name === 'delete_website') {
+        const { websiteId } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Are you sure you want to delete this website? This action cannot be undone.`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.deleteWebsite(websiteId);
+        return JSON.stringify(result);
+      }
+      else if (name === 'get_website_categories') {
+        const result = await chatFunctions.getWebsiteCategories();
+        return JSON.stringify(result);
+      }
+      
+      // Subscription Functions
+      else if (name === 'get_subscriptions') {
+        const subscriptionId = args.subscriptionId;
+        const result = await chatFunctions.getSubscriptions(subscriptionId);
+        return JSON.stringify(result);
+      }
+      else if (name === 'create_subscription') {
+        const subscriptionData = args;
+        // Ask for confirmation
+        if (!window.confirm(`Create a new subscription for "${subscriptionData.name}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.createSubscription(subscriptionData);
+        return JSON.stringify(result);
+      }
+      else if (name === 'update_subscription') {
+        const { subscriptionId, updates } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Update subscription with ID "${subscriptionId}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.updateSubscription(subscriptionId, updates);
+        return JSON.stringify(result);
+      }
+      else if (name === 'delete_subscription') {
+        const { subscriptionId } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Are you sure you want to delete this subscription? This action cannot be undone.`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.deleteSubscription(subscriptionId);
+        return JSON.stringify(result);
+      }
+      else if (name === 'get_subscription_categories') {
+        const result = await chatFunctions.getSubscriptionCategories();
+        return JSON.stringify(result);
+      }
+      
+      // Calendar Functions
+      else if (name === 'get_calendar_events') {
+        const { startDate, endDate } = args;
+        const result = await chatFunctions.getCalendarEvents(startDate, endDate);
+        return JSON.stringify(result);
+      }
+      else if (name === 'create_calendar_event') {
+        const eventData = args;
+        // Ask for confirmation
+        if (!window.confirm(`Create a new calendar event: "${eventData.title}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.createCalendarEvent(eventData);
+        return JSON.stringify(result);
+      }
+      else if (name === 'update_calendar_event') {
+        const { eventId, updates } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Update calendar event with ID "${eventId}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.updateCalendarEvent(eventId, updates);
+        return JSON.stringify(result);
+      }
+      else if (name === 'delete_calendar_event') {
+        const { eventId } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Are you sure you want to delete this calendar event? This action cannot be undone.`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.deleteCalendarEvent(eventId);
+        return JSON.stringify(result);
+      }
+      else if (name === 'get_projects') {
+        const result = await chatFunctions.getProjects();
+        return JSON.stringify(result);
+      }
+      
+      // Reminder Functions
+      else if (name === 'get_reminders') {
+        const result = await chatFunctions.getReminders();
+        return JSON.stringify(result);
+      }
+      else if (name === 'create_reminder') {
+        const { title, type, publishDate, time, notes } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Create a new reminder: "${title}"?`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.createReminder(title, type, publishDate, time, notes);
+        return JSON.stringify(result);
+      }
+      else if (name === 'delete_reminder') {
+        const { reminderId } = args;
+        // Ask for confirmation
+        if (!window.confirm(`Are you sure you want to delete this reminder? This action cannot be undone.`)) {
+          return 'Operation cancelled by user.';
+        }
+        const result = await chatFunctions.deleteReminder(reminderId);
+        return JSON.stringify(result);
+      }
+      
+      // Default case if function not found
+      return `Function "${name}" not implemented or not found.`;
+    } 
+    catch (error) {
       console.error('Error executing function:', error);
       return `Error executing function: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   };
 
-  // Create a context message from user profile
+  // Create context message from user data
   const createContextMessage = (): string => {
-    const parts = [];
+    // Combine all user context into a single string
+    let contextParts: string[] = [];
     
-    if (userContext.name || userContext.company) {
-      parts.push(`USER INFORMATION:`);
-      if (userContext.name) parts.push(`Name: ${userContext.name}`);
-      if (userContext.company) parts.push(`Company/Organization: ${userContext.company}`);
+    if (userContext.name) {
+      contextParts.push(`The user's name is ${userContext.name}.`);
     }
     
-    if (userContext.backStory) {
-      parts.push(`\nUSER BACKGROUND:\n${userContext.backStory}`);
-    }
-    
-    if (userContext.websiteLinks) {
-      parts.push(`\nUSER WEBSITES/LINKS:\n${userContext.websiteLinks}`);
-    }
-    
-    if (userContext.additionalInfo) {
-      parts.push(`\nADDITIONAL CONTEXT:\n${userContext.additionalInfo}`);
+    if (userContext.company) {
+      contextParts.push(`They work at ${userContext.company}.`);
     }
     
     if (userContext.voice) {
-      parts.push(`\nTONE/VOICE PREFERENCE: Please respond in a ${userContext.voice} tone.`);
+      contextParts.push(`When responding, use a ${userContext.voice} tone.`);
     }
     
-    return parts.join('\n');
+    if (userContext.backStory) {
+      contextParts.push(`Background information: ${userContext.backStory}`);
+    }
+    
+    if (userContext.websiteLinks) {
+      contextParts.push(`Their relevant websites are: ${userContext.websiteLinks}`);
+    }
+    
+    if (userContext.additionalInfo) {
+      contextParts.push(`Additional information: ${userContext.additionalInfo}`);
+    }
+    
+    // Add a note about having access to the app data
+    contextParts.push(`You have access to the user's content plans, websites, subscriptions, calendar events, and reminders in this application. You can help the user create, read, update, and delete this data using your function calling capabilities.`);
+    
+    return contextParts.join('\n');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
