@@ -36,9 +36,13 @@ interface CalendarEvent {
   id: string;
   title: string;
   date: string; // ISO string
+  time?: string; // Time in HH:MM format
   type: 'event' | 'milestone';
   projectId?: string; // For milestones
   color: string;
+  isRecurring?: boolean;
+  recurrenceType?: 'daily' | 'weekly' | 'monthly';
+  recurrenceEndDate?: string; // ISO string, optional end date for recurring events
 }
 
 interface ContentReminder {
@@ -81,6 +85,12 @@ const Dashboard: React.FC = () => {
 
   // Content reminders state
   const [contentReminders, setContentReminders] = useState<ContentReminder[]>([]);
+
+  // New event time and recurrence state
+  const [newEventTime, setNewEventTime] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
 
   // Update current date and time every minute
   useEffect(() => {
@@ -513,9 +523,39 @@ const Dashboard: React.FC = () => {
   
   const getEventsForDate = (date: Date) => {
     const dateString = date.toISOString().split('T')[0];
+    
     return calendarEvents.filter(event => {
+      // Check for direct date match
       const eventDate = new Date(event.date).toISOString().split('T')[0];
-      return eventDate === dateString;
+      if (eventDate === dateString) return true;
+      
+      // Check for recurring events
+      if (event.isRecurring) {
+        const eventOriginalDate = new Date(event.date);
+        const targetDate = new Date(date);
+        
+        // Check if target date is after the original date
+        if (targetDate >= eventOriginalDate) {
+          // Check if target date is before recurrence end date (if set)
+          if (event.recurrenceEndDate) {
+            const endDate = new Date(event.recurrenceEndDate);
+            if (targetDate > endDate) return false;
+          }
+          
+          // Calculate based on recurrence type
+          if (event.recurrenceType === 'daily') {
+            return true;
+          } else if (event.recurrenceType === 'weekly') {
+            // Same day of week
+            return targetDate.getDay() === eventOriginalDate.getDay();
+          } else if (event.recurrenceType === 'monthly') {
+            // Same day of month
+            return targetDate.getDate() === eventOriginalDate.getDate();
+          }
+        }
+      }
+      
+      return false;
     });
   };
   
@@ -530,8 +570,12 @@ const Dashboard: React.FC = () => {
             ...event,
             title: newEventTitle,
             date: new Date(newEventDate).toISOString(),
+            time: newEventTime,
             type: newEventType,
             color: newEventColor,
+            isRecurring: isRecurring,
+            recurrenceType: isRecurring ? recurrenceType : undefined,
+            recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(recurrenceEndDate).toISOString() : undefined,
             ...(newEventType === 'milestone' ? { projectId: newEventProjectId } : { projectId: undefined })
           };
         }
@@ -543,8 +587,12 @@ const Dashboard: React.FC = () => {
         id: Date.now().toString(),
         title: newEventTitle,
         date: new Date(newEventDate).toISOString(),
+        time: newEventTime,
         type: newEventType,
         color: newEventColor,
+        isRecurring: isRecurring,
+        recurrenceType: isRecurring ? recurrenceType : undefined,
+        recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(recurrenceEndDate).toISOString() : undefined,
         ...(newEventType === 'milestone' && newEventProjectId ? { projectId: newEventProjectId } : {})
       };
     
@@ -561,9 +609,13 @@ const Dashboard: React.FC = () => {
     setEditingEventId(eventId);
     setNewEventTitle(event.title);
     setNewEventDate(event.date.split('T')[0]);
+    setNewEventTime(event.time || '');
     setNewEventType(event.type);
     setNewEventColor(event.color);
     setNewEventProjectId(event.projectId || '');
+    setIsRecurring(event.isRecurring || false);
+    setRecurrenceType(event.recurrenceType || 'weekly');
+    setRecurrenceEndDate(event.recurrenceEndDate ? event.recurrenceEndDate.split('T')[0] : '');
     setShowAddEventModal(true);
   };
   
@@ -578,9 +630,13 @@ const Dashboard: React.FC = () => {
     setEditingEventId(null);
     setNewEventTitle('');
     setNewEventDate('');
+    setNewEventTime('');
     setNewEventType('event');
     setNewEventColor('#3B82F6');
     setNewEventProjectId('');
+    setIsRecurring(false);
+    setRecurrenceType('weekly');
+    setRecurrenceEndDate('');
   };
 
   const handleEventMouseEnter = (event: CalendarEvent, e: React.MouseEvent<HTMLDivElement>) => {
@@ -914,6 +970,20 @@ const Dashboard: React.FC = () => {
                 year: 'numeric'
               });
               
+              // Format recurrence info
+              let recurrenceInfo = '';
+              if (event.isRecurring) {
+                recurrenceInfo = `Repeats ${event.recurrenceType}`;
+                if (event.recurrenceEndDate) {
+                  const endDate = new Date(event.recurrenceEndDate);
+                  recurrenceInfo += ` until ${endDate.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}`;
+                }
+              }
+              
               return (
                 <div 
                   className="absolute z-10 bg-gray-900 border border-gray-700 rounded-md shadow-lg p-4 text-white w-64 transition-opacity duration-200 cursor-help"
@@ -934,7 +1004,11 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center text-gray-300 mt-3 text-sm">
                     <FiCalendar className="mr-2 text-gray-500 flex-shrink-0" size={16} />
-                    {formattedDate}
+                    <div className="flex flex-col">
+                      <span>{formattedDate}</span>
+                      {event.time && <span className="text-gray-400">{event.time}</span>}
+                      {event.isRecurring && <span className="text-gray-400 italic">{recurrenceInfo}</span>}
+                    </div>
                   </div>
                   {projectName && (
                     <div className="flex items-center text-gray-300 mt-2 text-sm">
@@ -1150,14 +1224,25 @@ const Dashboard: React.FC = () => {
               />
             </div>
             
-            <div className="mb-4">
-              <label className="block text-gray-300 mb-1">Date</label>
-              <input
-                type="date"
-                value={newEventDate}
-                onChange={(e) => setNewEventDate(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-gray-300 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={newEventDate}
+                  onChange={(e) => setNewEventDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 mb-1">Time (optional)</label>
+                <input
+                  type="time"
+                  value={newEventTime}
+                  onChange={(e) => setNewEventTime(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                />
+              </div>
             </div>
             
             <div className="mb-4">
@@ -1201,6 +1286,73 @@ const Dashboard: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="recurring-checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  className="mr-2 h-4 w-4 text-blue-600 bg-gray-700 border-gray-500 rounded focus:ring-blue-500 focus:ring-2"
+                />
+                <label htmlFor="recurring-checkbox" className="text-gray-300">
+                  Recurring Event
+                </label>
+              </div>
+            </div>
+            
+            {isRecurring && (
+              <div className="bg-gray-700 p-3 rounded mb-4">
+                <div className="mb-3">
+                  <label className="block text-gray-300 mb-1">Repeat</label>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setRecurrenceType('daily')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        recurrenceType === 'daily'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      Daily
+                    </button>
+                    <button
+                      onClick={() => setRecurrenceType('weekly')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        recurrenceType === 'weekly'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      Weekly
+                    </button>
+                    <button
+                      onClick={() => setRecurrenceType('monthly')}
+                      className={`px-3 py-1 rounded text-sm ${
+                        recurrenceType === 'monthly'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-300 mb-1">End Date (optional)</label>
+                  <input
+                    type="date"
+                    value={recurrenceEndDate}
+                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                    min={newEventDate} // Can't end before start date
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Leave empty for no end date</p>
+                </div>
               </div>
             )}
             
