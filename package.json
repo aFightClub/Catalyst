@@ -9,6 +9,7 @@
     "build": "vite build",
     "electron:dev": "concurrently \"vite\" \"electron .\"",
     "electron:build": "vite build && electron-builder",
+    "electron:build:dev:dmg": "vite build && CSC_IDENTITY_AUTO_DISCOVERY=false CSC_FORCE_SIGN=false electron-builder -m --config.mac.identity=null --config.mac.notarize=false --config.afterSign=\"\" --config.extraMetadata.main=electron/main-dev.js --publish never",
     "publish": "vite build && electron-builder build --mac --publish always"
   },
   "build": {
@@ -48,7 +49,6 @@
     "dmg": {
       "background": "src/images/installbg_large.png",
       "backgroundColor": "#ffffff",
-      "backgroundDark": "src/images/installbg_small.png",
       "window": {
         "width": 540,
         "height": 380

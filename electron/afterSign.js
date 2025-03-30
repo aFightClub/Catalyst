@@ -3,6 +3,12 @@ const { notarize } = require("electron-notarize");
 const path = require("path");
 
 exports.default = async function notarizing(context) {
+  // Skip notarization in development mode
+  if (process.env.CSC_FORCE_SIGN === "false") {
+    console.log("Skipping notarization in development mode");
+    return;
+  }
+
   const { electronPlatformName, appOutDir } = context;
   if (electronPlatformName !== "darwin") {
     return;
