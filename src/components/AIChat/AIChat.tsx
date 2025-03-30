@@ -155,6 +155,9 @@ const AIChat: React.FC = () => {
   // Available models
   const availableModels = [
     { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable multimodal model' },
+    { id: 'o1-2024-12-17', name: 'o1', description: 'Advanced reasoning capability' },
+    { id: 'o3-mini-2025-01-31', name: 'o3-mini', description: 'Efficient smaller model with good capabilities' },
+    { id: 'gpt-4.5-preview-2025-02-27', name: 'GPT-4.5', description: 'Premium model with advanced capabilities ($$$$)' },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Most powerful text model' },
     { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast and efficient' }
   ];
@@ -1738,28 +1741,37 @@ const AIChat: React.FC = () => {
     try {
       // Get the active assistant
       const activeAssistant = getActiveAssistant();
-      if (!activeAssistant) throw new Error('No active assistant found');
-      
-      // Copy messages for API but don't include the typing indicator
-      const apiMessages = [...updatedMessages];
-      
-      // If this is the first user message, prepend the system prompt + context
-      if (messages.filter(m => m.role === 'user').length === 0) {
-        // Start with assistant's system prompt
-        let systemPrompt = activeAssistant.systemPrompt;
-        
-        // Add user context if available
-        const contextContent = createContextMessage();
-        if (contextContent) {
-          systemPrompt += '\n\n' + contextContent;
-        }
-        
-        // Add system message at the beginning
-        apiMessages.unshift({
-          role: 'system',
-          content: systemPrompt
-        });
+      if (!activeAssistant) {
+        throw new Error('No active assistant found');
       }
+      
+      // Create messages array for API call
+      let apiMessages: Message[] = [];
+      
+      // Always include the system prompt and user context
+      let systemPrompt = activeAssistant.systemPrompt;
+      
+      // Add user context
+      const contextMessage = createContextMessage();
+      if (contextMessage) {
+        systemPrompt += `\n\n${contextMessage}`;
+      }
+      
+      // Add access to app data note
+      systemPrompt += '\n\nYou have access to app data through function calling. Help the user manage their content, websites, subscriptions, events, and reminders.';
+      
+      // Add the system prompt
+      apiMessages.push({
+        role: 'system',
+        content: systemPrompt
+      });
+      
+      // Include previous messages for context (excluding any previous system messages)
+      const conversationMessages = messages.filter(m => m.role !== 'system');
+      apiMessages = [...apiMessages, ...conversationMessages];
+      
+      // Add new user message
+      apiMessages.push(userMessage);
       
       // Configure request with streaming enabled
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1904,7 +1916,12 @@ const AIChat: React.FC = () => {
             body: JSON.stringify({
               model: selectedModel,
               messages: [
-                ...apiMessages, // Previous conversation context
+                // Include system message with context again
+                {
+                  role: 'system',
+                  content: systemPrompt
+                },
+                ...apiMessages.filter(m => m.role !== 'system'), // Previous conversation context without system message
                 functionCallMessage, // The function call that was made
                 // Add a system message explaining the function result
                 {
