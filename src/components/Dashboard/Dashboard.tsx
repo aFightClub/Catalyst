@@ -837,7 +837,7 @@ const Dashboard: React.FC = () => {
                   resetEventForm();
                   setShowAddEventModal(true);
                 }}
-                className="ml-2 p-1 rounded bg-blue-600 hover:bg-blue-700 flex items-center"
+                className="ml-2 px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 flex items-center"
               >
                 <FiPlus className="w-4 h-4" />
                 <span className="ml-1 text-sm">Event</span>
@@ -916,10 +916,10 @@ const Dashboard: React.FC = () => {
               
               return (
                 <div 
-                  className="absolute z-10 bg-gray-900 border border-gray-700 rounded-md shadow-lg p-4 text-white w-64 transition-opacity duration-200"
+                  className="absolute z-10 bg-gray-900 border border-gray-700 rounded-md shadow-lg p-4 text-white w-64 transition-opacity duration-200 cursor-help"
                   style={{ 
-                    top: `${tooltipPosition.top}px`, 
-                    left: `${tooltipPosition.left}px`,
+                    top: `${tooltipPosition.top - 30}px`, 
+                    left: `${tooltipPosition.left - 40}px`,
                   }}
                 >
                   <div className="flex items-center mb-2">

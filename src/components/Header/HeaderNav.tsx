@@ -47,7 +47,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({
   showLayoutDropdown
 }) => {
   return (
-    <div className="h-14 bg-gray-800 flex items-center px-4 space-x-2">
+    <div className="h-14 bg-gray-900 flex items-center px-4 space-x-2">
       <div className="flex space-x-1">
         <button 
           onClick={goBack}
@@ -69,7 +69,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({
         </button>
       </div>
       
-      <div className="mr-2 px-2 py-2 text-gray-600 bg-gray-800 rounded text-sm">
+      <div className="mr-2 px-2 py-2 text-gray-300 bg-gray-800 rounded text-sm">
         {activeWorkspace?.name || 'Default Workspace'}
       </div>
 

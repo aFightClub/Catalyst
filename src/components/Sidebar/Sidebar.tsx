@@ -171,8 +171,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
       
       {isAddingWorkspace && (
-        <div className="px-4 py-2 mb-2 ">
-          <div className="bg-gray-700 p-2 rounded">
+        <div className="px-4 py-2 mb-2" style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}>
+          <div className="bg-gray-700 p-2 rounded" style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}>
             <input
               type="text"
               value={newWorkspaceName}
@@ -180,12 +180,14 @@ const Sidebar: React.FC<SidebarProps> = ({
               placeholder="Workspace name"
               className="w-full bg-gray-600 text-white border border-gray-500 rounded px-2 py-1 mb-2"
               autoFocus
+              style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
             />
-            <div className="flex space-x-1">
+            <div className="flex space-x-1" style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}>
               <button 
                 onClick={addWorkspace}
                 disabled={!newWorkspaceName.trim()}
                 className={`flex-1 px-2 py-1 rounded text-white ${newWorkspaceName.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600'}`}
+                style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
               >
                 Add
               </button>
@@ -195,6 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   setNewWorkspaceName('');
                 }}
                 className="flex-1 px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-500"
+                style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
               >
                 Cancel
               </button>
