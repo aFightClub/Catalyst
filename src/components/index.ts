@@ -28,9 +28,11 @@ export { default as ToastContainer } from "./Toast/ToastContainer";
 export { default as Media } from "./Media/Media";
 export { default as ConsoleViewer } from "./ConsoleViewer";
 
-// CodeEditor components
-export { default as CodeEditor } from "./CodeEditor/CodeEditor";
-export { default as LoadingIndicator } from "./CodeEditor/LoadingIndicator";
-export { default as SplitPane } from "./CodeEditor/SplitPane";
-export { default as TabBar } from "./CodeEditor/TabBar";
-export { default as Terminal } from "./CodeEditor/Terminal";
+// CodeEditor component - use the direct file instead of nested directory
+export { default as CodeEditor } from "./CodeEditor";
+
+// Remove or comment out the missing imports
+// export { default as LoadingIndicator } from "./CodeEditor/LoadingIndicator";
+// export { default as SplitPane } from "./CodeEditor/SplitPane";
+// export { default as TabBar } from "./CodeEditor/TabBar";
+// export { default as Terminal } from "./CodeEditor/Terminal";

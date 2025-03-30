@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FiPlus, FiTrash2, FiRefreshCw, FiEdit, FiDollarSign, FiGlobe, FiClock, FiCalendar, FiChevronLeft, FiChevronRight, FiFolder, FiExternalLink } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+import { Channel } from '../../types';
 
 // Card types
 enum CardType {
@@ -622,14 +623,14 @@ const Dashboard: React.FC = () => {
         const upcoming: ContentReminder[] = [];
         
         plans.forEach(plan => {
-          const scheduledChannels = plan.channels.filter(channel => {
+          const scheduledChannels = plan.channels.filter((channel: Channel) => {
             if (channel.status !== 'scheduled' || !channel.publishDate) return false;
             
             const publishDate = new Date(channel.publishDate);
             return publishDate >= now && publishDate <= twoWeeksFromNow;
           });
           
-          scheduledChannels.forEach(channel => {
+          scheduledChannels.forEach((channel: Channel) => {
             upcoming.push({
               planId: plan.id,
               planName: plan.name,
