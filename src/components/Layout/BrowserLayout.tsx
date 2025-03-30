@@ -45,17 +45,19 @@ const BrowserLayout: React.FC<BrowserLayoutProps> = ({
   // Render the appropriate layout based on currentLayout value
   switch (currentLayout) {
     case LayoutType.SINGLE:
+      // Find the active tab
+      const activeTab = currentWorkspaceTabs.find(tab => tab.id === activeTabId);
       return (
         <main className="flex-1 p-2.5 pt-0">
-          {currentWorkspaceTabs.map(tab => (
+          {activeTab && (
             <div
-              key={tab.id}
-              style={{ display: activeTabId === tab.id ? 'block' : 'none', height: '100%' }}
+              key={activeTab.id}
+              style={{ height: '100%' }}
               className="rounded-md overflow-hidden shadow-lg"
             >
-              {renderWebviewWithLoader(tab.id, tab.url)}
+              {renderWebviewWithLoader(activeTab.id, activeTab.url)}
             </div>
-          ))}
+          )}
         </main>
       );
     
