@@ -1,7 +1,8 @@
 {
   "name": "catalyst-browser",
-  "version": "1.1.0",
+  "version": "0.0.1",
   "description": "The secondary web browser of digital creatives.",
+  "author": "Wynter Jones <wynter@monetizedesign.com> (https://wynter.ai)",
   "main": "electron/main.js",
   "scripts": {
     "start": "vite",
@@ -13,6 +14,7 @@
   "build": {
     "appId": "com.catalystbrowser.app",
     "productName": "Catalyst",
+    "afterSign": "electron/afterSign.js",
     "publish": [
       {
         "provider": "github",
@@ -40,7 +42,29 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": "Wynter Jones (7X2UF4FZHC)"
+      "identity": "Wynter Jones (7X2UF4FZHC)",
+      "notarize": true
+    },
+    "dmg": {
+      "background": "src/images/installbg_large.png",
+      "backgroundColor": "#ffffff",
+      "backgroundDark": "src/images/installbg_small.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "win": {
       "icon": "src/images/icon.png",
@@ -77,13 +101,16 @@
     "react-simple-code-editor": "^0.14.1"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.0.1",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.3",
     "autoprefixer": "^10.4.14",
     "concurrently": "^8.2.0",
+    "dotenv": "^16.4.7",
     "electron": "^35.1.2",
     "electron-builder": "^24.6.3",
+    "electron-notarize": "^1.2.2",
     "postcss": "^8.4.27",
     "tailwindcss": "^3.3.3",
     "typescript": "^5.0.2",
