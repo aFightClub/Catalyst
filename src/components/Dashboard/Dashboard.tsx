@@ -85,6 +85,12 @@ const Dashboard: React.FC = () => {
 
   // Content reminders state
   const [contentReminders, setContentReminders] = useState<ContentReminder[]>([]);
+  const [showAddReminderModal, setShowAddReminderModal] = useState(false);
+  const [newReminderTitle, setNewReminderTitle] = useState('');
+  const [newReminderType, setNewReminderType] = useState<string>('other');
+  const [newReminderDate, setNewReminderDate] = useState('');
+  const [newReminderTime, setNewReminderTime] = useState('');
+  const [newReminderNotes, setNewReminderNotes] = useState('');
 
   // New event time and recurrence state
   const [newEventTime, setNewEventTime] = useState('');
@@ -666,7 +672,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const loadContentReminders = async () => {
       try {
-        // Load all content plans
+        // Load all content plans for reminders
         const plans = await storeService.getContentPlans();
         
         if (!Array.isArray(plans) || plans.length === 0) return;
@@ -698,6 +704,23 @@ const Dashboard: React.FC = () => {
             });
           });
         });
+        
+        // Also load any manually created reminders
+        try {
+          const storedReminders = await storeService.getPlanReminders();
+          if (Array.isArray(storedReminders) && storedReminders.length > 0) {
+            // Filter for reminders that are upcoming and not expired
+            const validReminders = storedReminders.filter(reminder => {
+              const reminderDate = new Date(reminder.publishDate);
+              return reminderDate >= now && reminderDate <= twoWeeksFromNow;
+            });
+            
+            // Add manual reminders to the list
+            upcoming.push(...validReminders);
+          }
+        } catch (err) {
+          console.error('Failed to load manual reminders:', err);
+        }
         
         // Sort by date (closest first)
         upcoming.sort((a, b) => {
@@ -738,6 +761,68 @@ const Dashboard: React.FC = () => {
       hour: 'numeric',
       minute: '2-digit'
     });
+  };
+
+  // Function to add a new reminder manually
+  const addReminder = async () => {
+    if (!newReminderTitle || !newReminderDate) return;
+    
+    try {
+      // Create a new reminder
+      const newReminder: ContentReminder = {
+        planId: 'manual-' + Date.now().toString(),
+        planName: 'Manual Reminder',
+        channelId: Date.now().toString(),
+        channelName: newReminderTitle,
+        channelType: newReminderType,
+        publishDate: new Date(`${newReminderDate}T${newReminderTime || '12:00:00'}`).toISOString(),
+        documentTitle: newReminderNotes || undefined
+      };
+      
+      // Add to existing reminders
+      const updatedReminders = [...contentReminders, newReminder];
+      
+      // Sort by date
+      updatedReminders.sort((a, b) => {
+        return new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime();
+      });
+      
+      // Update state
+      setContentReminders(updatedReminders);
+      
+      // Try to save to planReminders in localStorage for persistence
+      try {
+        const existingReminders = await storeService.getPlanReminders();
+        await storeService.savePlanReminders([...existingReminders, newReminder]);
+      } catch (err) {
+        console.error('Failed to save reminder to storage:', err);
+      }
+      
+      // Schedule notification if possible
+      if ((window as any).electron?.notifications?.schedule) {
+        await (window as any).electron.notifications.schedule({
+          title: `Reminder: ${newReminderTitle}`,
+          body: newReminderNotes || `Your ${newReminderType} reminder is due.`,
+          timestamp: new Date(newReminder.publishDate).getTime()
+        });
+      }
+      
+      // Reset form
+      resetReminderForm();
+    } catch (err) {
+      console.error('Failed to add reminder:', err);
+      alert('Failed to add reminder. Please try again.');
+    }
+  };
+  
+  // Reset reminder form
+  const resetReminderForm = () => {
+    setShowAddReminderModal(false);
+    setNewReminderTitle('');
+    setNewReminderType('other');
+    setNewReminderDate('');
+    setNewReminderTime('');
+    setNewReminderNotes('');
   };
 
   return (
@@ -811,6 +896,13 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center mb-2">
               <FiClock className="text-purple-500 mr-2" />
               <h3 className="text-white font-medium">Content Reminders</h3>
+              <button
+                onClick={() => setShowAddReminderModal(true)}
+                className="ml-2 p-1 rounded bg-blue-600 hover:bg-blue-700 flex items-center text-xs"
+                title="Add Reminder"
+              >
+                <FiPlus className="w-3 h-3" />
+              </button>
             </div>
             
             {contentReminders.length > 0 ? (
@@ -1399,6 +1491,94 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Add Reminder Modal */}
+      {showAddReminderModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-4 max-w-md w-full">
+            <h3 className="text-lg font-medium text-white mb-4">
+              Add New Reminder
+            </h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Title</label>
+              <input
+                type="text"
+                value={newReminderTitle}
+                onChange={(e) => setNewReminderTitle(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                placeholder="Reminder Title"
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-gray-300 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={newReminderDate}
+                  onChange={(e) => setNewReminderDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-300 mb-1">Time</label>
+                <input
+                  type="time"
+                  value={newReminderTime}
+                  onChange={(e) => setNewReminderTime(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                />
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Type</label>
+              <select
+                value={newReminderType}
+                onChange={(e) => setNewReminderType(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+              >
+                <option value="facebook">Facebook</option>
+                <option value="twitter">Twitter</option>
+                <option value="instagram">Instagram</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="blog">Blog</option>
+                <option value="email">Email</option>
+                <option value="meeting">Meeting</option>
+                <option value="task">Task</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Notes (Optional)</label>
+              <textarea
+                value={newReminderNotes}
+                onChange={(e) => setNewReminderNotes(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                rows={3}
+                placeholder="Add additional details here..."
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={resetReminderForm}
+                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addReminder}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                disabled={!newReminderTitle || !newReminderDate}
+              >
+                Add Reminder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
      
     </div>
   );

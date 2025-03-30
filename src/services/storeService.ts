@@ -503,6 +503,14 @@ export const storeService = {
       assistants: await s.get("assistants"),
       chats: await s.get("chats"),
       automations: await s.get("automations"),
+      // Add calendar events
+      calendarEvents: localStorage.getItem("calendar_events")
+        ? JSON.parse(localStorage.getItem("calendar_events") || "[]")
+        : [],
+      // Export dashboard cards
+      dashboardCards: localStorage.getItem("dashboard_cards")
+        ? JSON.parse(localStorage.getItem("dashboard_cards") || "[]")
+        : [],
       exportDate: new Date().toISOString(),
       appVersion: "1.0.0", // Add version for future compatibility checks
     };
@@ -532,6 +540,10 @@ export const storeService = {
       importUserContext?: boolean;
       importWebsiteCategories?: boolean;
       importSubscriptionCategories?: boolean;
+      importContentPlans?: boolean;
+      importPlanReminders?: boolean;
+      importCalendarEvents?: boolean;
+      importDashboardCards?: boolean;
     } = {}
   ): Promise<{ success: boolean; message: string }> => {
     try {
@@ -855,6 +867,90 @@ export const storeService = {
             new Set([...currentCategories, ...data.subscriptionCategories])
           );
           await s.set("subscriptionCategories", mergedCategories);
+        }
+      }
+
+      // Import content plans
+      if (options.importContentPlans !== false && data.contentPlans) {
+        if (options.overwrite) {
+          await s.set("contentPlans", data.contentPlans);
+        } else {
+          const currentPlans = (await s.get("contentPlans")) as any[];
+          const existingIds = new Set(currentPlans.map((plan) => plan.id));
+          const newPlans = [...currentPlans];
+
+          for (const plan of data.contentPlans) {
+            if (!existingIds.has(plan.id)) {
+              newPlans.push(plan);
+              existingIds.add(plan.id);
+            }
+          }
+
+          await s.set("contentPlans", newPlans);
+        }
+      }
+
+      // Import plan reminders
+      if (options.importPlanReminders !== false && data.planReminders) {
+        if (options.overwrite) {
+          await s.set("planReminders", data.planReminders);
+        } else {
+          const currentReminders = (await s.get("planReminders")) as any[];
+          // We can't easily check for duplicates with reminders, so combine them
+          const mergedReminders = [...currentReminders, ...data.planReminders];
+          await s.set("planReminders", mergedReminders);
+        }
+      }
+
+      // Import calendar events
+      if (options.importCalendarEvents !== false && data.calendarEvents) {
+        if (options.overwrite) {
+          localStorage.setItem(
+            "calendar_events",
+            JSON.stringify(data.calendarEvents)
+          );
+        } else {
+          const currentEvents = JSON.parse(
+            localStorage.getItem("calendar_events") || "[]"
+          );
+          const existingIds = new Set(
+            currentEvents.map((event: any) => event.id)
+          );
+          const newEvents = [...currentEvents];
+
+          for (const event of data.calendarEvents) {
+            if (!existingIds.has(event.id)) {
+              newEvents.push(event);
+              existingIds.add(event.id);
+            }
+          }
+
+          localStorage.setItem("calendar_events", JSON.stringify(newEvents));
+        }
+      }
+
+      // Import dashboard cards
+      if (options.importDashboardCards !== false && data.dashboardCards) {
+        if (options.overwrite) {
+          localStorage.setItem(
+            "dashboard_cards",
+            JSON.stringify(data.dashboardCards)
+          );
+        } else {
+          const currentCards = JSON.parse(
+            localStorage.getItem("dashboard_cards") || "[]"
+          );
+          const existingIds = new Set(currentCards.map((card: any) => card.id));
+          const newCards = [...currentCards];
+
+          for (const card of data.dashboardCards) {
+            if (!existingIds.has(card.id)) {
+              newCards.push(card);
+              existingIds.add(card.id);
+            }
+          }
+
+          localStorage.setItem("dashboard_cards", JSON.stringify(newCards));
         }
       }
 
