@@ -24,31 +24,67 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
   const [notes, setNotes] = useState(channel.notes || '');
   const [showDocumentSelect, setShowDocumentSelect] = useState(false);
   
-  // Documents state
-  const [documents, setDocuments] = useState<PlanDocument[]>([]);
+  // Documents and Projects state
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState(channel.document?.id || '');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   
-  // Load documents
+  // Load projects and documents
   useEffect(() => {
-    const loadDocuments = async () => {
+    const loadData = async () => {
+      setIsLoadingProjects(true);
       setIsLoadingDocuments(true);
+      
       try {
+        // Load projects first
+        const storedProjects = await storeService.getProjects();
+        if (Array.isArray(storedProjects) && storedProjects.length > 0) {
+          setProjects(storedProjects);
+          // Set default project if none selected
+          if (!selectedProjectId && storedProjects.length > 0) {
+            setSelectedProjectId(storedProjects[0].id);
+          }
+        } else {
+          setProjects([]);
+        }
+        
+        // Then load documents
         const storedDocuments = await storeService.getDocuments();
         if (Array.isArray(storedDocuments)) {
-          setDocuments(storedDocuments);
+          // Add projectId if missing for backward compatibility
+          const docsWithProjects = storedDocuments.map((doc: any) => {
+            if (!doc.projectId) {
+              return { ...doc, projectId: 'default' };
+            }
+            return doc;
+          });
+          
+          setDocuments(docsWithProjects);
+          
+          // If document is already linked, find its project
+          if (channel.document?.id) {
+            const linkedDoc = docsWithProjects.find((doc: any) => doc.id === channel.document?.id);
+            if (linkedDoc && linkedDoc.projectId) {
+              setSelectedProjectId(linkedDoc.projectId);
+            }
+          }
         } else {
           setDocuments([]);
         }
       } catch (err) {
-        console.error('Failed to load documents:', err);
+        console.error('Failed to load data:', err);
+        setProjects([]);
         setDocuments([]);
       } finally {
+        setIsLoadingProjects(false);
         setIsLoadingDocuments(false);
       }
     };
     
-    loadDocuments();
+    loadData();
   }, []);
   
   // Save changes
@@ -60,13 +96,21 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
       ? documents.find(doc => doc.id === selectedDocumentId) 
       : undefined;
     
+    // Convert Writer document to PlanDocument if needed
+    const planDocument: PlanDocument | undefined = document ? {
+      id: document.id,
+      title: document.name || document.title,
+      content: document.content,
+      filePath: document.filePath
+    } : undefined;
+    
     const updatedChannel: Channel = {
       ...channel,
       name: name.trim(),
       type,
       status,
       notes: notes.trim() || undefined,
-      document,
+      document: planDocument,
       publishDate: publishDate ? new Date(publishDate).toISOString() : undefined
     };
     
@@ -157,12 +201,23 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
     }
   }, [publishDate]);
   
+  // Filter documents by selected project
+  const filteredDocuments = documents.filter(doc => 
+    selectedProjectId ? doc.projectId === selectedProjectId : true
+  );
+  
+  // Get project color by ID
+  const getProjectColor = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    return project ? project.color : '#3B82F6'; // Default blue
+  };
+  
   return (
     <div className="p-6">
       <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
         <div className="mb-6">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-400 mb-1">Channel Name</label>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Content Name</label>
             <input
               type="text"
               value={name}
@@ -173,7 +228,7 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Channel Type</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Content Type</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as ChannelType)}
@@ -253,18 +308,18 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setShowDocumentSelect(true)}
-                    className="p-1 text-gray-400 hover:text-blue-400"
+                    className="p-1.5 rounded text-blue-400 hover:text-blue-300 hover:bg-gray-600"
                     title="Change Document"
                   >
                     <FiEdit className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => {
-                      setSelectedDocumentId('');
-                      saveChanges();
+                      const updatedChannel = { ...channel, document: undefined };
+                      onUpdateChannel(updatedChannel);
                     }}
-                    className="p-1 text-gray-400 hover:text-red-400"
-                    title="Remove Document"
+                    className="p-1.5 rounded text-red-400 hover:text-red-300 hover:bg-gray-600"
+                    title="Remove Link"
                   >
                     <FiX className="w-4 h-4" />
                   </button>
@@ -273,27 +328,27 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
             ) : (
               <button
                 onClick={() => setShowDocumentSelect(true)}
-                className="w-full px-3 py-2 flex items-center justify-center rounded border border-dashed border-gray-600 text-gray-400 hover:text-blue-400 hover:border-blue-400"
+                className="w-full py-2 px-3 rounded border border-dashed border-gray-600 hover:border-gray-500 bg-gray-700 hover:bg-gray-650 flex items-center justify-center"
               >
-                <FiLink className="mr-1" />
-                Link a Document
+                <FiLink className="mr-2" />
+                <span>Link a Document</span>
               </button>
             )}
           </div>
           
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <button
               onClick={onDeleteChannel}
-              className="px-3 py-2 bg-red-900 text-red-200 rounded hover:bg-red-800 flex items-center"
+              className="px-3 py-2 bg-red-900 text-red-300 rounded hover:bg-red-800 flex items-center"
             >
               <FiTrash2 className="mr-1" />
-              Delete Channel
+              Delete Content 
             </button>
             
             <button
               onClick={saveChanges}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
               disabled={!name.trim()}
-              className={`px-4 py-2 rounded text-white flex items-center ${name.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600 cursor-not-allowed'}`}
             >
               <FiSave className="mr-1" />
               Save Changes
@@ -311,42 +366,77 @@ const ChannelDetail: React.FC<ChannelDetailProps> = ({
               Select Document
             </h3>
             
-            <div className="mb-6 max-h-96 overflow-y-auto">
+            {/* Project Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Project</label>
+              {isLoadingProjects ? (
+                <div className="p-2 flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500 mr-2"></div>
+                  <span className="text-gray-400">Loading projects...</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-white"
+                >
+                  <option value="">All Projects</option>
+                  {projects.map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            
+            <div className="mb-6 max-h-80 overflow-y-auto">
               {isLoadingDocuments ? (
                 <div className="text-center py-6">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-2"></div>
                   <p className="text-gray-400">Loading documents...</p>
                 </div>
-              ) : documents.length === 0 ? (
+              ) : filteredDocuments.length === 0 ? (
                 <div className="bg-gray-700 rounded-lg p-4 text-center">
                   <p className="text-gray-400 mb-2">No documents found</p>
                   <p className="text-gray-500 text-sm">
-                    Create documents in the Write section to link them to your content plan.
+                    {selectedProjectId 
+                      ? "This project doesn't have any documents yet." 
+                      : "Create documents in the Write section to link them to your content plan."}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {documents.map(doc => (
-                    <div
-                      key={doc.id}
-                      className={`p-3 rounded cursor-pointer flex items-center justify-between ${
-                        selectedDocumentId === doc.id
-                          ? 'bg-blue-900 border border-blue-700'
-                          : 'bg-gray-700 border border-gray-600 hover:border-gray-500'
-                      }`}
-                      onClick={() => setSelectedDocumentId(doc.id)}
-                    >
-                      <div className="flex items-center">
-                        <FiPaperclip className={`mr-2 ${selectedDocumentId === doc.id ? 'text-blue-400' : 'text-gray-400'}`} />
-                        <span className="text-white">{doc.title}</span>
+                  {filteredDocuments.map(doc => {
+                    const projectColor = getProjectColor(doc.projectId);
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`p-3 rounded cursor-pointer flex items-center justify-between ${
+                          selectedDocumentId === doc.id
+                            ? 'bg-blue-900 border border-blue-700'
+                            : 'bg-gray-700 border border-gray-600 hover:border-gray-500'
+                        }`}
+                        onClick={() => setSelectedDocumentId(doc.id)}
+                      >
+                        <div className="flex items-center">
+                          <FiPaperclip className={`mr-2 ${selectedDocumentId === doc.id ? 'text-blue-400' : 'text-gray-400'}`} />
+                          <span className="text-white">{doc.name || doc.title}</span>
+                          {/* Show project indicator */}
+                          <div 
+                            className="ml-2 h-2 w-2 rounded-full" 
+                            style={{ backgroundColor: projectColor }}
+                            title={projects.find(p => p.id === doc.projectId)?.name || 'Unknown Project'}
+                          ></div>
+                        </div>
+                        {selectedDocumentId === doc.id && (
+                          <svg className="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
                       </div>
-                      {selectedDocumentId === doc.id && (
-                        <svg className="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

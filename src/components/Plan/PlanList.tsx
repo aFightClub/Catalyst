@@ -49,7 +49,7 @@ const PlanList: React.FC<PlanListProps> = ({ plans, onSelectPlan, onDeletePlan }
           <FiFolder className="h-16 w-16 mx-auto mb-4 text-gray-500" />
           <h3 className="text-xl font-semibold text-white mb-2">No Content Plans Yet</h3>
           <p className="text-gray-400 mb-4">
-            Create your first content plan to organize your publishing schedule across different channels.
+            Create your first content plan to organize your publishing schedule across different platforms.
           </p>
           <p className="text-gray-400 mb-6">
             Content plans help you manage social media posts, blog articles, email newsletters, and more in one place.
@@ -99,7 +99,7 @@ const PlanList: React.FC<PlanListProps> = ({ plans, onSelectPlan, onDeletePlan }
                   <div className="bg-gray-700 p-3 rounded">
                     <div className="flex items-center text-blue-400 mb-1">
                       <FiLayout className="w-4 h-4 mr-2" />
-                      <span className="text-xs uppercase font-semibold">Channels</span>
+                      <span className="text-xs uppercase font-semibold">Content</span>
                     </div>
                     <p className="text-lg font-semibold text-white">{stats.total}</p>
                   </div>

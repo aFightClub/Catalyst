@@ -211,21 +211,21 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
       
       {/* Channels Section */}
       <div className="mb-4 flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-white">Channels</h3>
+        <h3 className="text-lg font-semibold text-white">Content</h3>
         <button
           onClick={() => setShowAddChannelModal(true)}
           className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center"
         >
           <FiPlus className="mr-1" />
-          Add Channel
+          Add Content
         </button>
       </div>
       
       {sortedChannels.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center border border-gray-700">
-          <p className="text-gray-400 mb-2">No channels added yet.</p>
+          <p className="text-gray-400 mb-2">No content added yet.</p>
           <p className="text-gray-500 text-sm">
-            Add channels for social media, blog posts, newsletters, or ads to organize your content plan.
+            Add content for social media, blog posts, newsletters, or ads to organize your content plan.
           </p>
         </div>
       ) : (
@@ -251,7 +251,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
                         onDeleteChannel(plan.id, channel.id);
                       }}
                       className="p-1 rounded text-gray-500 hover:text-red-400"
-                      title="Delete Channel"
+                      title="Delete Content"
                     >
                       <FiTrash2 className="w-4 h-4" />
                     </button>
@@ -289,21 +289,21 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
       {showAddChannelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-bold text-white mb-4">Add New Channel</h3>
+            <h3 className="text-lg font-bold text-white mb-4">Add New Content</h3>
             
             <div className="mb-4">
-              <label className="block text-gray-300 mb-2">Channel Name</label>
+              <label className="block text-gray-300 mb-2">Content Name</label>
               <input
                 type="text"
                 value={newChannelName}
                 onChange={(e) => setNewChannelName(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-white"
-                placeholder="E.g., Facebook Page"
+                placeholder="E.g., Facebook Post"
               />
             </div>
             
             <div className="mb-6">
-              <label className="block text-gray-300 mb-2">Channel Type</label>
+              <label className="block text-gray-300 mb-2">Content Type</label>
               <select
                 value={newChannelType}
                 onChange={(e) => setNewChannelType(e.target.value as ChannelType)}
@@ -332,7 +332,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
                 disabled={!newChannelName.trim()}
                 className={`px-4 py-2 rounded text-white ${newChannelName.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600 cursor-not-allowed'}`}
               >
-                Add Channel
+                Add Content
               </button>
             </div>
           </div>
