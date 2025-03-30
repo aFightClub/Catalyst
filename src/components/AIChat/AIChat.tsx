@@ -59,6 +59,64 @@ const STORAGE_KEYS = {
   DOCUMENTS: 'writer_docs'
 };
 
+// First, let's add CSS for the hidden function results
+const markdownStyles = `
+  .hidden-function-result {
+    display: none;
+  }
+  
+  .chat-message ul {
+    padding-left: 1.5rem;
+    margin: 0.75rem 0;
+  }
+  
+  .chat-message ol {
+    padding-left: 1.5rem;
+    margin: 0.75rem 0;
+    list-style-type: decimal;
+  }
+  
+  .chat-message li {
+    margin-bottom: 0.25rem;
+  }
+  
+  .chat-message strong, .chat-message b {
+    font-weight: bold;
+  }
+  
+  .chat-message em, .chat-message i {
+    font-style: italic;
+  }
+  
+  .chat-message h1, .chat-message h2, .chat-message h3, 
+  .chat-message h4, .chat-message h5, .chat-message h6 {
+    font-weight: bold;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .chat-message h1 { font-size: 1.5rem; }
+  .chat-message h2 { font-size: 1.4rem; }
+  .chat-message h3 { font-size: 1.3rem; }
+  .chat-message h4 { font-size: 1.2rem; }
+  .chat-message h5 { font-size: 1.1rem; }
+  .chat-message h6 { font-size: 1rem; }
+  
+  .chat-message a {
+    color: #60a5fa;
+    text-decoration: underline;
+  }
+  
+  .chat-message blockquote {
+    border-left: 3px solid #4b5563;
+    padding-left: 1rem;
+    margin-left: 0;
+    margin-right: 0;
+    font-style: italic;
+    color: #9ca3af;
+  }
+`;
+
 const AIChat: React.FC = () => {
   // Chat and assistant state
   const [assistants, setAssistants] = useState<Assistant[]>([]);
@@ -1043,7 +1101,7 @@ const AIChat: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Format message content to add formatting
+  // Update the formatMessageContent function to better handle markdown
   const formatMessageContent = (content: string) => {
     if (!content) return '';
     
@@ -1091,11 +1149,89 @@ const AIChat: React.FC = () => {
       formattedContent = formattedContent.replace(match.fullMatch, replacementHTML);
     }
     
+    // Basic markdown formatting (outside of code blocks)
+    // Handle headers (h1-h6)
+    formattedContent = formattedContent.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+    formattedContent = formattedContent.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+    formattedContent = formattedContent.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+    formattedContent = formattedContent.replace(/^#### (.*$)/gm, '<h4>$1</h4>');
+    formattedContent = formattedContent.replace(/^##### (.*$)/gm, '<h5>$1</h5>');
+    formattedContent = formattedContent.replace(/^###### (.*$)/gm, '<h6>$1</h6>');
+    
+    // Handle bold and italic text
+    formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    formattedContent = formattedContent.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    formattedContent = formattedContent.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    formattedContent = formattedContent.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    // Handle lists
+    const processLists = (content: string): string => {
+      // Process unordered lists
+      const ulRegex = /^[-*] (.*?)$((\n(?:^ {2,4}[-*] .*?$))*)/gm;
+      let result = content.replace(ulRegex, (match, item, subItems) => {
+        let listItems = `<li>${item}</li>`;
+        
+        if (subItems) {
+          // Process nested items (simplified)
+          const nestedItems = subItems.match(/^ {2,4}[-*] (.*?)$/gm);
+          if (nestedItems) {
+            listItems += '<ul>';
+            for (const nestedItem of nestedItems) {
+              const itemText = nestedItem.replace(/^ {2,4}[-*] /, '');
+              listItems += `<li>${itemText}</li>`;
+            }
+            listItems += '</ul>';
+          }
+        }
+        
+        return `<ul>${listItems}</ul>`;
+      });
+      
+      // Process ordered lists
+      const olRegex = /^[0-9]+\. (.*?)$((\n(?:^ {2,4}[0-9]+\. .*?$))*)/gm;
+      result = result.replace(olRegex, (match, item, subItems) => {
+        let listItems = `<li>${item}</li>`;
+        
+        if (subItems) {
+          // Process nested items (simplified)
+          const nestedItems = subItems.match(/^ {2,4}[0-9]+\. (.*?)$/gm);
+          if (nestedItems) {
+            listItems += '<ol>';
+            for (const nestedItem of nestedItems) {
+              const itemText = nestedItem.replace(/^ {2,4}[0-9]+\. /, '');
+              listItems += `<li>${itemText}</li>`;
+            }
+            listItems += '</ol>';
+          }
+        }
+        
+        return `<ol>${listItems}</ol>`;
+      });
+      
+      return result;
+    };
+    
+    formattedContent = processLists(formattedContent);
+    
+    // Handle links
+    formattedContent = formattedContent.replace(/\[([^\[]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Handle blockquotes
+    formattedContent = formattedContent.replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>');
+    
     // Convert line breaks to <br> and wrap paragraphs for proper rendering
     if (!matches.length) {
       // Split by double newlines to identify paragraphs
       const paragraphs = formattedContent.split(/\n\n+/);
       formattedContent = paragraphs.map(p => {
+        // Don't wrap list items or headers in paragraphs
+        if (p.startsWith('<ul>') || p.startsWith('<ol>') || 
+            p.startsWith('<h1>') || p.startsWith('<h2>') || 
+            p.startsWith('<h3>') || p.startsWith('<h4>') || 
+            p.startsWith('<h5>') || p.startsWith('<h6>') ||
+            p.startsWith('<blockquote>')) {
+          return p;
+        }
         // Convert single newlines to <br> within paragraphs
         const processed = p.replace(/\n/g, '<br>');
         return `<p class="mb-3">${processed}</p>`;
@@ -1110,6 +1246,14 @@ const AIChat: React.FC = () => {
           // Process text content
           const paragraphs = fragment.split(/\n\n+/);
           return paragraphs.map(p => {
+            // Don't wrap list items or headers in paragraphs
+            if (p.startsWith('<ul>') || p.startsWith('<ol>') || 
+                p.startsWith('<h1>') || p.startsWith('<h2>') || 
+                p.startsWith('<h3>') || p.startsWith('<h4>') || 
+                p.startsWith('<h5>') || p.startsWith('<h6>') ||
+                p.startsWith('<blockquote>')) {
+              return p;
+            }
             const processed = p.trim().replace(/\n/g, '<br>');
             return processed ? `<p class="mb-3">${processed}</p>` : '';
           }).join('');
@@ -1728,7 +1872,7 @@ const AIChat: React.FC = () => {
           // Execute the function
           const functionResult = await executeFunction(functionCall);
           
-          // Create function call and result messages
+          // Create function call message - but don't show it to the user
           const functionCallMessage: Message = {
             role: 'assistant',
             content: `Calling function: ${functionName}...`,
@@ -1741,11 +1885,55 @@ const AIChat: React.FC = () => {
             type: 'function_result'
           };
           
-          // Update messages with function call and result
-          const newMessages = [...updatedMessages, functionCallMessage, functionResultMessage];
-          setMessages(newMessages);
+          // Store these messages in the chat history, but don't display them to the user
+          const historyMessages = [...updatedMessages, functionCallMessage, functionResultMessage];
           
-          // Update the chat in the chats array
+          // Show a temporary message to the user
+          setMessages([...updatedMessages, {
+            role: 'assistant',
+            content: 'Processing your request...'
+          }]);
+          
+          // Now send the function result back to OpenAI to get a human-readable response
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: selectedModel,
+              messages: [
+                ...apiMessages, // Previous conversation context
+                functionCallMessage, // The function call that was made
+                // Add a system message explaining the function result
+                {
+                  role: 'system',
+                  content: 'The function has been executed. Please provide a helpful response based on the function result. Format your response using markdown for better readability.'
+                },
+                // Add the function result as an assistant message
+                {
+                  role: 'assistant',
+                  content: functionResult
+                }
+              ]
+            })
+          });
+          
+          const responseData = await response.json();
+          const humanReadableResponse = responseData.choices[0]?.message?.content || 'I processed your request, but couldn\'t generate a good response.';
+          
+          // Create the final human-readable message
+          const finalResponseMessage: Message = {
+            role: 'assistant',
+            content: humanReadableResponse
+          };
+          
+          // Update messages with all the history plus the human-readable response
+          const newMessages = [...historyMessages, finalResponseMessage];
+          setMessages([...updatedMessages, finalResponseMessage]); // Only show the final human-readable response to the user
+          
+          // Update the chat in the chats array with the full history
           const updatedChatsWithFunction = chats.map(chat => 
             chat.id === activeChatId 
               ? { ...chat, messages: newMessages, updatedAt: new Date().toISOString() } 
@@ -1754,7 +1942,23 @@ const AIChat: React.FC = () => {
           
           setChats(updatedChatsWithFunction);
         } catch (error) {
-          console.error('Error executing function:', error);
+          console.error('Error executing function or getting response:', error);
+          
+          // Show error to user
+          const errorMessage: Message = {
+            role: 'assistant',
+            content: 'I encountered an error while processing your request. Please try again.'
+          };
+          
+          setMessages([...updatedMessages, errorMessage]);
+          
+          const updatedChatsWithError = chats.map(chat => 
+            chat.id === activeChatId 
+              ? { ...chat, messages: [...updatedMessages, errorMessage], updatedAt: new Date().toISOString() } 
+              : chat
+          );
+          
+          setChats(updatedChatsWithError);
         }
       } else {
         // Finalize the regular text response
@@ -1802,9 +2006,43 @@ const AIChat: React.FC = () => {
     }
   };
 
+  // Add this CSS class for the loading indicator near the top
+  const loadingIndicatorStyles = `
+    .loading-indicator {
+      position: fixed;
+      top: 90px;
+      right: 20px;
+      z-index: 1000;
+      background-color: rgba(30, 41, 59, 0.8);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    
+    .loading-spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      border-top: 3px solid #3b82f6;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `;
+
   return (
     <div className="flex flex-col h-full bg-gray-900">
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
+      <style>{loadingIndicatorStyles}</style>
+      <style>{markdownStyles}</style>
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center">
           {!showLandingScreen && !showChatList && (
@@ -2233,14 +2471,12 @@ const AIChat: React.FC = () => {
                           <div className="font-mono">{message.content}</div>
                         </div>
                       ) : message.type === 'function_result' ? (
-                        <div className="self-start max-w-3/4 bg-transparent text-white">
-                          <div className="whitespace-pre-wrap">
-                            <div dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }} />
-                          </div>
+                        <div className="hidden-function-result">
+                          {message.content}
                         </div>
                       ) : (
                         <div className="self-start max-w-3/4 bg-transparent text-white">
-                          <div className="whitespace-pre-wrap">
+                          <div className="chat-message">
                             {isLoading && index === messages.length - 1 && message.content === '' ? (
                               renderTypingIndicator()
                             ) : (
@@ -2254,6 +2490,11 @@ const AIChat: React.FC = () => {
                 </div>
               )}
               <div ref={messagesEndRef} />
+              {isLoading && (
+                <div className="loading-indicator">
+                  <div className="loading-spinner"></div>
+                </div>
+              )}
             </div>
           </div>
 
