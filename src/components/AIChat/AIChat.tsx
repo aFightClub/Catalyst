@@ -2125,7 +2125,7 @@ const AIChat: React.FC = () => {
                 ) : null;
               })()}
               <h2 className="text-xl font-bold text-white">
-                {chats.find(c => c.id === activeChatId)?.title || 'AI Chat'}
+                {chats.find(c => c.id === activeChatId)?.title || 'Chat'}
               </h2>
               <button
                 onClick={() => {
@@ -2144,7 +2144,7 @@ const AIChat: React.FC = () => {
               </button>
             </div>
           ) : (
-            <h2 className="text-xl font-bold text-white">AI Chat</h2>
+            <h2 className="text-xl font-bold text-white">Chat</h2>
           )}
         </div>
         
@@ -2224,27 +2224,49 @@ const AIChat: React.FC = () => {
       ) : null}
 
       {showLandingScreen ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          <div className="max-w-lg w-full space-y-6">
-            <h1 className="text-3xl font-bold text-center text-white mb-8">AI Chat</h1>
+        <div className="flex-1 overflow-hidden bg-gray-900 p-8">
+          <div className="max-w-6xl mx-auto h-full flex flex-col">
             
-            <button
-              onClick={navigateToNewChat}
-              className="w-full p-6 bg-blue-600 rounded-lg hover:bg-blue-700 flex flex-col items-center justify-center transition-colors"
-            >
-              <FiPlus className="w-8 h-8 mb-2" />
-              <span className="text-xl font-semibold">New Chat</span>
-              <p className="text-sm text-blue-200 mt-1">Start a conversation with an assistant</p>
-            </button>
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* New Chat Card */}
+              <div 
+                onClick={navigateToNewChat}
+                className="flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl  cursor-pointer transform hover:-translate-y-1 hover:scale-[1.02]"
+              >
+                <div className="p-8 flex-1 flex flex-col items-center justify-center">
+                  <div className="bg-white/20 p-4 rounded-full mb-6">
+                    <FiPlus className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-medium text-gray-100  mb-2">New Chat</h2>
+                  <p className="text-gray-500 text-center">Start a conversation with an assistant</p>
+                </div>
+                <div className="bg-black/20 py-4 text-center">
+                  <span className="text-white/90 font-medium">Create New &rarr;</span>
+                </div>
+              </div>
+              
+              {/* Past Chats Card */}
+              <div 
+                onClick={navigateToPastChats}
+                className="flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl cursor-pointer border border-gray-700 transform hover:-translate-y-1 hover:scale-[1.02]"
+              >
+                <div className="p-8 flex-1 flex flex-col items-center justify-center">
+                  <div className="bg-white/10 p-4 rounded-full mb-6">
+                    <FiList className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-medium text-gray-100  mb-2">Past Chats</h2>
+                  <p className="text-gray-500 text-center">Continue a previous conversation</p>
+                </div>
+                <div className="bg-black/20 py-4 text-center">
+                  <span className="text-white/90 font-medium">View History &rarr;</span>
+                </div>
+              </div>
+            </div>
             
-            <button
-              onClick={navigateToPastChats}
-              className="w-full p-6 bg-gray-700 rounded-lg hover:bg-gray-600 flex flex-col items-center justify-center transition-colors"
-            >
-              <FiList className="w-8 h-8 mb-2" />
-              <span className="text-xl font-semibold">Past Chats</span>
-              <p className="text-sm text-gray-300 mt-1">Continue a previous conversation</p>
-            </button>
+            {/* Extra information section */}
+            <div className="mt-8 text-center text-gray-400 text-sm">
+              <p>Powered by OpenAI models with function calling capabilities</p>
+            </div>
           </div>
         </div>
       ) : showAssistantSelect ? (
