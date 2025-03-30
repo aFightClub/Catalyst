@@ -262,7 +262,7 @@ const Tasks: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-gray-900">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
-        <h2 className="text-xl font-bold text-white">Plan</h2>
+        <h2 className="text-xl font-bold text-white">Tasks</h2>
       </div>
 
       <div className="flex flex-1 overflow-hidden">

@@ -102,6 +102,14 @@ const schema = {
       "Other",
     ],
   },
+  contentPlans: {
+    type: "array",
+    default: [],
+  },
+  planReminders: {
+    type: "array",
+    default: [],
+  },
   userContext: {
     type: "object",
     default: {
@@ -391,6 +399,26 @@ export const storeService = {
     return s.set("subscriptionCategories", categories);
   },
 
+  // Content Plans
+  getContentPlans: async () => {
+    const s = await ensureStore();
+    return s.get("contentPlans") as any[];
+  },
+  saveContentPlans: async (plans: any[]) => {
+    const s = await ensureStore();
+    return s.set("contentPlans", plans);
+  },
+
+  // Plan Reminders
+  getPlanReminders: async () => {
+    const s = await ensureStore();
+    return s.get("planReminders") as any[];
+  },
+  savePlanReminders: async (reminders: any[]) => {
+    const s = await ensureStore();
+    return s.set("planReminders", reminders);
+  },
+
   // User Context
   getUserContext: async () => {
     const s = await ensureStore();
@@ -469,6 +497,8 @@ export const storeService = {
       websiteCategories: await s.get("websiteCategories"),
       subscriptions: await s.get("subscriptions"),
       subscriptionCategories: await s.get("subscriptionCategories"),
+      contentPlans: await s.get("contentPlans"),
+      planReminders: await s.get("planReminders"),
       userContext: await s.get("userContext"),
       assistants: await s.get("assistants"),
       chats: await s.get("chats"),

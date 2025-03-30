@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { 
   FiHome, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, 
   FiGlobe, FiDollarSign, FiClock, FiSettings, FiPlus, 
-  FiPackage, FiTrash2, FiChrome 
+  FiPackage, FiTrash2, FiChrome, FiCalendar 
 } from 'react-icons/fi';
 import { Workspace, Tab } from '../../types';
 
@@ -23,6 +23,7 @@ interface SidebarProps {
   showAIChat: boolean;
   showWriter: boolean;
   showTasks: boolean;
+  showPlan: boolean;
   showImages: boolean;
   showSubscriptions: boolean;
   showWebsites: boolean;
@@ -32,6 +33,7 @@ interface SidebarProps {
   setShowAIChat: (show: boolean) => void;
   setShowWriter: (show: boolean) => void;
   setShowTasks: (show: boolean) => void;
+  setShowPlan: (show: boolean) => void;
   setShowImages: (show: boolean) => void;
   setShowSubscriptions: (show: boolean) => void;
   setShowWebsites: (show: boolean) => void;
@@ -66,6 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   showAIChat,
   showWriter,
   showTasks,
+  showPlan,
   showImages,
   showSubscriptions,
   showWebsites,
@@ -75,6 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setShowAIChat,
   setShowWriter,
   setShowTasks,
+  setShowPlan,
   setShowImages,
   setShowSubscriptions,
   setShowWebsites,
@@ -130,6 +134,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
@@ -220,6 +225,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 setShowAIChat(false);
                 setShowWriter(false);
                 setShowTasks(false);
+                setShowPlan(false);
                 setShowImages(false);
                 setShowSubscriptions(false);
                 setShowWebsites(false);
@@ -308,7 +314,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Show tabs for active workspace */}
             {activeWorkspaceId === workspace.id && !showDashboard && 
              !showSettings && !showAIChat && !showWriter && !showTasks && 
-             !showImages && !showSubscriptions && !showWebsites && !showAutomations && (
+             !showPlan && !showImages && !showSubscriptions && !showWebsites && !showAutomations && (
               <div className="ml-4 border-l border-gray-700 pl-2">
                 {workspace.tabs.map(tab => (
                   <div
@@ -428,6 +434,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSettings(false)
             setShowWriter(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
@@ -447,6 +454,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSettings(false)
             setShowAIChat(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
@@ -466,6 +474,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSettings(false)
             setShowAIChat(false)
             setShowWriter(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)
@@ -475,9 +484,28 @@ const Sidebar: React.FC<SidebarProps> = ({
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiCheckSquare className="w-5 h-5" />
+          <span>Tasks</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            setShowPlan(true)
+            setShowTasks(false)
+            setShowDashboard(false)
+            setShowSettings(false)
+            setShowAIChat(false)
+            setShowWriter(false)
+            setShowImages(false)
+            setShowSubscriptions(false)
+            setShowWebsites(false)
+            setShowAutomations(false)
+          }}
+          className={`w-full p-2 rounded-lg ${showPlan ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
+        >
+          <FiCalendar className="w-5 h-5" />
           <span>Plan</span>
         </button>
-        
         
         <button 
           onClick={() => {
@@ -487,6 +515,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowSubscriptions(false)
             setShowAutomations(false)
@@ -506,6 +535,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowWebsites(false)
             setShowAutomations(false)
@@ -525,6 +555,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowWebsites(false)
             setShowSubscriptions(false)
@@ -543,6 +574,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
             setShowTasks(false)
+            setShowPlan(false)
             setShowImages(false)
             setShowSubscriptions(false)
             setShowWebsites(false)

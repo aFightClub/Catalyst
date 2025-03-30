@@ -56,3 +56,41 @@ export interface Workflow {
   variables?: string[];
   startUrl?: string;
 }
+
+// Content Plan types
+export enum ChannelType {
+  FACEBOOK = "facebook",
+  TWITTER = "twitter",
+  LINKEDIN = "linkedin",
+  INSTAGRAM = "instagram",
+  BLOG = "blog",
+  EMAIL = "email",
+  AD = "ad",
+  OTHER = "other",
+}
+
+export interface PlanDocument {
+  id: string;
+  title: string;
+  filePath?: string;
+  content?: string;
+}
+
+export interface Channel {
+  id: string;
+  name: string;
+  type: ChannelType;
+  publishDate?: string; // ISO format date string
+  document?: PlanDocument;
+  notes?: string;
+  status: "draft" | "scheduled" | "published";
+}
+
+export interface ContentPlan {
+  id: string;
+  name: string;
+  description?: string;
+  channels: Channel[];
+  createdAt: string;
+  updatedAt: string;
+}

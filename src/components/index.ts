@@ -10,6 +10,7 @@ export { default as Settings } from "./Settings/Settings";
 export { default as AIChat } from "./AIChat/AIChat";
 export { default as Writer } from "./Writer/Writer";
 export { default as Tasks } from "./Tasks/Tasks";
+export { default as Plan } from "./Plan/Plan";
 export { default as Images } from "./Images/Images";
 export { default as Dashboard } from "./Dashboard/Dashboard";
 export { default as Subscriptions } from "./Subscriptions/Subscriptions";
@@ -25,3 +26,11 @@ export { default as Toast } from "./Toast/Toast";
 export { default as ToastContainer } from "./Toast/ToastContainer";
 
 export { default as Media } from "./Media/Media";
+export { default as ConsoleViewer } from "./ConsoleViewer";
+
+// CodeEditor components
+export { default as CodeEditor } from "./CodeEditor/CodeEditor";
+export { default as LoadingIndicator } from "./CodeEditor/LoadingIndicator";
+export { default as SplitPane } from "./CodeEditor/SplitPane";
+export { default as TabBar } from "./CodeEditor/TabBar";
+export { default as Terminal } from "./CodeEditor/Terminal";

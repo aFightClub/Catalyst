@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiRefreshCw, FiEdit, FiDollarSign, FiGlobe, FiClock } from 'react-icons/fi';
+import React, { useState, useEffect, useRef } from 'react';
+import { FiPlus, FiTrash2, FiRefreshCw, FiEdit, FiDollarSign, FiGlobe, FiClock, FiCalendar, FiChevronLeft, FiChevronRight, FiFolder, FiExternalLink } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 
 // Card types
@@ -31,6 +31,25 @@ interface Website {
   status: 'active' | 'idea' | 'archived';
 }
 
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string; // ISO string
+  type: 'event' | 'milestone';
+  projectId?: string; // For milestones
+  color: string;
+}
+
+interface ContentReminder {
+  planId: string;
+  planName: string;
+  channelId: string;
+  channelName: string;
+  channelType: string;
+  publishDate: string;
+  documentTitle?: string;
+}
+
 const Dashboard: React.FC = () => {
   const [cards, setCards] = useState<Card[]>([]);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
@@ -43,6 +62,24 @@ const Dashboard: React.FC = () => {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
+  
+  // Calendar state
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventDate, setNewEventDate] = useState('');
+  const [newEventType, setNewEventType] = useState<'event' | 'milestone'>('event');
+  const [newEventColor, setNewEventColor] = useState('#3B82F6'); // Default blue
+  const [newEventProjectId, setNewEventProjectId] = useState<string>('');
+  const [availableProjects, setAvailableProjects] = useState<{id: string, name: string}[]>([]);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [hoveredEvent, setHoveredEvent] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Content reminders state
+  const [contentReminders, setContentReminders] = useState<ContentReminder[]>([]);
 
   // Update current date and time every minute
   useEffect(() => {
@@ -81,6 +118,24 @@ const Dashboard: React.FC = () => {
         if (storedWebsites && Array.isArray(storedWebsites)) {
           setWebsites(storedWebsites);
         }
+        
+        // Load calendar events
+        const storedEvents = localStorage.getItem('calendar_events');
+        if (storedEvents) {
+          try {
+            const parsedEvents = JSON.parse(storedEvents);
+            setCalendarEvents(parsedEvents);
+          } catch (e) {
+            console.error('Failed to parse saved events:', e);
+            setCalendarEvents([]);
+          }
+        }
+        
+        // Load projects for milestone selection
+        const storedProjects = await storeService.getProjects();
+        if (storedProjects && Array.isArray(storedProjects)) {
+          setAvailableProjects(storedProjects.map(p => ({ id: p.id, name: p.name })));
+        }
       } catch (e) {
         console.error('Failed to load data:', e);
         initializeDefaultCards();
@@ -118,6 +173,21 @@ const Dashboard: React.FC = () => {
       saveCards();
     }
   }, [cards]);
+  
+  // Save calendar events whenever they change
+  useEffect(() => {
+    const saveEvents = async () => {
+      try {
+        localStorage.setItem('calendar_events', JSON.stringify(calendarEvents));
+      } catch (e) {
+        console.error('Failed to save calendar events:', e);
+      }
+    };
+    
+    if (calendarEvents.length > 0) {
+      saveEvents();
+    }
+  }, [calendarEvents]);
 
   // Fetch data for stat cards
   useEffect(() => {
@@ -394,9 +464,224 @@ const Dashboard: React.FC = () => {
       return c;
     }));
   };
+  
+  // Calendar functions
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    // Get the first day of the month
+    const firstDay = new Date(year, month, 1);
+    // Get the last day of the month
+    const lastDay = new Date(year, month + 1, 0);
+    
+    const daysArray = [];
+    
+    // Add days from previous month to fill first week
+    const firstDayOfWeek = firstDay.getDay();
+    for (let i = firstDayOfWeek; i > 0; i--) {
+      const prevDate = new Date(year, month, 1 - i);
+      daysArray.push(prevDate);
+    }
+    
+    // Add all days in current month
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      daysArray.push(new Date(year, month, i));
+    }
+    
+    // Add days from next month to complete grid (6 rows x 7 days = 42 total cells)
+    const remainingCells = 42 - daysArray.length;
+    for (let i = 1; i <= remainingCells; i++) {
+      daysArray.push(new Date(year, month + 1, i));
+    }
+    
+    return daysArray;
+  };
+  
+  const calendarDays = getDaysInMonth(currentCalendarDate);
+  
+  const navigateCalendar = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentCalendarDate);
+    if (direction === 'prev') {
+      newDate.setMonth(newDate.getMonth() - 1);
+    } else {
+      newDate.setMonth(newDate.getMonth() + 1);
+    }
+    setCurrentCalendarDate(newDate);
+  };
+  
+  const getEventsForDate = (date: Date) => {
+    const dateString = date.toISOString().split('T')[0];
+    return calendarEvents.filter(event => {
+      const eventDate = new Date(event.date).toISOString().split('T')[0];
+      return eventDate === dateString;
+    });
+  };
+  
+  const addEvent = () => {
+    if (!newEventTitle || !newEventDate) return;
+    
+    if (editingEventId) {
+      // Update existing event
+      setCalendarEvents(calendarEvents.map(event => {
+        if (event.id === editingEventId) {
+          return {
+            ...event,
+            title: newEventTitle,
+            date: new Date(newEventDate).toISOString(),
+            type: newEventType,
+            color: newEventColor,
+            ...(newEventType === 'milestone' ? { projectId: newEventProjectId } : { projectId: undefined })
+          };
+        }
+        return event;
+      }));
+    } else {
+      // Add new event
+      const newEvent: CalendarEvent = {
+        id: Date.now().toString(),
+        title: newEventTitle,
+        date: new Date(newEventDate).toISOString(),
+        type: newEventType,
+        color: newEventColor,
+        ...(newEventType === 'milestone' && newEventProjectId ? { projectId: newEventProjectId } : {})
+      };
+    
+      setCalendarEvents([...calendarEvents, newEvent]);
+    }
+    
+    resetEventForm();
+  };
+  
+  const editEvent = (eventId: string) => {
+    const event = calendarEvents.find(e => e.id === eventId);
+    if (!event) return;
+    
+    setEditingEventId(eventId);
+    setNewEventTitle(event.title);
+    setNewEventDate(event.date.split('T')[0]);
+    setNewEventType(event.type);
+    setNewEventColor(event.color);
+    setNewEventProjectId(event.projectId || '');
+    setShowAddEventModal(true);
+  };
+  
+  const deleteEvent = (eventId: string) => {
+    if (confirm('Are you sure you want to delete this event?')) {
+      setCalendarEvents(calendarEvents.filter(event => event.id !== eventId));
+    }
+  };
+  
+  const resetEventForm = () => {
+    setShowAddEventModal(false);
+    setEditingEventId(null);
+    setNewEventTitle('');
+    setNewEventDate('');
+    setNewEventType('event');
+    setNewEventColor('#3B82F6');
+    setNewEventProjectId('');
+  };
+
+  const handleEventMouseEnter = (event: CalendarEvent, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = calendarRef.current?.getBoundingClientRect();
+    // Get the target element (the dot)
+    const target = e.currentTarget;
+    const targetRect = target.getBoundingClientRect();
+    
+    if (rect) {
+      // Position directly adjacent to the dot
+      const top = targetRect.top - rect.top - 5;
+      const left = targetRect.left - rect.left + targetRect.width + 5;
+      
+      setTooltipPosition({ top, left });
+      setHoveredEvent(event.id);
+    }
+  };
+
+  const handleEventMouseLeave = () => {
+    setHoveredEvent(null);
+  };
 
   const { monthlyCost, yearlyCost, total: totalSubscriptions } = calculateSubscriptionCosts();
   const websiteStats = getWebsiteStats();
+
+  // Load content reminders
+  useEffect(() => {
+    const loadContentReminders = async () => {
+      try {
+        // Load all content plans
+        const plans = await storeService.getContentPlans();
+        
+        if (!Array.isArray(plans) || plans.length === 0) return;
+        
+        // Extract scheduled channels with upcoming dates
+        const now = new Date();
+        const twoWeeksFromNow = new Date(now);
+        twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14);
+        
+        const upcoming: ContentReminder[] = [];
+        
+        plans.forEach(plan => {
+          const scheduledChannels = plan.channels.filter(channel => {
+            if (channel.status !== 'scheduled' || !channel.publishDate) return false;
+            
+            const publishDate = new Date(channel.publishDate);
+            return publishDate >= now && publishDate <= twoWeeksFromNow;
+          });
+          
+          scheduledChannels.forEach(channel => {
+            upcoming.push({
+              planId: plan.id,
+              planName: plan.name,
+              channelId: channel.id,
+              channelName: channel.name,
+              channelType: channel.type,
+              publishDate: channel.publishDate!,
+              documentTitle: channel.document?.title
+            });
+          });
+        });
+        
+        // Sort by date (closest first)
+        upcoming.sort((a, b) => {
+          return new Date(a.publishDate).getTime() - new Date(b.publishDate).getTime();
+        });
+        
+        setContentReminders(upcoming);
+      } catch (err) {
+        console.error('Failed to load content reminders:', err);
+      }
+    };
+    
+    loadContentReminders();
+  }, []);
+
+  // Function to format the publish date
+  const formatPublishDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Check if it's today
+    if (date.toDateString() === today.toDateString()) {
+      return `Today at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    }
+    
+    // Check if it's tomorrow
+    if (date.toDateString() === tomorrow.toDateString()) {
+      return `Tomorrow at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    }
+    
+    // Otherwise show full date
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'short',
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-900 overflow-auto">
@@ -419,7 +704,7 @@ const Dashboard: React.FC = () => {
 
       {/* Stats Overview Section */}
       <div className="px-4 pt-6 ">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Subscription Stats */}
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-2">
@@ -473,6 +758,146 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-center h-full">
               <p className="text-gray-400 text-lg">Coming soon</p>
             </div>
+          </div>
+        </div>
+        
+        {/* Calendar Widget */}
+        <div className="bg-gray-800 rounded-lg p-4 mb-6" ref={calendarRef}>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center">
+              <FiCalendar className="text-indigo-500 mr-2" />
+              <h3 className="text-white font-medium">Calendar</h3>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigateCalendar('prev')}
+                className="p-1 rounded hover:bg-gray-700"
+              >
+                <FiChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-white">
+                {currentCalendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => navigateCalendar('next')}
+                className="p-1 rounded hover:bg-gray-700"
+              >
+                <FiChevronRight className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  setEditingEventId(null);
+                  resetEventForm();
+                  setShowAddEventModal(true);
+                }}
+                className="ml-2 p-1 rounded bg-blue-600 hover:bg-blue-700 flex items-center"
+              >
+                <FiPlus className="w-4 h-4" />
+                <span className="ml-1 text-sm">Event</span>
+              </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1 relative">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+              <div key={`header-${index}`} className="text-center text-xs text-gray-400 mb-1">
+                {day}
+              </div>
+            ))}
+            
+            {calendarDays.map((date, index) => {
+              const isToday = new Date().toDateString() === date.toDateString();
+              const isCurrentMonth = date.getMonth() === currentCalendarDate.getMonth();
+              const events = getEventsForDate(date);
+              
+              return (
+                <div 
+                  key={`day-${index}`}
+                  className={`h-9 p-1 rounded border ${
+                    isToday 
+                      ? 'border-blue-500 bg-blue-900 bg-opacity-20' 
+                      : isCurrentMonth 
+                        ? 'border-gray-700 bg-gray-700' 
+                        : 'border-gray-800 bg-gray-800 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between h-full">
+                    <span className={`text-xs ${
+                      isToday ? 'text-blue-400 font-bold' : isCurrentMonth ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
+                      {date.getDate()}
+                    </span>
+                    
+                    {events.length > 0 && (
+                      <div className="flex items-center space-x-1">
+                        {events.map(event => (
+                          <div 
+                            key={event.id}
+                            className="w-2 h-2 rounded-full cursor-pointer"
+                            style={{ backgroundColor: event.color }}
+                            onClick={() => editEvent(event.id)}
+                            onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                            onMouseLeave={handleEventMouseLeave}
+                            title={`${event.title} (${event.type})`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            
+            {/* Event Tooltip */}
+            {hoveredEvent && (() => {
+              const event = calendarEvents.find(e => e.id === hoveredEvent);
+              if (!event) return null;
+              
+              // Find project name if it's a milestone
+              const projectName = event.type === 'milestone' && event.projectId 
+                ? availableProjects.find(p => p.id === event.projectId)?.name || 'Unknown Project'
+                : null;
+              
+              // Format date for display
+              const eventDate = new Date(event.date);
+              const formattedDate = eventDate.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+              });
+              
+              return (
+                <div 
+                  className="absolute z-10 bg-gray-900 border border-gray-700 rounded-md shadow-lg p-4 text-white w-64 transition-opacity duration-200"
+                  style={{ 
+                    top: `${tooltipPosition.top}px`, 
+                    left: `${tooltipPosition.left}px`,
+                  }}
+                >
+                  <div className="flex items-center mb-2">
+                    <div 
+                      className="w-4 h-4 rounded-full mr-2" 
+                      style={{ backgroundColor: event.color }}
+                    />
+                    <span className="font-semibold text-base">{event.title}</span>
+                  </div>
+                  <div className="text-gray-400 ml-6 mb-2 text-sm">
+                    {event.type === 'milestone' ? 'Milestone' : 'Event'}
+                  </div>
+                  <div className="flex items-center text-gray-300 mt-3 text-sm">
+                    <FiCalendar className="mr-2 text-gray-500 flex-shrink-0" size={16} />
+                    {formattedDate}
+                  </div>
+                  {projectName && (
+                    <div className="flex items-center text-gray-300 mt-2 text-sm">
+                      <FiFolder className="mr-2 text-gray-500 flex-shrink-0" size={16} />
+                      {projectName}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -655,6 +1080,182 @@ const Dashboard: React.FC = () => {
                 {editingCardId ? 'Update' : 'Add'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Add/Edit Event Modal */}
+      {showAddEventModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-4 max-w-md w-full">
+            <h3 className="text-lg font-medium text-white mb-4">
+              {editingEventId ? 'Edit Calendar Event' : 'Add New Calendar Event'}
+            </h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Event Title</label>
+              <input
+                type="text"
+                value={newEventTitle}
+                onChange={(e) => setNewEventTitle(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                placeholder="Event Title"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Date</label>
+              <input
+                type="date"
+                value={newEventDate}
+                onChange={(e) => setNewEventDate(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Event Type</label>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setNewEventType('event')}
+                  className={`px-4 py-2 rounded ${
+                    newEventType === 'event'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Event
+                </button>
+                <button
+                  onClick={() => setNewEventType('milestone')}
+                  className={`px-4 py-2 rounded ${
+                    newEventType === 'milestone'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Milestone
+                </button>
+              </div>
+            </div>
+            
+            {newEventType === 'milestone' && (
+              <div className="mb-4">
+                <label className="block text-gray-300 mb-1">Project</label>
+                <select
+                  value={newEventProjectId}
+                  onChange={(e) => setNewEventProjectId(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                >
+                  <option value="">Select a project</option>
+                  {availableProjects.map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <label className="block text-gray-300 mb-1">Color</label>
+              <div className="flex space-x-2">
+                {['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'].map(color => (
+                  <div
+                    key={color}
+                    className={`w-8 h-8 rounded-full cursor-pointer ${
+                      newEventColor === color ? 'ring-2 ring-white' : ''
+                    }`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNewEventColor(color)}
+                  ></div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              {editingEventId && (
+                <button
+                  onClick={() => deleteEvent(editingEventId)}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              )}
+              <button
+                onClick={resetEventForm}
+                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addEvent}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                disabled={!newEventTitle || !newEventDate || (newEventType === 'milestone' && !newEventProjectId)}
+              >
+                {editingEventId ? 'Update' : 'Add'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Reminders */}
+      {contentReminders.length > 0 && (
+        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center">
+              <FiClock className="text-purple-500 mr-2" />
+              <h3 className="text-white font-medium">Upcoming Content</h3>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            {contentReminders.slice(0, 5).map((reminder, index) => (
+              <div key={`${reminder.planId}-${reminder.channelId}`} className="bg-gray-700 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center mb-1">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                    <h4 className="text-white font-medium">{reminder.channelName}</h4>
+                    <span className="ml-2 text-xs px-2 py-0.5 bg-gray-600 rounded text-gray-300">
+                      {reminder.channelType}
+                    </span>
+                  </div>
+                  
+                  <div className="text-xs text-gray-400 flex items-center">
+                    <FiCalendar className="mr-1" />
+                    <span>{formatPublishDate(reminder.publishDate)}</span>
+                    
+                    {reminder.documentTitle && (
+                      <>
+                        <span className="mx-1">•</span>
+                        <span className="truncate max-w-xs">{reminder.documentTitle}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-center text-gray-400">
+                  <FiFolder className="mr-1" />
+                  <span className="text-xs">{reminder.planName}</span>
+                </div>
+              </div>
+            ))}
+            
+            {contentReminders.length > 5 && (
+              <div className="text-center mt-2">
+                <button
+                  onClick={() => {
+                    // This would be replaced with proper navigation to the Plan page
+                    alert('Navigate to Plan page');
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center justify-center mx-auto"
+                >
+                  <span>View all {contentReminders.length} upcoming items</span>
+                  <FiExternalLink className="ml-1" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
