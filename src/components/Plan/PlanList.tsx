@@ -116,11 +116,10 @@ const PlanList: React.FC<PlanListProps> = ({ plans, onSelectPlan, onDeletePlan }
                 <div className="flex items-center justify-between text-xs text-gray-400">
                   <div className="flex items-center">
                     <FiCalendar className="w-3 h-3 mr-1" />
-                    <span>Created: {formatDate(plan.createdAt)}</span>
+                    <span>{formatDate(plan.createdAt)}</span>
                   </div>
                   
                   <div className="flex items-center">
-                    <span className="mr-2">Status:</span>
                     <div className="flex items-center space-x-1">
                       <span className="px-1.5 py-0.5 bg-gray-700 rounded">{stats.draft} Draft</span>
                       <span className="px-1.5 py-0.5 bg-blue-900 text-blue-300 rounded">{stats.scheduled} Scheduled</span>

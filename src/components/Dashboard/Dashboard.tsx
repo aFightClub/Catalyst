@@ -754,16 +754,62 @@ const Dashboard: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center mb-2">
               <FiClock className="text-purple-500 mr-2" />
-              <h3 className="text-white font-medium">Tasks</h3>
+              <h3 className="text-white font-medium">Content Reminders</h3>
             </div>
-            <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400 text-lg">Coming soon</p>
-            </div>
+            
+            {contentReminders.length > 0 ? (
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {contentReminders.slice(0, 3).map((reminder) => (
+                  <div 
+                    key={`${reminder.planId}-${reminder.channelId}`} 
+                    className="flex items-center text-sm text-gray-300 py-1 border-b border-gray-700"
+                  >
+                    <div className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: reminder.channelType === 'facebook' ? '#3B82F6' : 
+                                                                    reminder.channelType === 'twitter' ? '#1DA1F2' : 
+                                                                    reminder.channelType === 'linkedin' ? '#0A66C2' : '#8B5CF6' }} />
+                    <div className="flex-1 truncate">
+                      {reminder.channelName}
+                    </div>
+                    <div className="ml-2 text-xs text-gray-400">
+                      {formatPublishDate(reminder.publishDate)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-20">
+                <p className="text-gray-400 text-sm">No upcoming reminders</p>
+              </div>
+            )}
+            
+            {contentReminders.length > 3 && (
+              <div className="mt-2 text-xs text-right">
+                <button className="text-blue-400 hover:text-blue-300 flex items-center justify-end ml-auto" 
+                        onClick={() => {
+                          // Trigger the Plan page navigation through the App component
+                          const setShowPlanFn = (window as any).setShowPlan;
+                          if (typeof setShowPlanFn === 'function') {
+                            setShowPlanFn(true);
+                            // Also need to hide the dashboard
+                            const setShowDashboardFn = (window as any).setShowDashboard;
+                            if (typeof setShowDashboardFn === 'function') {
+                              setShowDashboardFn(false);
+                            }
+                          } else {
+                            console.error("setShowPlan function not available");
+                            alert('Navigate to Plan page');
+                          }
+                        }}>
+                  <span>View all {contentReminders.length}</span>
+                  <FiExternalLink className="ml-1" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
         
         {/* Calendar Widget */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-6" ref={calendarRef}>
+        <div className="bg-gray-800 rounded-lg p-4 mb-2" ref={calendarRef}>
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center">
               <FiCalendar className="text-indigo-500 mr-2" />
@@ -1201,65 +1247,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Content Reminders */}
-      {contentReminders.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center">
-              <FiClock className="text-purple-500 mr-2" />
-              <h3 className="text-white font-medium">Upcoming Content</h3>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            {contentReminders.slice(0, 5).map((reminder, index) => (
-              <div key={`${reminder.planId}-${reminder.channelId}`} className="bg-gray-700 rounded-lg p-3 flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center mb-1">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                    <h4 className="text-white font-medium">{reminder.channelName}</h4>
-                    <span className="ml-2 text-xs px-2 py-0.5 bg-gray-600 rounded text-gray-300">
-                      {reminder.channelType}
-                    </span>
-                  </div>
-                  
-                  <div className="text-xs text-gray-400 flex items-center">
-                    <FiCalendar className="mr-1" />
-                    <span>{formatPublishDate(reminder.publishDate)}</span>
-                    
-                    {reminder.documentTitle && (
-                      <>
-                        <span className="mx-1">•</span>
-                        <span className="truncate max-w-xs">{reminder.documentTitle}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex items-center text-gray-400">
-                  <FiFolder className="mr-1" />
-                  <span className="text-xs">{reminder.planName}</span>
-                </div>
-              </div>
-            ))}
-            
-            {contentReminders.length > 5 && (
-              <div className="text-center mt-2">
-                <button
-                  onClick={() => {
-                    // This would be replaced with proper navigation to the Plan page
-                    alert('Navigate to Plan page');
-                  }}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center justify-center mx-auto"
-                >
-                  <span>View all {contentReminders.length} upcoming items</span>
-                  <FiExternalLink className="ml-1" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+     
     </div>
   );
 };

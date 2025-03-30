@@ -10,6 +10,7 @@ import {
   AIChat,
   Writer,
   Tasks,
+  Plan,
   Images,
   Dashboard,
   Subscriptions,
@@ -50,6 +51,10 @@ export default function App() {
     (window as any).runWorkflowInAppTab = (workflowId: string, variables: {[key: string]: string} = {}) => {
       runWorkflowInNewTab(workflowId, variables);
     };
+    
+    // Expose navigation functions to the window object
+    (window as any).setShowPlan = setShowPlan;
+    (window as any).setShowDashboard = setShowDashboard;
   }, []);
 
   // Check for workflow to run on startup
@@ -136,6 +141,7 @@ export default function App() {
   const [showAIChat, setShowAIChat] = useState(false)
   const [showWriter, setShowWriter] = useState(false)
   const [showTasks, setShowTasks] = useState(false)
+  const [showPlan, setShowPlan] = useState(false)
   const [showImages, setShowImages] = useState(false)
   const [showMedia, setShowMedia] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true) // Dashboard shown by default
@@ -2135,6 +2141,7 @@ export default function App() {
         setShowAIChat={setShowAIChat}
         setShowWriter={setShowWriter}
         setShowTasks={setShowTasks}
+        setShowPlan={setShowPlan}
         setShowImages={setShowImages}
         setShowMedia={setShowMedia}
         setShowWebsites={setShowWebsites}
@@ -2145,6 +2152,7 @@ export default function App() {
         showAIChat={showAIChat}
         showWriter={showWriter}
         showTasks={showTasks}
+        showPlan={showPlan}
         showImages={showImages}
         showMedia={showMedia}
         showWebsites={showWebsites}
@@ -2169,6 +2177,8 @@ export default function App() {
           <Writer />
         ) : showTasks ? (
           <Tasks />
+        ) : showPlan ? (
+          <Plan />
         ) : showImages ? (
           <Images />
         ) : showMedia ? (
@@ -2307,7 +2317,7 @@ export default function App() {
       
       {/* Add the console viewer component */}
       {!showSettings && !showAIChat && !showWriter && !showTasks && 
-       !showImages && !showDashboard && !showSubscriptions && 
+       !showPlan && !showImages && !showDashboard && !showSubscriptions && 
        !showWebsites && !showAutomations && (
         <ConsoleViewer activeTabId={activeTabId} webviewRefs={webviewRefs} />
       )}

@@ -342,6 +342,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           <button 
                             onClick={() => saveTabEdit(workspace.id)}
                             className="p-1 text-green-400 hover:text-green-300 rounded"
+                            style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                             title="Save"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -351,6 +352,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           <button 
                             onClick={cancelEdit}
                             className="p-1 text-red-400 hover:text-red-300 rounded"
+                            style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                             title="Cancel"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">

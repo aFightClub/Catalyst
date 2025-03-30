@@ -201,7 +201,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
             
             <div className="flex items-center text-sm text-gray-400">
               <FiCalendar className="mr-1.5" />
-              <span>Created: {formatDate(plan.createdAt)}</span>
+              <span>{formatDate(plan.createdAt)}</span>
               <span className="mx-2">•</span>
               <span>Last Updated: {formatDate(plan.updatedAt)}</span>
             </div>
