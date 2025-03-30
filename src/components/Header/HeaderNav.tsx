@@ -69,9 +69,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({
         </button>
       </div>
       
-      <div className="mr-2 px-2 py-2 text-gray-300 bg-gray-800 rounded text-sm">
-        {activeWorkspace?.name || 'Default Workspace'}
-      </div>
+     
 
       <div className="flex-1">
         <input
@@ -82,6 +80,10 @@ const HeaderNav: React.FC<HeaderNavProps> = ({
           className="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder="Enter URL"
         />
+      </div>
+
+      <div className="mr-2 px-2 py-2 text-gray-300 rounded">
+        {activeWorkspace?.name || 'Default Workspace'}
       </div>
 
       <button 
@@ -184,7 +186,8 @@ const HeaderNav: React.FC<HeaderNavProps> = ({
         className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${eraserMode ? 'bg-red-600' : ''}`}
         title={eraserMode ? "Exit Eraser Mode" : "Enter Eraser Mode"}
       >
-        <FiTrash2 className="w-5 h-5" />
+
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M11.41 5.505C13.08 3.835 13.915 3 14.952 3c1.038 0 1.873.835 3.543 2.505S21 8.01 21 9.048c0 1.037-.835 1.872-2.505 3.542l-4.193 4.194l-7.086-7.086z"/><path fill="currentColor" d="m6.156 10.759l7.085 7.085l-.65.65c-.378.379-.713.714-1.018 1.006H21a.75.75 0 0 1 0 1.5H9c-1.016-.025-1.85-.86-3.495-2.505C3.835 16.825 3 15.99 3 14.952c0-1.037.835-1.872 2.505-3.542z"/></svg>
       </button>
     </div>
   );
