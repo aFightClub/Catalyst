@@ -123,6 +123,10 @@ const Settings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputBackupRef = useRef<HTMLInputElement>(null);
 
+  // After the fileInputBackupRef definition, add these new refs
+  const newSystemPromptRef = useRef<HTMLTextAreaElement>(null);
+  const editSystemPromptRef = useRef<HTMLTextAreaElement>(null);
+
   const [websiteCategories, setWebsiteCategories] = useState<string[]>([]);
   const [subscriptionCategories, setSubscriptionCategories] = useState<string[]>([]);
   const [newWebsiteCategory, setNewWebsiteCategory] = useState('');
@@ -134,6 +138,17 @@ const Settings: React.FC = () => {
   const [imagePrompt, setImagePrompt] = useState('');
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+
+  // Add this function after the other helper functions (before the render functions)
+  const adjustTextareaHeight = (textarea: HTMLTextAreaElement | null) => {
+    if (!textarea) return;
+    
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Set the height to the scrollHeight to fit the content
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
 
   useEffect(() => {
     setPlugins(pluginManager.getPlugins());
@@ -220,7 +235,18 @@ const Settings: React.FC = () => {
     loadUserContext();
     loadAssistants();
     loadCategories();
+
+    // Adjust textarea heights after component mounts
+    adjustTextareaHeight(newSystemPromptRef.current);
+    adjustTextareaHeight(editSystemPromptRef.current);
   }, []);
+
+  // In the useEffect block, add this to adjust heights when assistants are loaded
+  useEffect(() => {
+    // Adjust textarea heights after component mounts
+    adjustTextareaHeight(newSystemPromptRef.current);
+    adjustTextareaHeight(editSystemPromptRef.current);
+  }, [newAssistant.systemPrompt, editingAssistantId]);
 
   // Function to run a workflow in a new tab
   const runWorkflowInNewTab = (workflow: Workflow) => {
@@ -1064,9 +1090,13 @@ const Settings: React.FC = () => {
           <div className="mb-4">
             <label className="block text-gray-300 mb-2">System Prompt</label>
             <textarea
+              ref={newSystemPromptRef}
               value={newAssistant.systemPrompt}
-              onChange={(e) => setNewAssistant({...newAssistant, systemPrompt: e.target.value})}
-              className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
+              onChange={(e) => {
+                setNewAssistant({...newAssistant, systemPrompt: e.target.value});
+                adjustTextareaHeight(newSystemPromptRef.current);
+              }}
+              className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] overflow-hidden"
               placeholder="You are a helpful assistant..."
             ></textarea>
             <p className="text-gray-500 text-sm mt-1">Set the personality, expertise, and behavior of your assistant</p>
@@ -1195,14 +1225,16 @@ const Settings: React.FC = () => {
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">System Prompt</label>
                   <textarea
+                    ref={editSystemPromptRef}
                     value={assistant.systemPrompt}
                     onChange={(e) => {
                       const updated = [...assistants];
                       const index = updated.findIndex(a => a.id === assistant.id);
                       updated[index] = { ...updated[index], systemPrompt: e.target.value };
                       setAssistants(updated);
+                      adjustTextareaHeight(editSystemPromptRef.current);
                     }}
-                    className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
+                    className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] overflow-hidden"
                   ></textarea>
                   <p className="text-gray-500 text-sm mt-1">Set the personality, expertise, and behavior of your assistant</p>
                 </div>

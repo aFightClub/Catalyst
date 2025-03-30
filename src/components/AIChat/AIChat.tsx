@@ -2528,7 +2528,7 @@ const AIChat: React.FC = () => {
                       }
                     }
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-700 rounded-l resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[40px] max-h-[200px]"
+                  className="flex-1 px-4 py-2 bg-gray-700 rounded-l resize-none overflow-hidden focus:outline-none focus:ring-0  min-h-[40px] max-h-[200px]"
                   placeholder="Type your message..."
                   disabled={isLoading || !apiKey}
                   rows={1}
