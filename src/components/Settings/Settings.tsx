@@ -778,7 +778,7 @@ const Settings: React.FC = () => {
           className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.WORKFLOWS ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.WORKFLOWS)}
         >
-          <FiActivity className="mr-3" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-3" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" color="currentColor"><path d="M9 5a3 3 0 1 1-6 0a3 3 0 0 1 6 0m12 0a3 3 0 1 1-6 0a3 3 0 0 1 6 0M9 19a3 3 0 1 1-6 0a3 3 0 0 1 6 0M6 8v8"/><path d="M6 12h8c1.4 0 2.1 0 2.635-.273a2.5 2.5 0 0 0 1.092-1.092C18 10.1 18 9.4 18 8"/></g></svg>
           <span>Workflows</span>
         </button>
 
@@ -786,7 +786,7 @@ const Settings: React.FC = () => {
           className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.CATEGORIES ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.CATEGORIES)}
         >
-          <FiActivity className="mr-3" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-3" viewBox="0 0 24 24"><path fill="currentColor" d="M6.5 11L12 2l5.5 9zm11 11q-1.875 0-3.187-1.312T13 17.5t1.313-3.187T17.5 13t3.188 1.313T22 17.5t-1.312 3.188T17.5 22M3 21.5v-8h8v8zM17.5 20q1.05 0 1.775-.725T20 17.5t-.725-1.775T17.5 15t-1.775.725T15 17.5t.725 1.775T17.5 20M5 19.5h4v-4H5zM10.05 9h3.9L12 5.85zm7.45 8.5"/></svg>
           <span>Categories</span>
         </button>
         
@@ -794,7 +794,7 @@ const Settings: React.FC = () => {
           className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.UPDATES ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.UPDATES)}
         >
-          <FiActivity className="mr-3" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-3" viewBox="0 0 24 24"><path fill="currentColor" d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1c-2.73 2.71-2.73 7.08 0 9.79s7.15 2.71 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29c-3.51 3.48-9.21 3.48-12.72 0c-3.5-3.47-3.53-9.11-.02-12.58s9.14-3.47 12.65 0L21 3zM12.5 8v4.25l3.5 2.08l-.72 1.21L11 13V8z"/></svg>
           <span>Updates</span>
         </button>
         
@@ -802,7 +802,7 @@ const Settings: React.FC = () => {
           className={`w-full text-left px-4 py-3 flex items-center ${currentPage === SettingsPage.DATA_BACKUP ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
           onClick={() => setCurrentPage(SettingsPage.DATA_BACKUP)}
         >
-          <FiActivity className="mr-3" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-3" viewBox="0 0 36 36"><path fill="currentColor" d="m18 19.84l6.38-6.35A1 1 0 1 0 23 12.08L19 16V4a1 1 0 1 0-2 0v12l-4-3.95a1 1 0 0 0-1.41 1.42Z" class="clr-i-solid--badged clr-i-solid-path-1--badged"/><path fill="currentColor" d="m16.58 21.26l-6.38-6.35A3 3 0 0 1 9.44 12H7.07a1.92 1.92 0 0 0-1.9 1.32c-2.31 6.36-2.93 8.11-3.1 8.68h15.26Z" class="clr-i-solid--badged clr-i-solid-path-2--badged"/><path fill="currentColor" d="M2 24v6a2 2 0 0 0 2 2h28a2 2 0 0 0 2-2v-6Zm28 4h-4v-2h4Z" class="clr-i-solid--badged clr-i-solid-path-3--badged"/><path fill="currentColor" d="M18.66 22h15.27c-.17-.57-.79-2.3-3.06-8.55a8 8 0 0 1-.87.05a7.46 7.46 0 0 1-3.35-.8a3 3 0 0 1-.86 2.21l-6.38 6.35Z" class="clr-i-solid--badged clr-i-solid-path-4--badged"/><circle cx="30" cy="6" r="5" fill="currentColor" class="clr-i-solid--badged clr-i-solid-path-5--badged clr-i-badge"/><path fill="none" d="M0 0h36v36H0z"/></svg>
           <span>Data Backup</span>
         </button>
       </div>
