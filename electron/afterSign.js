@@ -1,5 +1,4 @@
 require("dotenv").config();
-const { notarize } = require("electron-notarize");
 const path = require("path");
 
 exports.default = async function notarizing(context) {
@@ -20,12 +19,15 @@ exports.default = async function notarizing(context) {
   const appPath = path.join(appOutDir, `${appName}.app`);
 
   try {
+    // Using dynamic import() for @electron/notarize
+    const { notarize } = await import("@electron/notarize");
+
     await notarize({
-      appBundleId: "com.catalystbrowser.app",
+      tool: "notarytool",
       appPath,
+      teamId: process.env.APPLE_TEAM_ID,
       appleId: process.env.APPLE_ID,
       appleIdPassword: process.env.APPLE_ID_PASSWORD,
-      teamId: process.env.APPLE_TEAM_ID,
     });
     console.log(`Successfully notarized ${appName}`);
   } catch (error) {
