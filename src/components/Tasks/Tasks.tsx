@@ -470,7 +470,7 @@ const Tasks: React.FC = () => {
                           onClick={() => toggleTaskCompletion(task.id)}
                           className={`mt-0.5 mr-3 w-5 h-5 rounded-full flex-shrink-0 border ${
                             task.completed 
-                              ? 'bg-green-500 border-green-600' 
+                              ? 'bg-gray-500 border-gray-600' 
                               : 'border-gray-500 hover:border-white'
                           } flex items-center justify-center`}
                         >

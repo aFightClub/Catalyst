@@ -101,24 +101,20 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [version, setVersion] = useState('1.0.0');
   
   useEffect(() => {
-    // Try to get version from electron on component mount
-    const electronVersion = (window as any).electron?.appInfo?.version;
-    if (electronVersion) {
-      setVersion(electronVersion);
-      console.log('Updated version from electron:', electronVersion);
-    } else {
-      // If running in dev mode, try to fetch package.json directly
-      fetch('/package.json')
-        .then(response => response.json())
-        .then(data => {
-          console.log('Fetched package.json:', data);
-          if (data.version) {
-            setVersion(data.version);
-            console.log('Updated version from package.json:', data.version);
-          }
-        })
-        .catch(err => console.error('Failed to fetch package.json:', err));
-    }
+    // Read version directly from version.txt file
+    fetch('/version.txt')
+      .then(response => response.text())
+      .then(version => {
+        if (version) {
+          setVersion(version.trim());
+          console.log('Updated version from version.txt:', version.trim());
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch version.txt:', err);
+        // Fallback to hardcoded version as last resort
+        setVersion(appVersion);
+      });
   }, []);
 
   return (

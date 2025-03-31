@@ -1,16 +1,17 @@
 {
   "name": "catalyst-browser",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "The secondary web browser of digital creatives.",
   "author": "Wynter Jones <wynter@monetizedesign.com> (https://wynter.ai)",
   "main": "electron/main.js",
   "scripts": {
     "start": "vite",
     "build": "vite build",
-    "electron:dev": "concurrently \"vite\" \"electron .\"",
-    "electron:build": "vite build && electron-builder",
-    "electron:build:dev:dmg": "vite build && CSC_IDENTITY_AUTO_DISCOVERY=false CSC_FORCE_SIGN=false electron-builder -m --config.mac.identity=null --config.mac.notarize=false --config.afterSign=\"\" --config.extraMetadata.main=electron/main-dev.js --publish never",
-    "publish": "vite build && electron-builder build --mac --publish always"
+    "update-version": "node scripts/update-version.js",
+    "electron:dev": "npm run update-version && concurrently \"vite\" \"electron .\"",
+    "electron:build": "npm run update-version && vite build && electron-builder",
+    "electron:build:dev:dmg": "npm run update-version && vite build && CSC_IDENTITY_AUTO_DISCOVERY=false CSC_FORCE_SIGN=false electron-builder -m --config.mac.identity=null --config.mac.notarize=false --config.afterSign=\"\" --config.extraMetadata.main=electron/main-dev.js --publish never",
+    "publish": "npm run update-version && vite build && electron-builder build --mac --publish always"
   },
   "build": {
     "appId": "com.catalystbrowser.app",
@@ -48,7 +49,6 @@
     },
     "dmg": {
       "background": "src/images/installbg_large.png",
-      "backgroundColor": "#ffffff",
       "window": {
         "width": 540,
         "height": 380
