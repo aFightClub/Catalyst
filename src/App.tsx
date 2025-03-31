@@ -1873,8 +1873,9 @@ export default function App() {
           ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabId)}
           src={url}
           style={{ width: '100%', height: '100%' }}
-          webpreferences="contextIsolation=false,nodeIntegration=true,allowRunningInsecureContent=true,experimentalFeatures=true"
+          webpreferences="contextIsolation=true,nodeIntegration=false,allowRunningInsecureContent=true"
           allowpopups="true"
+          partition="persist:webcontent"
           key={`webview-${tabId}`}
         />
       </div>

@@ -20,11 +20,11 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
-      enableRemoteModule: true,
-      nodeIntegrationInSubframes: true,
-      nodeIntegrationInWorker: true,
+      enableRemoteModule: false,
+      nodeIntegrationInSubframes: false,
+      nodeIntegrationInWorker: false,
       webviewTag: true,
-      webSecurity: false, // This disables same-origin policy for the browser window
+      webSecurity: true,
     },
     titleBarStyle: "hiddenInset",
     vibrancy: "under-window",
@@ -104,12 +104,42 @@ app.on("web-contents-created", (e, contents) => {
 
     // Configure webview-specific settings
     contents.session.webRequest.onHeadersReceived((details, callback) => {
+      const responseHeaders = { ...details.responseHeaders };
+
+      // Only add CORS headers if they don't already exist
+      if (
+        !responseHeaders["access-control-allow-origin"] &&
+        !responseHeaders["Access-Control-Allow-Origin"]
+      ) {
+        responseHeaders["Access-Control-Allow-Origin"] = ["*"];
+        responseHeaders["Access-Control-Allow-Methods"] = [
+          "GET, POST, OPTIONS, PUT, DELETE",
+        ];
+        responseHeaders["Access-Control-Allow-Headers"] = [
+          "Content-Type, Authorization",
+        ];
+      } else {
+        // If site already has CORS headers, don't modify them
+        console.log(
+          `Site ${details.url} already has CORS headers, not modifying`
+        );
+      }
+
       callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          "Access-Control-Allow-Origin": ["*"],
-        },
+        responseHeaders,
       });
+    });
+
+    // Log any failed requests to help with debugging
+    contents.session.webRequest.onErrorOccurred((details) => {
+      if (
+        details.error &&
+        details.error !== "net::ERR_ABORTED" && // Skip aborted requests
+        details.error !== "net::ERR_BLOCKED_BY_CLIENT"
+      ) {
+        // Skip ad-blocker blocks
+        console.log(`Request failed: ${details.url} - Error: ${details.error}`);
+      }
     });
 
     // Handle webview events and security

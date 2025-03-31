@@ -35,8 +35,9 @@ const BrowserLayout: React.FC<BrowserLayoutProps> = ({
           ref={(ref) => handleWebviewRef(ref as Electron.WebviewTag, tabId)}
           src={url}
           style={{ width: '100%', height: '100%' }}
-          webpreferences="contextIsolation=false,nodeIntegration=true"
+          webpreferences="contextIsolation=true,nodeIntegration=false,allowRunningInsecureContent=true"
           allowpopups="true"
+          partition="persist:webcontent"
         />
       </div>
     );
