@@ -7,7 +7,9 @@ import {
 import { Workspace, Tab } from '../../types';
 
 // Hardcoded version as a last resort
-const appVersion = '1.0.3'; // Update this manually when you change package.json
+const defaultVersion = '0.0.3';
+
+// Remove problematic type definition
 
 interface SidebarProps {
   workspaces: Workspace[];
@@ -98,23 +100,48 @@ const Sidebar: React.FC<SidebarProps> = ({
   closeTab,
   setEditName
 }) => {
-  const [version, setVersion] = useState('1.0.0');
+  const [version, setVersion] = useState(defaultVersion);
   
   useEffect(() => {
-    // Read version directly from version.txt file
-    fetch('/version.txt')
-      .then(response => response.text())
-      .then(version => {
-        if (version) {
-          setVersion(version.trim());
-          console.log('Updated version from version.txt:', version.trim());
+    // Try to read version.txt from multiple locations
+    const fetchVersion = async () => {
+      try {
+        // First try the root path
+        const response = await fetch('/version.txt');
+        if (response.ok) {
+          const data = await response.text();
+          setVersion(data.trim());
+          console.log('Version from /version.txt:', data.trim());
+          return;
         }
-      })
-      .catch(err => {
-        console.error('Failed to fetch version.txt:', err);
-        // Fallback to hardcoded version as last resort
-        setVersion(appVersion);
-      });
+        
+        // Try relative path
+        const fallbackResponse = await fetch('./version.txt');
+        if (fallbackResponse.ok) {
+          const data = await fallbackResponse.text();
+          setVersion(data.trim());
+          console.log('Version from ./version.txt:', data.trim());
+          return;
+        }
+        
+        // Try src folder path for development
+        const srcResponse = await fetch('./src/version.txt');
+        if (srcResponse.ok) {
+          const data = await srcResponse.text();
+          setVersion(data.trim());
+          console.log('Version from src/version.txt:', data.trim());
+          return;
+        }
+        
+        // If we get here, we couldn't find the file
+        console.log('Using default version:', defaultVersion);
+      } catch (error) {
+        console.error('Error fetching version.txt:', error);
+        console.log('Using default version:', defaultVersion);
+      }
+    };
+    
+    fetchVersion();
   }, []);
 
   return (
@@ -507,37 +534,37 @@ const Sidebar: React.FC<SidebarProps> = ({
           <FiCalendar className="w-5 h-5" />
           <span>Plan</span>
         </button>
-        
+
         <button 
           onClick={() => {
-            setShowWebsites(true)
+            setShowImages(true)
+            setShowPlan(false)
+            setShowTasks(false)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
             setShowWriter(false)
-            setShowTasks(false)
-            setShowPlan(false)
-            setShowImages(false)
             setShowSubscriptions(false)
+            setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          className={`w-full p-2 rounded-lg ${showImages ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
-          <FiGlobe className="w-5 h-5" />
-          <span>Websites</span>
+          <FiImage className="w-5 h-5" />
+          <span>Images</span>
         </button>
-        
+
         <button 
           onClick={() => {
             setShowSubscriptions(true)
+            setShowImages(false)
+            setShowPlan(false)
+            setShowTasks(false)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
             setShowWriter(false)
-            setShowTasks(false)
-            setShowPlan(false)
-            setShowImages(false)
             setShowWebsites(false)
             setShowAutomations(false)
           }}
@@ -547,19 +574,39 @@ const Sidebar: React.FC<SidebarProps> = ({
           <FiDollarSign className="w-5 h-5" />
           <span>Subscriptions</span>
         </button>
-        
+
         <button 
           onClick={() => {
-            setShowAutomations(true)
+            setShowWebsites(true)
+            setShowSubscriptions(false)
+            setShowImages(false)
+            setShowPlan(false)
+            setShowTasks(false)
             setShowDashboard(false)
             setShowSettings(false)
             setShowAIChat(false)
             setShowWriter(false)
-            setShowTasks(false)
-            setShowPlan(false)
-            setShowImages(false)
+            setShowAutomations(false)
+          }}
+          className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
+        >
+          <FiGlobe className="w-5 h-5" />
+          <span>Websites</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            setShowAutomations(true)
             setShowWebsites(false)
             setShowSubscriptions(false)
+            setShowImages(false)
+            setShowPlan(false)
+            setShowTasks(false)
+            setShowDashboard(false)
+            setShowSettings(false)
+            setShowAIChat(false)
+            setShowWriter(false)
           }}
           className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -567,19 +614,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           <FiClock className="w-5 h-5" />
           <span>Automations</span>
         </button>
-        
+
         <button 
           onClick={() => {
             setShowSettings(true)
+            setShowAutomations(false)
+            setShowWebsites(false)
+            setShowSubscriptions(false)
+            setShowImages(false)
+            setShowPlan(false)
+            setShowTasks(false)
             setShowDashboard(false)
             setShowAIChat(false)
             setShowWriter(false)
-            setShowTasks(false)
-            setShowPlan(false)
-            setShowImages(false)
-            setShowSubscriptions(false)
-            setShowWebsites(false)
-            setShowAutomations(false)
           }}
           className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-start pl-4 space-x-3`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}

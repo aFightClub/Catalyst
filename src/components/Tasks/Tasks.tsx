@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiFolder, FiCheck, FiX, FiEdit, FiMoreVertical } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiFolder, FiCheck, FiX, FiEdit, FiMoreVertical, FiList, FiColumns, FiArrowRight } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+
+// Task status enum
+enum TaskStatus {
+  BACKLOG = 'backlog',
+  DOING = 'doing',
+  DONE = 'done',
+}
 
 interface Task {
   id: string;
@@ -8,6 +15,7 @@ interface Task {
   completed: boolean;
   createdAt: string;
   projectId: string;
+  status: TaskStatus;
 }
 
 interface Project {
@@ -69,6 +77,9 @@ const Tasks: React.FC = () => {
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [showProjectActions, setShowProjectActions] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editProjectName, setEditProjectName] = useState('');
 
   // Load tasks and projects on component mount
   useEffect(() => {
@@ -80,7 +91,12 @@ const Tasks: React.FC = () => {
         // Load tasks
         const storedTasks = await storeService.getTasks();
         if (Array.isArray(storedTasks)) {
-          setTasks(storedTasks);
+          // Handle migration for existing tasks without status
+          const migratedTasks = storedTasks.map(task => ({
+            ...task,
+            status: task.status || (task.completed ? TaskStatus.DONE : TaskStatus.BACKLOG)
+          }));
+          setTasks(migratedTasks);
         } else {
           console.warn("Tasks data is not an array, using empty array", storedTasks);
           setTasks([]);
@@ -148,7 +164,8 @@ const Tasks: React.FC = () => {
       title: newTaskTitle.trim(),
       completed: false,
       createdAt: new Date().toISOString(),
-      projectId: activeProjectId
+      projectId: activeProjectId,
+      status: TaskStatus.BACKLOG
     };
 
     setTasks([...tasks, newTask]);
@@ -157,9 +174,31 @@ const Tasks: React.FC = () => {
 
   const toggleTaskCompletion = (taskId: string) => {
     setTasks(
-      tasks.map(task =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      )
+      tasks.map(task => {
+        if (task.id === taskId) {
+          const completed = !task.completed;
+          return { 
+            ...task, 
+            completed,
+            // Update status when completing a task
+            status: completed ? TaskStatus.DONE : task.status === TaskStatus.DONE ? TaskStatus.BACKLOG : task.status
+          };
+        }
+        return task;
+      })
+    );
+  };
+
+  const updateTaskStatus = (taskId: string, newStatus: TaskStatus) => {
+    setTasks(
+      tasks.map(task => {
+        if (task.id === taskId) {
+          // Update completed state based on status
+          const completed = newStatus === TaskStatus.DONE;
+          return { ...task, status: newStatus, completed };
+        }
+        return task;
+      })
     );
   };
 
@@ -207,6 +246,27 @@ const Tasks: React.FC = () => {
     setNewProjectColor(COLORS[0]);
   };
 
+  const startEditingProject = (project: Project) => {
+    setEditingProjectId(project.id);
+    setEditProjectName(project.name);
+    setShowProjectActions(null);
+  };
+
+  const saveEditedProject = () => {
+    if (!editProjectName.trim() || !editingProjectId) return;
+
+    setProjects(
+      projects.map(project =>
+        project.id === editingProjectId ? { ...project, name: editProjectName.trim() } : project
+      )
+    );
+    setEditingProjectId(null);
+  };
+
+  const cancelEditingProject = () => {
+    setEditingProjectId(null);
+  };
+
   const deleteProject = (projectId: string) => {
     if (projects.length <= 1) {
       alert('You must have at least one project');
@@ -228,23 +288,36 @@ const Tasks: React.FC = () => {
     }
   };
 
-  // Get tasks for the active project, sorted by completion status and creation date
+  // Get tasks for the active project
   const filteredTasks = tasks && Array.isArray(tasks) 
-    ? tasks
-        .filter(task => task.projectId === activeProjectId)
-        .sort((a, b) => {
-          // Sort by completion status (incomplete tasks first)
-          if (a.completed !== b.completed) {
-            return a.completed ? 1 : -1;
-          }
-          // Then sort by creation date (newest first for incomplete, oldest first for complete)
-          if (a.completed) {
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-          } else {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          }
-        })
+    ? tasks.filter(task => task.projectId === activeProjectId)
     : [];
+
+  // Group tasks by status for kanban view
+  const groupedTasks = {
+    [TaskStatus.BACKLOG]: filteredTasks.filter(task => task.status === TaskStatus.BACKLOG),
+    [TaskStatus.DOING]: filteredTasks.filter(task => task.status === TaskStatus.DOING),
+    [TaskStatus.DONE]: filteredTasks.filter(task => task.status === TaskStatus.DONE || task.completed)
+  };
+
+  // For list view, sort tasks
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    // Sort by completion status (incomplete tasks first)
+    if (a.completed !== b.completed) {
+      return a.completed ? 1 : -1;
+    }
+    // Then sort by status
+    if (a.status !== b.status) {
+      const statusOrder = { [TaskStatus.BACKLOG]: 0, [TaskStatus.DOING]: 1, [TaskStatus.DONE]: 2 };
+      return statusOrder[a.status] - statusOrder[b.status];
+    }
+    // Then sort by creation date (newest first for incomplete, oldest first for complete)
+    if (a.completed) {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    } else {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
 
   if (isLoading) {
     return (
@@ -263,6 +336,26 @@ const Tasks: React.FC = () => {
     <div className="flex flex-col h-full bg-gray-900">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
         <h2 className="text-xl font-bold text-white">Tasks</h2>
+        <div className="flex items-center bg-gray-700 rounded">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1 rounded-l flex items-center ${
+              viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'
+            }`}
+            title="List View"
+          >
+            <FiList className="mr-1" /> List
+          </button>
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`px-3 py-1 rounded-r flex items-center ${
+              viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'
+            }`}
+            title="Kanban View"
+          >
+            <FiColumns className="mr-1" /> Kanban
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -342,45 +435,90 @@ const Tasks: React.FC = () => {
                 }`}
                 onClick={() => setActiveProjectId(project.id)}
               >
-                <div className="flex items-center justify-between group">
-                  <div className="flex items-center">
-                    <div
-                      className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
-                      style={{ backgroundColor: project.color }}
-                    ></div>
-                    <span className="text-white font-medium truncate">
-                      {project.name}
-                    </span>
-                  </div>
-                  
-                  <div className="relative">
+                {editingProjectId === project.id ? (
+                  <div className="flex">
+                    <input
+                      type="text"
+                      value={editProjectName}
+                      onChange={(e) => setEditProjectName(e.target.value)}
+                      className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEditedProject();
+                        if (e.key === 'Escape') cancelEditingProject();
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setShowProjectActions(showProjectActions === project.id ? null : project.id);
+                        saveEditedProject();
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-600 transition-opacity"
+                      className="px-2 py-1 bg-green-600 hover:bg-green-700"
                     >
-                      <FiMoreVertical className="w-4 h-4" />
+                      <FiCheck className="w-4 h-4" />
                     </button>
-                    
-                    {showProjectActions === project.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-gray-700 rounded shadow-lg z-10 w-32">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteProject(project.id);
-                            setShowProjectActions(null);
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-600 text-white text-sm flex items-center"
-                        >
-                          <FiTrash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelEditingProject();
+                      }}
+                      className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded-r"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between group">
+                    <div className="flex items-center">
+                      <div
+                        className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
+                        style={{ backgroundColor: project.color }}
+                      ></div>
+                      <span className="text-white font-medium truncate">
+                        {project.name}
+                      </span>
+                    </div>
+                    
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowProjectActions(showProjectActions === project.id ? null : project.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-600 transition-opacity"
+                      >
+                        <FiMoreVertical className="w-4 h-4" />
+                      </button>
+                      
+                      {showProjectActions === project.id && (
+                        <div className="absolute right-0 top-full mt-1 bg-gray-700 rounded shadow-lg z-10 w-32">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditingProject(project);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-600 text-white text-sm flex items-center"
+                          >
+                            <FiEdit className="w-4 h-4 mr-2" />
+                            Rename
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteProject(project.id);
+                              setShowProjectActions(null);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-600 text-white text-sm flex items-center"
+                          >
+                            <FiTrash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="text-gray-400 text-xs mt-1">
                   {Array.isArray(tasks) ? tasks.filter(task => task.projectId === project.id).length : 0} tasks
@@ -422,90 +560,327 @@ const Tasks: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4">
-            {filteredTasks.length === 0 ? (
-              <div className="text-center text-gray-400 mt-10">
-                <FiFolder className="w-12 h-12 mx-auto mb-4" />
-                <p>No tasks yet</p>
-                <p className="text-sm mt-2">Add a new task to get started</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredTasks.map(task => (
-                  <div 
-                    key={task.id}
-                    className={`p-3 rounded ${
-                      task.completed ? 'bg-gray-800' : 'bg-gray-800'
-                    } group hover:bg-gray-700 transition-colors`}
-                  >
-                    {editingTaskId === task.id ? (
-                      <div className="flex">
-                        <input
-                          type="text"
-                          value={editTaskTitle}
-                          onChange={(e) => setEditTaskTitle(e.target.value)}
-                          className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEditedTask();
-                            if (e.key === 'Escape') cancelEditingTask();
-                          }}
-                        />
-                        <button
-                          onClick={saveEditedTask}
-                          className="px-2 py-1 bg-green-600 hover:bg-green-700"
-                        >
-                          <FiCheck className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditingTask}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded-r"
-                        >
-                          <FiX className="w-4 h-4" />
-                        </button>
+          {viewMode === 'list' ? (
+            // List View
+            <div className="flex-1 overflow-y-auto p-4">
+              {sortedTasks.length === 0 ? (
+                <div className="text-center text-gray-400 mt-10">
+                  <FiFolder className="w-12 h-12 mx-auto mb-4" />
+                  <p>No tasks yet</p>
+                  <p className="text-sm mt-2">Add a new task to get started</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sortedTasks.map(task => (
+                    <div 
+                      key={task.id}
+                      className={`p-3 rounded ${
+                        task.completed ? 'bg-gray-800' : 'bg-gray-800'
+                      } group hover:bg-gray-700 transition-colors`}
+                    >
+                      {editingTaskId === task.id ? (
+                        <div className="flex">
+                          <input
+                            type="text"
+                            value={editTaskTitle}
+                            onChange={(e) => setEditTaskTitle(e.target.value)}
+                            className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveEditedTask();
+                              if (e.key === 'Escape') cancelEditingTask();
+                            }}
+                          />
+                          <button
+                            onClick={saveEditedTask}
+                            className="px-2 py-1 bg-green-600 hover:bg-green-700"
+                          >
+                            <FiCheck className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={cancelEditingTask}
+                            className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded-r"
+                          >
+                            <FiX className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-start">
+                          <button
+                            onClick={() => toggleTaskCompletion(task.id)}
+                            className={`mt-0.5 mr-3 w-5 h-5 rounded-full flex-shrink-0 border ${
+                              task.completed 
+                                ? 'bg-gray-500 border-gray-600' 
+                                : 'border-gray-500 hover:border-white'
+                            } flex items-center justify-center`}
+                          >
+                            {task.completed && <FiCheck className="w-3 h-3 text-white" />}
+                          </button>
+                          
+                          <div className="flex-1">
+                            <p className={`text-white ${task.completed ? 'line-through text-gray-400' : ''}`}>
+                              {task.title}
+                            </p>
+                            <div className="text-xs text-gray-500 mt-1">
+                              <span 
+                                className={`px-2 py-0.5 rounded ${
+                                  task.status === TaskStatus.BACKLOG ? 'bg-gray-600' :
+                                  task.status === TaskStatus.DOING ? 'bg-blue-900' :
+                                  'bg-green-900'
+                                }`}
+                              >
+                                {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <select
+                              value={task.status}
+                              onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
+                              className="mr-2 bg-gray-700 border-none text-sm rounded text-white py-1"
+                            >
+                              <option value={TaskStatus.BACKLOG}>Backlog</option>
+                              <option value={TaskStatus.DOING}>Doing</option>
+                              <option value={TaskStatus.DONE}>Done</option>
+                            </select>
+                            <button
+                              onClick={() => startEditingTask(task)}
+                              className="p-1 rounded hover:bg-gray-600"
+                              title="Edit Task"
+                            >
+                              <FiEdit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteTask(task.id)}
+                              className="p-1 rounded hover:bg-red-600"
+                              title="Delete Task"
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            // Kanban View
+            <div className="flex-1 overflow-auto p-4">
+              <div className="flex h-full space-x-4">
+                {/* Backlog Column */}
+                <div className="flex-1 flex flex-col bg-gray-800 rounded-lg overflow-hidden min-w-[150px]">
+                  <div className="p-3 bg-gray-800 border-b border-gray-700">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0 bg-gray-500"></div>
+                      <h4 className="font-medium text-white">Backlog</h4>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {groupedTasks[TaskStatus.BACKLOG].length === 0 ? (
+                      <div className="text-center text-gray-500 p-4 text-sm">
+                        No tasks in backlog
                       </div>
                     ) : (
-                      <div className="flex items-start">
-                        <button
-                          onClick={() => toggleTaskCompletion(task.id)}
-                          className={`mt-0.5 mr-3 w-5 h-5 rounded-full flex-shrink-0 border ${
-                            task.completed 
-                              ? 'bg-gray-500 border-gray-600' 
-                              : 'border-gray-500 hover:border-white'
-                          } flex items-center justify-center`}
-                        >
-                          {task.completed && <FiCheck className="w-3 h-3 text-white" />}
-                        </button>
-                        
-                        <div className="flex-1">
-                          <p className={`text-white ${task.completed ? 'line-through text-gray-400' : ''}`}>
-                            {task.title}
-                          </p>
-                        </div>
-                        
-                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => startEditingTask(task)}
-                            className="p-1 rounded hover:bg-gray-600"
-                            title="Edit Task"
+                      <div className="space-y-2">
+                        {groupedTasks[TaskStatus.BACKLOG].map(task => (
+                          <div 
+                            key={task.id}
+                            className="p-3 bg-gray-700 rounded group hover:bg-gray-600 transition-colors"
                           >
-                            <FiEdit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteTask(task.id)}
-                            className="p-1 rounded hover:bg-red-600"
-                            title="Delete Task"
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="text-white">{task.title}</p>
+                              </div>
+                              <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => updateTaskStatus(task.id, TaskStatus.DOING)}
+                                  className="p-1 rounded hover:bg-blue-600 text-white"
+                                  title="Move to Doing"
+                                >
+                                  <FiArrowRight className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => startEditingTask(task)}
+                                  className="p-1 rounded hover:bg-gray-500"
+                                  title="Edit Task"
+                                >
+                                  <FiEdit className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => deleteTask(task.id)}
+                                  className="p-1 rounded hover:bg-red-600"
+                                  title="Delete Task"
+                                >
+                                  <FiTrash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                ))}
+                </div>
+
+                {/* In Progress Column */}
+                <div className="flex-1 flex flex-col bg-gray-800 rounded-lg overflow-hidden min-w-[150px]">
+                  <div className="p-3 bg-gray-800 border-b border-gray-700">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0 bg-blue-600"></div>
+                      <h4 className="font-medium text-white">Doing</h4>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {groupedTasks[TaskStatus.DOING].length === 0 ? (
+                      <div className="text-center text-gray-500 p-4 text-sm">
+                        No tasks in progress
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {groupedTasks[TaskStatus.DOING].map(task => (
+                          <div 
+                            key={task.id}
+                            className="p-3 bg-gray-700 rounded group hover:bg-gray-600 transition-colors"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="text-white">{task.title}</p>
+                              </div>
+                              <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => updateTaskStatus(task.id, TaskStatus.BACKLOG)}
+                                  className="p-1 rounded hover:bg-gray-500 rotate-180"
+                                  title="Move to Backlog"
+                                >
+                                  <FiArrowRight className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => updateTaskStatus(task.id, TaskStatus.DONE)}
+                                  className="p-1 rounded hover:bg-green-600"
+                                  title="Move to Done"
+                                >
+                                  <FiArrowRight className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => startEditingTask(task)}
+                                  className="p-1 rounded hover:bg-gray-500"
+                                  title="Edit Task"
+                                >
+                                  <FiEdit className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => deleteTask(task.id)}
+                                  className="p-1 rounded hover:bg-red-600"
+                                  title="Delete Task"
+                                >
+                                  <FiTrash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Done Column */}
+                <div className="flex-1 flex flex-col bg-gray-800 rounded-lg overflow-hidden min-w-[150px]">
+                  <div className="p-3 bg-gray-800 border-b border-gray-700">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0 bg-green-600"></div>
+                      <h4 className="font-medium text-white">Done</h4>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {groupedTasks[TaskStatus.DONE].length === 0 ? (
+                      <div className="text-center text-gray-500 p-4 text-sm">
+                        No completed tasks
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {groupedTasks[TaskStatus.DONE].map(task => (
+                          <div 
+                            key={task.id}
+                            className="p-3 bg-gray-700 rounded group hover:bg-gray-600 transition-colors"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="text-white line-through text-gray-400">{task.title}</p>
+                              </div>
+                              <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => updateTaskStatus(task.id, TaskStatus.DOING)}
+                                  className="p-1 rounded hover:bg-blue-600 rotate-180"
+                                  title="Move to Doing"
+                                >
+                                  <FiArrowRight className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => deleteTask(task.id)}
+                                  className="p-1 rounded hover:bg-red-600"
+                                  title="Delete Task"
+                                >
+                                  <FiTrash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+          
+          {/* Task Edit Modal */}
+          {editingTaskId && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-gray-800 p-4 rounded-lg shadow-lg w-full max-w-md">
+                <h3 className="text-lg font-medium text-white mb-4">Edit Task</h3>
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={editTaskTitle}
+                    onChange={(e) => setEditTaskTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Status</label>
+                  <select
+                    value={tasks.find(t => t.id === editingTaskId)?.status}
+                    onChange={(e) => updateTaskStatus(editingTaskId, e.target.value as TaskStatus)}
+                    className="w-full bg-gray-700 border-none rounded text-white py-2 px-3"
+                  >
+                    <option value={TaskStatus.BACKLOG}>Backlog</option>
+                    <option value={TaskStatus.DOING}>Doing</option>
+                    <option value={TaskStatus.DONE}>Done</option>
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={cancelEditingTask}
+                    className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEditedTask}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
