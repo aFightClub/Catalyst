@@ -661,11 +661,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex justify-center mt-4">
           <button
             onClick={() => setIsMinimized(!isMinimized)}
-            className="p-2 text-gray-400 hover:text-white bg-gray-700 rounded-full"
+            className={`text-gray-400 hover:text-white bg-gray-800 ${isMinimized ? 'p-2 rounded-full' : 'py-2 px-4 rounded-lg w-full flex items-center justify-center space-x-2'}`}
             title={isMinimized ? "Expand sidebar" : "Collapse sidebar"}
             style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
           >
-            {isMinimized ? <FiChevronRight className="w-4 h-4" /> : <FiChevronLeft className="w-4 h-4" />}
+            {isMinimized ? (
+              <FiChevronRight className="w-4 h-4" />
+            ) : (
+              <>
+                <FiChevronLeft className="w-4 h-4" />
+                <span className="text-sm font-medium">Minimize</span>
+              </>
+            )}
           </button>
         </div>
       </div>
