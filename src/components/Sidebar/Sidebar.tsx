@@ -168,8 +168,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full border border-gray-700 p-1 my-3 rounded-lg text-white font-medium shadow-lg transition-all duration-200 hover:shadow-xl flex items-center justify-center
               ${showDashboard 
-                ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
-                : 'hover:bg-gradient-to-r hover:from-blue-500/70 hover:to-purple-600/70'
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600' 
+                : 'hover:bg-gradient-to-r hover:from-indigo-500/70 hover:to-purple-600/70'
               }`}
             style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
             title="Dashboard"
@@ -193,8 +193,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full border border-gray-700 p-3 my-3 rounded-lg text-white font-medium shadow-lg transition-all duration-200 hover:shadow-xl 
               ${showDashboard 
-                ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
-                : 'hover:bg-gradient-to-r hover:from-blue-500/70 hover:to-purple-600/70'
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600' 
+                : 'hover:bg-gradient-to-r hover:from-indigo-500/70 hover:to-purple-600/70'
               } flex items-center justify-start pl-4 space-x-3`}
             style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
           >
@@ -243,7 +243,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <button 
                 onClick={addWorkspace}
                 disabled={!newWorkspaceName.trim()}
-                className={`flex-1 px-2 py-1 rounded text-white ${newWorkspaceName.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600'}`}
+                className={`flex-1 px-2 py-1 rounded text-white ${newWorkspaceName.trim() ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-600'}`}
                 style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
               >
                 Add
@@ -346,7 +346,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           e.stopPropagation();
                           startEditingWorkspace(workspace.id);
                         }}
-                        className="text-gray-400 hover:text-blue-400"
+                        className="text-gray-400 hover:text-indigo-400"
                         title="Edit Workspace Name"
                         style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
                       >
@@ -445,7 +445,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         {!isMinimized && (
                           <div className="flex space-x-1 opacity-0 group-hover:opacity-100">
                             <button
-                              className="text-gray-400 hover:text-blue-400"
+                              className="text-gray-400 hover:text-indigo-400"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 startEditingTab(workspace.id, tab.id);
@@ -510,7 +510,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiMessageSquare className="w-6 h-6" />
@@ -530,7 +530,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showWriter ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showWriter ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiEdit className="w-6 h-6" />
@@ -550,7 +550,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showTasks ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showTasks ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiCheckSquare className="w-6 h-6" />
@@ -570,7 +570,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showPlan ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showPlan ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiCalendar className="w-6 h-6" />
@@ -591,7 +591,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWebsites(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiDollarSign className="w-6 h-6" />
@@ -611,7 +611,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWriter(false)
             setShowAutomations(false)
           }}
-          className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiGlobe className="w-6 h-6" />
@@ -631,7 +631,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
           }}
-          className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiClock className="w-6 h-6" />
@@ -651,7 +651,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
           }}
-          className={`w-full p-2 rounded-lg ${showSettings ? 'bg-blue-600' : ''} hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          className={`w-full p-2 rounded-lg ${showSettings ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiSettings className="w-6 h-6" />
