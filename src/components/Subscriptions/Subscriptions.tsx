@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiTrash2, FiEdit, FiDollarSign, FiSave, FiX, FiCalendar, FiLink } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 interface Subscription {
   id: string;
@@ -37,10 +38,14 @@ const Subscriptions: React.FC = () => {
     category: 'Other',
     linkedWebsites: []
   });
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isAddPopupOpen, setIsAddPopupOpen] = useState(false);
   const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | null>(null);
+  const [isEditPopupOpen, setIsEditPopupOpen] = useState(false);
+  const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [subscriptionToDelete, setSubscriptionToDelete] = useState<Subscription | null>(null);
 
   // Load subscriptions from store
   useEffect(() => {
@@ -156,14 +161,11 @@ const Subscriptions: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
-    if (editingSubscriptionId) {
-      setSubscriptions(subs => 
-        subs.map(sub => 
-          sub.id === editingSubscriptionId 
-            ? { ...sub, [name]: name === 'price' ? parseFloat(value) : value } 
-            : sub
-        )
-      );
+    if (editingSubscription) {
+      setEditingSubscription(prev => ({ 
+        ...prev!, 
+        [name]: name === 'price' ? parseFloat(value) : value
+      }));
     } else {
       setNewSubscription(prev => ({ 
         ...prev, 
@@ -174,20 +176,17 @@ const Subscriptions: React.FC = () => {
 
   // Handle website selection for linking
   const handleWebsiteSelection = (websiteId: string, isChecked: boolean) => {
-    if (editingSubscriptionId) {
-      setSubscriptions(subs => 
-        subs.map(sub => {
-          if (sub.id === editingSubscriptionId) {
-            const linkedWebsites = sub.linkedWebsites || [];
-            if (isChecked && !linkedWebsites.includes(websiteId)) {
-              return { ...sub, linkedWebsites: [...linkedWebsites, websiteId] };
-            } else if (!isChecked && linkedWebsites.includes(websiteId)) {
-              return { ...sub, linkedWebsites: linkedWebsites.filter(id => id !== websiteId) };
-            }
-          }
-          return sub;
-        })
-      );
+    if (editingSubscription) {
+      setEditingSubscription(prev => {
+        if (!prev) return prev;
+        const linkedWebsites = prev.linkedWebsites || [];
+        if (isChecked && !linkedWebsites.includes(websiteId)) {
+          return { ...prev, linkedWebsites: [...linkedWebsites, websiteId] };
+        } else if (!isChecked && linkedWebsites.includes(websiteId)) {
+          return { ...prev, linkedWebsites: linkedWebsites.filter(id => id !== websiteId) };
+        }
+        return prev;
+      });
     } else {
       const linkedWebsites = newSubscription.linkedWebsites || [];
       if (isChecked && !linkedWebsites.includes(websiteId)) {
@@ -202,6 +201,24 @@ const Subscriptions: React.FC = () => {
         }));
       }
     }
+  };
+
+  const openAddPopup = () => {
+    setIsAddPopupOpen(true);
+  };
+
+  const closeAddPopup = () => {
+    setIsAddPopupOpen(false);
+    setNewSubscription({
+      id: '',
+      name: '',
+      url: '',
+      price: 0,
+      billingCycle: 'monthly',
+      startDate: new Date().toISOString().split('T')[0],
+      category: 'Other',
+      linkedWebsites: []
+    });
   };
 
   const addSubscription = () => {
@@ -223,23 +240,56 @@ const Subscriptions: React.FC = () => {
       category: 'Other',
       linkedWebsites: []
     });
-    setIsAddingNew(false);
+    setIsAddPopupOpen(false);
   };
 
   const startEditing = (id: string) => {
-    setEditingSubscriptionId(id);
+    const subscriptionToEdit = subscriptions.find(sub => sub.id === id);
+    if (subscriptionToEdit) {
+      setEditingSubscription({...subscriptionToEdit});
+      setEditingSubscriptionId(id);
+      setIsEditPopupOpen(true);
+    }
   };
 
   const cancelEditing = () => {
     setEditingSubscriptionId(null);
+    setEditingSubscription(null);
+    setIsEditPopupOpen(false);
+  };
+
+  const saveEditing = () => {
+    if (editingSubscription && editingSubscriptionId) {
+      setSubscriptions(subs => 
+        subs.map(sub => 
+          sub.id === editingSubscriptionId 
+            ? editingSubscription
+            : sub
+        )
+      );
+      setEditingSubscriptionId(null);
+      setEditingSubscription(null);
+      setIsEditPopupOpen(false);
+    }
   };
 
   const deleteSubscription = (id: string) => {
-    if (confirm('Are you sure you want to delete this subscription?')) {
-      setSubscriptions(subscriptions.filter(sub => sub.id !== id));
-      if (editingSubscriptionId === id) {
+    const subscription = subscriptions.find(sub => sub.id === id);
+    if (subscription) {
+      setSubscriptionToDelete(subscription);
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (subscriptionToDelete) {
+      setSubscriptions(subscriptions.filter(sub => sub.id !== subscriptionToDelete.id));
+      if (editingSubscriptionId === subscriptionToDelete.id) {
         setEditingSubscriptionId(null);
+        setIsEditPopupOpen(false);
       }
+      setIsDeleteConfirmOpen(false);
+      setSubscriptionToDelete(null);
     }
   };
 
@@ -356,171 +406,325 @@ const Subscriptions: React.FC = () => {
           </select>
         </div>
         
-        {!isAddingNew && (
-          <button
-            onClick={() => setIsAddingNew(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700 h-[38px] mt-auto"
-          >
-            <FiPlus className="mr-2" />
-            Add Subscription
-          </button>
-        )}
+        <button
+          onClick={openAddPopup}
+          className="btn-primary"
+        >
+          <FiPlus className="mr-2" />
+          Add Subscription
+        </button>
       </div>
       
-      {/* Add new subscription form */}
-      {isAddingNew && (
-        <div className="bg-gray-800 p-6 rounded-lg mb-6">
-          <h2 className="text-xl font-semibold mb-4">Add New Subscription</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Service Name</label>
-              <input
-                type="text"
-                name="name"
-                value={newSubscription.name}
-                onChange={handleInputChange}
-                className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Netflix, Spotify, etc."
-              />
+      {/* Add Subscription Popup */}
+      {isAddPopupOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-lg overflow-y-auto max-h-[90vh]">
+            <h2 className="text-xl font-semibold mb-4">Add New Subscription</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Service Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={newSubscription.name}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Netflix, Spotify, etc."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Website URL</label>
+                <input
+                  type="text"
+                  name="url"
+                  value={newSubscription.url}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://example.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={newSubscription.price}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Billing Cycle</label>
+                <select
+                  name="billingCycle"
+                  value={newSubscription.billingCycle}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  name="startDate"
+                  value={newSubscription.startDate}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Category</label>
+                <select
+                  name="category"
+                  value={newSubscription.category}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {getCategories().map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {websites.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Linked Websites</label>
+                  <div className="bg-gray-700 p-3 rounded-md max-h-40 overflow-y-auto">
+                    {websites.length === 0 ? (
+                      <p className="text-sm text-gray-400">No websites available. Add websites in the Websites tab.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {websites.map(website => (
+                          <div key={website.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`new-website-${website.id}`}
+                              checked={newSubscription.linkedWebsites?.includes(website.id) || false}
+                              onChange={(e) => handleWebsiteSelection(website.id, e.target.checked)}
+                              className="mr-2"
+                            />
+                            <label htmlFor={`new-website-${website.id}`} className="text-sm">
+                              {website.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Select websites powered by this subscription</p>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Notes</label>
+                <textarea
+                  name="notes"
+                  value={newSubscription.notes || ''}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                ></textarea>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  onClick={closeAddPopup}
+                  className="btn-ghost"
+                >
+                  <FiX className="mr-2" /> Cancel
+                </button>
+                <button
+                  onClick={addSubscription}
+                  disabled={!newSubscription.name.trim() || !newSubscription.price}
+                  className={`btn-success ${
+                    !newSubscription.name.trim() || !newSubscription.price
+                      ? 'opacity-50 cursor-not-allowed'
+                      : ''
+                  }`}
+                >
+                  <FiSave className="mr-2" /> Save
+                </button>
+              </div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Website URL</label>
-              <input
-                type="text"
-                name="url"
-                value={newSubscription.url}
-                onChange={handleInputChange}
-                className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://example.com"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Price</label>
-              <input
-                type="number"
-                name="price"
-                value={newSubscription.price}
-                onChange={handleInputChange}
-                className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Billing Cycle</label>
-              <select
-                name="billingCycle"
-                value={newSubscription.billingCycle}
-                onChange={handleInputChange}
-                className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
-              <input
-                type="date"
-                name="startDate"
-                value={newSubscription.startDate}
-                onChange={handleInputChange}
-                className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Category</label>
-              <select
-                name="category"
-                value={newSubscription.category}
-                onChange={handleInputChange}
-                className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {getCategories().map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-            </div>
-            
-            {websites.length > 0 && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-400 mb-2">Linked Websites</label>
-                <div className="bg-gray-700 p-3 rounded-md max-h-40 overflow-y-auto">
-                  {websites.length === 0 ? (
-                    <p className="text-sm text-gray-400">No websites available. Add websites in the Websites tab.</p>
-                  ) : (
+          </div>
+        </div>
+      )}
+      
+      {/* Edit Subscription Popup */}
+      {isEditPopupOpen && editingSubscription && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-lg overflow-y-auto max-h-[90vh]">
+            <h2 className="text-xl font-semibold mb-4">Edit Subscription</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Service Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={editingSubscription.name}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Website URL</label>
+                <input
+                  type="text"
+                  name="url"
+                  value={editingSubscription.url}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={editingSubscription.price}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Billing Cycle</label>
+                <select
+                  name="billingCycle"
+                  value={editingSubscription.billingCycle}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  name="startDate"
+                  value={editingSubscription.startDate}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Category</label>
+                <select
+                  name="category"
+                  value={editingSubscription.category}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {getCategories().map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {websites.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Linked Websites</label>
+                  <div className="bg-gray-700 p-3 rounded-md max-h-40 overflow-y-auto">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {websites.map(website => (
                         <div key={website.id} className="flex items-center">
                           <input
                             type="checkbox"
-                            id={`new-website-${website.id}`}
-                            checked={newSubscription.linkedWebsites?.includes(website.id) || false}
+                            id={`edit-website-${editingSubscriptionId}-${website.id}`}
+                            checked={editingSubscription.linkedWebsites?.includes(website.id) || false}
                             onChange={(e) => handleWebsiteSelection(website.id, e.target.checked)}
                             className="mr-2"
                           />
-                          <label htmlFor={`new-website-${website.id}`} className="text-sm">
+                          <label htmlFor={`edit-website-${editingSubscriptionId}-${website.id}`} className="text-sm">
                             {website.name}
                           </label>
                         </div>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Select websites powered by this subscription</p>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Notes</label>
+                <textarea
+                  name="notes"
+                  value={editingSubscription.notes || ''}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                ></textarea>
               </div>
-            )}
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-400 mb-1">Notes</label>
-            <textarea
-              name="notes"
-              value={newSubscription.notes || ''}
-              onChange={handleInputChange}
-              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={3}
-            ></textarea>
-          </div>
-          
-          <div className="flex justify-end space-x-2">
-            <button
-              onClick={() => setIsAddingNew(false)}
-              className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center"
-            >
-              <FiX className="mr-2" /> Cancel
-            </button>
-            <button
-              onClick={addSubscription}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
-            >
-              <FiSave className="mr-2" /> Save
-            </button>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  onClick={cancelEditing}
+                  className="btn-ghost"
+                >
+                  <FiX className="mr-2" /> Cancel
+                </button>
+                <button
+                  onClick={saveEditing}
+                  className="btn-success"
+                >
+                  <FiSave className="mr-2" /> Save
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
+      
+      {/* Delete Confirmation Popup */}
+      <DeleteConfirmationPopup
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        itemName={subscriptionToDelete?.name || ''}
+        itemType="subscription"
+      />
       
       {/* Subscriptions list */}
-      {filteredSubscriptions.length === 0 && (
-        <div className="text-center py-10 text-gray-400">
-          <p>No subscriptions found{selectedCategory ? ` in "${selectedCategory}"` : ''}.</p>
-          {!isAddingNew && (
-            <button
-              onClick={() => setIsAddingNew(true)}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Add Your First Subscription
-            </button>
+      {filteredSubscriptions.length === 0 ? (
+        <div className="bg-gray-800 p-8 rounded-lg text-center">
+          <FiDollarSign className="w-12 h-12 mx-auto mb-4 text-gray-500" />
+          <h3 className="text-xl font-semibold mb-2">No subscriptions found</h3>
+          <p className="text-gray-400 mb-4">
+            {selectedCategory 
+              ? `No subscriptions found in category "${selectedCategory}".`
+              : 'Add your first subscription to get started tracking your expenses.'}
+          </p>
+          {!isAddPopupOpen && (
+            <div className="flex justify-center">
+              <button
+                onClick={openAddPopup}
+                className="btn-primary"
+              >
+                <FiPlus className="inline mr-2" />
+                Add Subscription
+              </button>
+            </div>
           )}
         </div>
-      )}
-      
-      {filteredSubscriptions.length > 0 && (
+      ) : (
         <div>
           {Object.entries(subscriptionsByCategory).map(([category, subs]) => (
             <div key={category} className="mb-8">
@@ -528,190 +732,59 @@ const Subscriptions: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {subs.map(sub => (
                   <div key={sub.id} className="bg-gray-800 rounded-lg p-4">
-                    {editingSubscriptionId === sub.id ? (
-                      // Edit mode
-                      <div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Service Name</label>
-                            <input
-                              type="text"
-                              name="name"
-                              value={sub.name}
-                              onChange={handleInputChange}
-                              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Website URL</label>
-                            <input
-                              type="text"
-                              name="url"
-                              value={sub.url}
-                              onChange={handleInputChange}
-                              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Price</label>
-                            <input
-                              type="number"
-                              name="price"
-                              value={sub.price}
-                              onChange={handleInputChange}
-                              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              min="0"
-                              step="0.01"
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Billing Cycle</label>
-                            <select
-                              name="billingCycle"
-                              value={sub.billingCycle}
-                              onChange={handleInputChange}
-                              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    <div>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-semibold">{sub.name}</h3>
+                          {sub.url && (
+                            <a 
+                              href={sub.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-blue-400 hover:underline text-sm"
                             >
-                              <option value="monthly">Monthly</option>
-                              <option value="yearly">Yearly</option>
-                            </select>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
-                            <input
-                              type="date"
-                              name="startDate"
-                              value={sub.startDate}
-                              onChange={handleInputChange}
-                              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Category</label>
-                            <select
-                              name="category"
-                              value={sub.category}
-                              onChange={handleInputChange}
-                              className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              {getCategories().map(category => (
-                                <option key={category} value={category}>{category}</option>
-                              ))}
-                            </select>
-                          </div>
+                              {sub.url}
+                            </a>
+                          )}
                         </div>
-                        
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-400 mb-1">Notes</label>
-                          <textarea
-                            name="notes"
-                            value={sub.notes || ''}
-                            onChange={handleInputChange}
-                            className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            rows={3}
-                          ></textarea>
-                        </div>
-                        
-                        {websites.length > 0 && (
-                          <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-400 mb-2">Linked Websites</label>
-                            <div className="bg-gray-700 p-3 rounded-md max-h-40 overflow-y-auto">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {websites.map(website => (
-                                  <div key={website.id} className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      id={`edit-website-${sub.id}-${website.id}`}
-                                      checked={sub.linkedWebsites?.includes(website.id) || false}
-                                      onChange={(e) => handleWebsiteSelection(website.id, e.target.checked)}
-                                      className="mr-2"
-                                    />
-                                    <label htmlFor={`edit-website-${sub.id}-${website.id}`} className="text-sm">
-                                      {website.name}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={cancelEditing}
-                            className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 flex items-center"
-                          >
-                            <FiX className="mr-2" /> Cancel
-                          </button>
-                          <button
-                            onClick={cancelEditing}
-                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
-                          >
-                            <FiSave className="mr-2" /> Save
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      // View mode
-                      <div>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="text-lg font-semibold">{sub.name}</h3>
-                            {sub.url && (
-                              <a 
-                                href={sub.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="text-blue-400 hover:underline text-sm"
-                              >
-                                {sub.url}
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-bold text-lg">
-                              ${sub.price}
-                              <span className="text-sm text-gray-400 ml-1">
-                                /{sub.billingCycle === 'monthly' ? 'mo' : 'yr'}
-                              </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-lg">
+                            ${sub.price}
+                            <span className="text-sm text-gray-400 ml-1">
+                              /{sub.billingCycle === 'monthly' ? 'mo' : 'yr'}
                             </span>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-3 text-sm text-gray-400">
-                          Started: {new Date(sub.startDate).toLocaleDateString()}
-                        </div>
-                        
-                        {sub.notes && (
-                          <div className="mt-3 text-sm bg-gray-700 p-2 rounded">
-                            {sub.notes}
-                          </div>
-                        )}
-                        
-                        {/* Linked websites section */}
-                        {renderWebsiteSection(sub)}
-                        
-                        <div className="mt-4 flex justify-end space-x-2">
-                          <button
-                            onClick={() => startEditing(sub.id)}
-                            className="p-2 text-gray-400 hover:text-white"
-                          >
-                            <FiEdit />
-                          </button>
-                          <button
-                            onClick={() => deleteSubscription(sub.id)}
-                            className="p-2 text-gray-400 hover:text-red-500"
-                          >
-                            <FiTrash2 />
-                          </button>
+                          </span>
                         </div>
                       </div>
-                    )}
+                      
+                      <div className="mt-3 text-sm text-gray-400">
+                        Started: {new Date(sub.startDate).toLocaleDateString()}
+                      </div>
+                      
+                      {sub.notes && (
+                        <div className="mt-3 text-sm bg-gray-700 p-2 rounded">
+                          {sub.notes}
+                        </div>
+                      )}
+                      
+                      {/* Linked websites section */}
+                      {renderWebsiteSection(sub)}
+                      
+                      <div className="mt-4 flex justify-end space-x-2">
+                        <button
+                          onClick={() => startEditing(sub.id)}
+                          className="btn-secondary btn-sm"
+                        >
+                          <FiEdit />
+                        </button>
+                        <button
+                          onClick={() => deleteSubscription(sub.id)}
+                          className="btn-delete btn-sm"
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

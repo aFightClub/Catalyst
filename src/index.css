@@ -76,6 +76,7 @@ body {
   line-height: 1.5;
   margin: 0;
   align-items: center;
+  justify-content: center;
   padding: 0.5rem 1rem;
   text-align: center;
   text-transform: none;
@@ -143,6 +144,7 @@ body {
   font-family: Inter, sans-serif;
   font-size: 1rem;
   align-items: center;
+  justify-content: center;
   font-weight: 500;
   line-height: 1.5;
   margin: 0;
@@ -216,6 +218,7 @@ body {
   line-height: 1.5;
   margin: 0;
   align-items: center;
+  justify-content: center;
   padding: 0.5rem 1rem;
   text-align: center;
   text-transform: none;
@@ -286,6 +289,7 @@ body {
   line-height: 1.5;
   margin: 0;
   align-items: center;
+  justify-content: center;
   padding: 0.5rem 1rem;
   text-align: center;
   text-transform: none;
@@ -345,6 +349,7 @@ body {
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   font-family: Inter, sans-serif;
   font-size: 1rem;
   font-weight: 500;

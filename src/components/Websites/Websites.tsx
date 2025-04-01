@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiTrash2, FiEdit, FiGlobe, FiSave, FiX, FiLink, FiLayers, FiArchive } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 interface Website {
   id: string;
@@ -38,6 +39,8 @@ const Websites: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<'active' | 'idea' | 'domains' | 'archived' | null>('active');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [websiteToDelete, setWebsiteToDelete] = useState<Website | null>(null);
 
   // Load websites from store
   useEffect(() => {
@@ -140,6 +143,11 @@ const Websites: React.FC = () => {
   };
 
   const openAddPopup = () => {
+    // Use the currently selected status for new websites
+    setNewWebsite(prev => ({
+      ...prev,
+      status: selectedStatus || 'active'
+    }));
     setIsAddPopupOpen(true);
   };
 
@@ -187,11 +195,21 @@ const Websites: React.FC = () => {
   };
 
   const deleteWebsite = (id: string) => {
-    if (confirm('Are you sure you want to delete this website?')) {
-      setWebsites(websites.filter(site => site.id !== id));
-      if (editingWebsiteId === id) {
+    const website = websites.find(site => site.id === id);
+    if (website) {
+      setWebsiteToDelete(website);
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (websiteToDelete) {
+      setWebsites(websites.filter(site => site.id !== websiteToDelete.id));
+      if (editingWebsiteId === websiteToDelete.id) {
         setEditingWebsiteId(null);
       }
+      setIsDeleteConfirmOpen(false);
+      setWebsiteToDelete(null);
     }
   };
 
@@ -532,6 +550,7 @@ const Websites: React.FC = () => {
               : 'Add your first website to get started'}
           </p>
           {!isAddPopupOpen && (
+            <div className="flex justify-center">
             <button
               onClick={openAddPopup}
               className="btn-primary"
@@ -539,6 +558,7 @@ const Websites: React.FC = () => {
               <FiPlus className="inline mr-2" />
               Add Website
             </button>
+           </div>
           )}
         </div>
       ) : (
@@ -588,98 +608,25 @@ const Websites: React.FC = () => {
                   <span className="inline-block px-2 py-1 text-xs rounded-full bg-gray-700">
                     {website.category}
                   </span>
-                  
-                  {/* Status badge */}
-                  {website.status !== 'active' && (
-                    <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                      website.status === 'idea' ? 'bg-yellow-800 text-yellow-200' : 
-                      website.status === 'domains' ? 'bg-green-800 text-green-200' :
-                      'bg-gray-700 text-gray-300'
-                    }`}>
-                      {website.status === 'idea' ? 'Side Idea' : 
-                       website.status === 'domains' ? 'Domain' : 'Archived'}
-                    </span>
-                  )}
-                  
-                  <span className="text-xs text-gray-400">
-                    Added {formatDate(website.createdAt)}
-                  </span>
+                 
                 </div>
             
                 
-                {website.status === 'idea' && (
-                  <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'active')}
-                      className="btn-primary btn-xs"
-                    >
-                      Activate
-                    </button>
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'domains')}
-                      className="btn-success btn-xs"
-                    >
-                      Mark as Domain
-                    </button>
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'archived')}
-                      className="btn-secondary btn-xs"
-                    >
-                      Archive
-                    </button>
-                  </div>
-                )}
-                
-                {website.status === 'domains' && (
-                  <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'active')}
-                      className="btn-primary btn-xs"
-                    >
-                      Activate
-                    </button>
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'idea')}
-                      className="btn-secondary btn-xs"
-                    >
-                      Move to Ideas
-                    </button>
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'archived')}
-                      className="btn-ghost btn-xs"
-                    >
-                      Archive
-                    </button>
-                  </div>
-                )}
-                
-                {website.status === 'archived' && (
-                  <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'active')}
-                      className="btn-primary btn-xs"
-                    >
-                      Restore
-                    </button>
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'idea')}
-                      className="btn-secondary btn-xs"
-                    >
-                      Move to Ideas
-                    </button>
-                    <button
-                      onClick={() => changeWebsiteStatus(website.id, 'domains')}
-                      className="btn-success btn-xs"
-                    >
-                      Mark as Domain
-                    </button>
-                  </div>
-                )}
+              
               </div>
             </div>
           ))}
         </div>
       )}
+      
+      {/* Delete Confirmation Popup */}
+      <DeleteConfirmationPopup
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        itemName={websiteToDelete?.name || ''}
+        itemType="website"
+      />
     </div>
   );
 };
