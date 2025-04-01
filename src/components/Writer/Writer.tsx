@@ -9,6 +9,7 @@ import Marker from '@editorjs/marker';
 import Checklist from '@editorjs/checklist';
 import Table from '@editorjs/table';
 import { storeService } from '../../services/storeService';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 // OpenAI Tool for EditorJS
 interface OpenAIToolData {
@@ -347,6 +348,8 @@ const Writer: React.FC = () => {
   const [newProjectColor, setNewProjectColor] = useState(COLORS[0]);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showProjectActions, setShowProjectActions] = useState<string | null>(null);
+  const [docToDelete, setDocToDelete] = useState<string | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const editorInstance = useRef<any>(null);
 
   // Load documents and projects from store on component mount
@@ -930,31 +933,34 @@ const Writer: React.FC = () => {
   };
 
   // Delete project
+  const confirmDeleteProject = (projectId: string) => {
+    setProjectToDelete(projectId);
+  };
+
   const deleteProject = (projectId: string) => {
     if (projects.length <= 1) {
       alert('You must have at least one project');
       return;
     }
 
-    if (confirm('Are you sure you want to delete this project and all its documents?')) {
-      // Delete the project
-      const updatedProjects = projects.filter(project => project.id !== projectId);
-      setProjects(updatedProjects);
-      
-      // Set documents in this project to the default project
-      const updatedDocs = documents.map(doc => 
-        doc.projectId === projectId ? {...doc, projectId: 'default'} : doc
-      );
-      
-      setDocuments(updatedDocs);
-      
-      // Switch to another project if the active project was deleted
-      if (activeProjectId === projectId) {
-        setActiveProjectId(updatedProjects[0]?.id || 'default');
-      }
-      
-      setShowProjectActions(null);
+    // Delete the project
+    const updatedProjects = projects.filter(project => project.id !== projectId);
+    setProjects(updatedProjects);
+    
+    // Set documents in this project to the default project
+    const updatedDocs = documents.map(doc => 
+      doc.projectId === projectId ? {...doc, projectId: 'default'} : doc
+    );
+    
+    setDocuments(updatedDocs);
+    
+    // Switch to another project if the active project was deleted
+    if (activeProjectId === projectId) {
+      setActiveProjectId(updatedProjects[0]?.id || 'default');
     }
+    
+    setShowProjectActions(null);
+    setProjectToDelete(null);
   };
   
   // Save current document
@@ -988,15 +994,19 @@ const Writer: React.FC = () => {
     }
   };
 
+  const confirmDeleteDocument = (docId: string) => {
+    setDocToDelete(docId);
+  };
+
   const deleteDocument = (docId: string) => {
-    if (confirm('Are you sure you want to delete this document?')) {
-      const updatedDocs = documents.filter(doc => doc.id !== docId);
-      saveDocuments(updatedDocs);
-      
-      if (currentDocId === docId) {
-        setCurrentDocId(updatedDocs.length > 0 ? updatedDocs[0].id : null);
-      }
+    const updatedDocs = documents.filter(doc => doc.id !== docId);
+    saveDocuments(updatedDocs);
+    
+    if (currentDocId === docId) {
+      setCurrentDocId(updatedDocs.length > 0 ? updatedDocs[0].id : null);
     }
+    
+    setDocToDelete(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -1031,7 +1041,7 @@ const Writer: React.FC = () => {
           {currentDocId && (
             <button 
               onClick={saveCurrentDocument}
-              className={`p-2 rounded-lg hover:bg-gray-700 flex items-center ${isSaving ? 'opacity-50' : ''}`}
+              className={`btn-success btn-sm flex items-center ${isSaving ? 'opacity-50' : ''}`}
               title="Save Document"
               disabled={isSaving}
             >
@@ -1041,7 +1051,7 @@ const Writer: React.FC = () => {
           )}
           <button 
             onClick={() => setShowDocList(!showDocList)}
-            className={`p-2 rounded-lg hover:bg-gray-700 ${showDocList ? 'bg-gray-700' : ''}`}
+            className={`btn-secondary btn-sm ${showDocList ? 'bg-gray-700' : ''}`}
             title="Toggle Document List"
           >
             <FiList className="w-5 h-5" />
@@ -1053,7 +1063,16 @@ const Writer: React.FC = () => {
         {showDocList && (
           <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
             <div className="p-3 border-b border-gray-700">
-              <h3 className="text-white font-medium mb-2">Projects</h3>
+
+              <div className="flex justify-between items-center mb-2">
+              <h3 className="text-white font-medium">Projects</h3>
+              <button
+                onClick={() => setIsCreatingProject(true)}
+                className="btn-primary btn-xs"
+              >
+                <FiPlus className="w-4 h-4" />
+              </button>
+              </div>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {projects.map(project => (
                   <div 
@@ -1071,7 +1090,7 @@ const Writer: React.FC = () => {
                       <span className="text-white text-sm truncate">{project.name}</span>
                     </div>
                     <button
-                      className="opacity-0 hover:opacity-100 p-1 rounded hover:bg-gray-600"
+                      className="opacity-0 hover:opacity-100 p-1 rounded hover:bg-gray-600 btn-ghost btn-xs"
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowProjectActions(project.id);
@@ -1083,10 +1102,11 @@ const Writer: React.FC = () => {
                     {showProjectActions === project.id && (
                       <div className="absolute z-10 right-0 mt-8 bg-gray-800 border border-gray-700 rounded shadow-lg">
                         <button
-                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 flex items-center"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 flex items-center btn-delete btn-xs"
                           onClick={(e) => {
                             e.stopPropagation();
-                            deleteProject(project.id);
+                            confirmDeleteProject(project.id);
+                            setShowProjectActions(null);
                           }}
                         >
                           <FiTrash2 className="w-3 h-3 mr-2" />
@@ -1097,13 +1117,7 @@ const Writer: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => setIsCreatingProject(true)}
-                className="mt-2 w-full px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center"
-              >
-                <FiPlus className="w-3 h-3 mr-1" />
-                New Project
-              </button>
+              
             </div>
             
             {isCreatingProject && (
@@ -1112,7 +1126,7 @@ const Writer: React.FC = () => {
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Project name"
                   autoFocus
                 />
@@ -1131,13 +1145,13 @@ const Writer: React.FC = () => {
                 <div className="flex justify-end space-x-2">
                   <button
                     onClick={() => setIsCreatingProject(false)}
-                    className="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600"
+                    className="btn-ghost btn-sm"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={addProject}
-                    className="px-3 py-1 text-sm rounded bg-blue-600 hover:bg-blue-700"
+                    className="btn-primary btn-sm"
                     disabled={!newProjectName.trim()}
                   >
                     Create
@@ -1150,7 +1164,7 @@ const Writer: React.FC = () => {
               <h3 className="text-white font-medium">Documents</h3>
               <button 
                 onClick={() => setIsCreatingDoc(true)}
-                className="p-1 rounded hover:bg-gray-700"
+                className="btn-primary btn-xs"
                 title="New Document"
               >
                 <FiPlus className="w-4 h-4" />
@@ -1163,20 +1177,20 @@ const Writer: React.FC = () => {
                   type="text"
                   value={newDocName}
                   onChange={(e) => setNewDocName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Document name"
                   autoFocus
                 />
                 <div className="flex justify-end space-x-2">
                   <button
                     onClick={() => setIsCreatingDoc(false)}
-                    className="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600"
+                    className="btn-ghost btn-sm"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={createNewDocument}
-                    className="px-3 py-1 text-sm rounded bg-blue-600 hover:bg-blue-700"
+                    className="btn-primary btn-sm"
                     disabled={!newDocName.trim()}
                   >
                     Create
@@ -1210,9 +1224,9 @@ const Writer: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteDocument(doc.id);
+                          confirmDeleteDocument(doc.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-600 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 btn-delete btn-xs transition-opacity"
                       >
                         <FiTrash2 className="w-3 h-3" />
                       </button>
@@ -1250,18 +1264,29 @@ const Writer: React.FC = () => {
               <div>
                 <FiFile className="w-12 h-12 mx-auto mb-4" />
                 <p>Select a document or create a new one</p>
-                <button
-                  onClick={() => setIsCreatingDoc(true)}
-                  className="mt-4 px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <FiPlus className="w-4 h-4 mr-2 inline-block" />
-                  New Document
-                </button>
               </div>
             </div>
           )}
         </div>
       </div>
+      
+      {/* Delete Document Confirmation */}
+      <DeleteConfirmationPopup
+        isOpen={docToDelete !== null}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={() => docToDelete && deleteDocument(docToDelete)}
+        itemName={documents.find(doc => doc.id === docToDelete)?.name || ''}
+        itemType="document"
+      />
+      
+      {/* Delete Project Confirmation */}
+      <DeleteConfirmationPopup
+        isOpen={projectToDelete !== null}
+        onClose={() => setProjectToDelete(null)}
+        onConfirm={() => projectToDelete && deleteProject(projectToDelete)}
+        itemName={projects.find(project => project.id === projectToDelete)?.name || ''}
+        itemType="project"
+      />
     </div>
   );
 };

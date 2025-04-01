@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FiSend, FiUser, FiCpu, FiSettings, FiPlus, FiList, FiMessageCircle, FiChevronLeft, FiTrash2 } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 import chatFunctions, { getCapabilitiesSystemPrompt } from '../../services/chatFunctions';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -127,6 +128,8 @@ const AIChat: React.FC = () => {
   const [showLandingScreen, setShowLandingScreen] = useState(true);
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
   const [newChatTitle, setNewChatTitle] = useState('');
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [clearingChatId, setClearingChatId] = useState<string | null>(null);
   
   // Original state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1275,38 +1278,48 @@ const AIChat: React.FC = () => {
   };
 
   // Clear chat history
-  const clearChatHistory = () => {
+  const confirmClearChatHistory = () => {
     if (!activeChatId) return;
+    setClearingChatId(activeChatId);
+  };
+
+  const clearChatHistory = () => {
+    if (!clearingChatId) return;
     
-    if (confirm('Are you sure you want to clear this chat history?')) {
-      // Create a new updated chats array with empty messages for the active chat
-      const updatedChats = chats.map(chat => 
-        chat.id === activeChatId 
-          ? { ...chat, messages: [], updatedAt: new Date().toISOString() } 
-          : chat
-      );
-      
-      setChats(updatedChats);
-      setMessages([]);
-    }
+    // Create a new updated chats array with empty messages for the active chat
+    const updatedChats = chats.map(chat => 
+      chat.id === clearingChatId 
+        ? { ...chat, messages: [], updatedAt: new Date().toISOString() } 
+        : chat
+    );
+    
+    setChats(updatedChats);
+    setMessages([]);
+    setClearingChatId(null);
   };
   
   // Delete chat
+  const confirmDeleteChat = (chatId: string) => {
+    setChatToDelete(chatId);
+  };
+
   const deleteChat = (chatId: string) => {
-    if (confirm('Are you sure you want to delete this chat?')) {
-      const updatedChats = chats.filter(chat => chat.id !== chatId);
-      setChats(updatedChats);
-      
-      if (chatId === activeChatId) {
-        if (updatedChats.length > 0) {
-          setActiveChatId(updatedChats[0].id);
-        } else {
-          setActiveChatId(null);
-          setMessages([]);
-          setShowChatList(true);
-        }
+    if (!chatId) return;
+    
+    const updatedChats = chats.filter(chat => chat.id !== chatId);
+    setChats(updatedChats);
+    
+    if (chatId === activeChatId) {
+      if (updatedChats.length > 0) {
+        setActiveChatId(updatedChats[0].id);
+      } else {
+        setActiveChatId(null);
+        setMessages([]);
+        setShowChatList(true);
       }
     }
+    
+    setChatToDelete(null);
   };
   
   // Add these new functions for chat renaming
@@ -2063,7 +2076,7 @@ const AIChat: React.FC = () => {
                 setActiveChatId(null);
                 setMessages([]);
               }}
-              className="p-2 rounded-lg hover:bg-gray-700 mr-2"
+              className="btn-ghost btn-sm"
               title="Back to Home"
             >
               <FiChevronLeft className="w-5 h-5" />
@@ -2075,7 +2088,7 @@ const AIChat: React.FC = () => {
                 type="text"
                 value={newChatTitle}
                 onChange={(e) => setNewChatTitle(e.target.value)}
-                className="px-2 py-1 bg-gray-700 rounded text-white text-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="px-2 py-1 bg-gray-700 rounded text-white text-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 placeholder="Enter chat name"
                 autoFocus
                 onKeyDown={(e) => {
@@ -2086,7 +2099,7 @@ const AIChat: React.FC = () => {
               <div className="flex space-x-1 ml-2">
                 <button
                   onClick={renameChat}
-                  className="p-1 text-gray-300 hover:text-green-500 rounded"
+                  className="btn-success btn-xs"
                   title="Save"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2095,7 +2108,7 @@ const AIChat: React.FC = () => {
                 </button>
                 <button
                   onClick={cancelRenaming}
-                  className="p-1 text-gray-300 hover:text-red-500 rounded"
+                  className="btn-delete btn-xs"
                   title="Cancel"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2117,7 +2130,7 @@ const AIChat: React.FC = () => {
                         className="w-8 h-8 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                      <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm">
                         {activeAssistant.name.charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -2135,7 +2148,7 @@ const AIChat: React.FC = () => {
                     setNewChatTitle(chat.title);
                   }
                 }}
-                className="ml-2 p-1 text-gray-400 hover:text-blue-500 rounded"
+                className="ml-2 p-1 text-gray-400 hover:text-indigo-500 rounded"
                 title="Rename Chat"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -2152,15 +2165,15 @@ const AIChat: React.FC = () => {
           {!showLandingScreen && !showChatList && messages.length > 0 && (
             <>
               <button
-                onClick={clearChatHistory}
-                className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white"
+                onClick={confirmClearChatHistory}
+                className="btn-ghost btn-sm"
                 title="Clear Chat History"
               >
                 Clear
               </button>
               <button
-                onClick={() => deleteChat(activeChatId!)}
-                className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-red-500"
+                onClick={() => confirmDeleteChat(activeChatId!)}
+                className="btn-delete btn-sm"
                 title="Delete Chat"
               >
                 <FiTrash2 className="w-5 h-5" />
@@ -2169,7 +2182,7 @@ const AIChat: React.FC = () => {
           )}
           <button 
             onClick={() => setShowAPISettings(!showAPISettings)}
-            className="p-2 rounded-lg hover:bg-gray-700"
+            className="btn-secondary btn-sm"
             title="API Settings"
           >
             <FiSettings className="w-5 h-5" />
@@ -2186,12 +2199,12 @@ const AIChat: React.FC = () => {
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="flex-1 px-4 py-2 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-4 py-2 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Enter your OpenAI API key"
               />
               <button
                 onClick={() => setShowAPISettings(false)}
-                className="px-4 py-2 bg-blue-600 rounded-r hover:bg-blue-700"
+                className="btn-primary"
               >
                 Save
               </button>
@@ -2209,7 +2222,7 @@ const AIChat: React.FC = () => {
                   key={model.id}
                   className={`p-3 rounded cursor-pointer ${
                     selectedModel === model.id 
-                      ? 'bg-blue-600 border border-blue-400' 
+                      ? 'bg-indigo-600 border border-indigo-400' 
                       : 'bg-gray-700 border border-gray-600 hover:bg-gray-600'
                   }`}
                   onClick={() => setSelectedModel(model.id)}
@@ -2231,13 +2244,13 @@ const AIChat: React.FC = () => {
               {/* New Chat Card */}
               <div 
                 onClick={navigateToNewChat}
-                className="flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl  cursor-pointer transform hover:-translate-y-1 hover:scale-[1.02]"
+                className="flex flex-col bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl cursor-pointer transform hover:-translate-y-1 hover:scale-[1.02]"
               >
                 <div className="p-8 flex-1 flex flex-col items-center justify-center">
                   <div className="bg-white/20 p-4 rounded-full mb-6">
                     <FiPlus className="w-10 h-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-medium text-gray-100  mb-2">New Chat</h2>
+                  <h2 className="text-2xl font-medium text-gray-100 mb-2">New Chat</h2>
                   <p className="text-gray-500 text-center">Start a conversation with an assistant</p>
                 </div>
                 <div className="bg-black/20 py-4 text-center">
@@ -2254,7 +2267,7 @@ const AIChat: React.FC = () => {
                   <div className="bg-white/10 p-4 rounded-full mb-6">
                     <FiList className="w-10 h-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-medium text-gray-100  mb-2">Past Chats</h2>
+                  <h2 className="text-2xl font-medium text-gray-100 mb-2">Past Chats</h2>
                   <p className="text-gray-500 text-center">Continue a previous conversation</p>
                 </div>
                 <div className="bg-black/20 py-4 text-center">
@@ -2274,7 +2287,7 @@ const AIChat: React.FC = () => {
           <div className="mb-6 flex gap-2">
             <button
               onClick={() => setShowLandingScreen(true)}
-              className="px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 flex items-center justify-center"
+              className="btn-ghost"
             >
               <FiChevronLeft className="mr-2" />
               <span>Back</span>
@@ -2298,7 +2311,7 @@ const AIChat: React.FC = () => {
                         className="w-10 h-10 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white">
                         {assistant.name.charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -2318,17 +2331,17 @@ const AIChat: React.FC = () => {
         </div>
       ) : showChatList ? (
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="mb-6 flex gap-2">
+          <div className="mb-6 flex justify-between gap-2">
             <button
               onClick={() => setShowLandingScreen(true)}
-              className="px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 flex items-center justify-center"
+              className="btn-ghost"
             >
               <FiChevronLeft className="mr-2" />
               <span>Back</span>
             </button>
             <button
               onClick={() => setShowAssistantSelect(true)}
-              className="flex-1 px-4 py-3 bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center justify-center"
+              className="btn-primary"
             >
               <FiPlus className="mr-2" />
               <span>New Chat</span>
@@ -2364,7 +2377,7 @@ const AIChat: React.FC = () => {
                               className="w-8 h-8 rounded-full object-cover"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm">
                               {chatAssistant ? chatAssistant.name.charAt(0).toUpperCase() : 'A'}
                             </div>
                           )}
@@ -2374,7 +2387,7 @@ const AIChat: React.FC = () => {
                             type="text"
                             value={newChatTitle}
                             onChange={(e) => setNewChatTitle(e.target.value)}
-                            className="w-full px-2 py-1 bg-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1 bg-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                             placeholder="Enter chat name"
                             autoFocus
                             onKeyDown={(e) => {
@@ -2386,7 +2399,7 @@ const AIChat: React.FC = () => {
                         <div className="flex space-x-1 ml-2">
                           <button
                             onClick={renameChat}
-                            className="p-1 text-gray-300 hover:text-green-500 rounded"
+                            className="btn-success btn-xs"
                             title="Save"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2395,7 +2408,7 @@ const AIChat: React.FC = () => {
                           </button>
                           <button
                             onClick={cancelRenaming}
-                            className="p-1 text-gray-300 hover:text-red-500 rounded"
+                            className="btn-delete btn-xs"
                             title="Cancel"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -2428,7 +2441,7 @@ const AIChat: React.FC = () => {
                           className="w-8 h-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm">
                           {chatAssistant ? chatAssistant.name.charAt(0).toUpperCase() : 'A'}
                         </div>
                       )}
@@ -2445,7 +2458,7 @@ const AIChat: React.FC = () => {
                           e.stopPropagation();
                           startRenaming(chat.id);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-blue-500 rounded"
+                        className="btn-secondary btn-xs"
                         title="Rename"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -2455,9 +2468,9 @@ const AIChat: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteChat(chat.id);
+                          confirmDeleteChat(chat.id);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                        className="btn-delete btn-xs"
                         title="Delete"
                       >
                         <FiTrash2 size={16} />
@@ -2497,7 +2510,7 @@ const AIChat: React.FC = () => {
                           </div>
                         </div>
                       ) : message.type === 'function_call' ? (
-                        <div className="self-start max-w-full w-full bg-gray-800 border-l-4 border-blue-500 px-3 py-2 my-2 text-blue-300 text-sm flex items-center">
+                        <div className="self-start max-w-full w-full bg-gray-800 border-l-4 border-indigo-500 px-3 py-2 my-2 text-indigo-300 text-sm flex items-center">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
@@ -2563,10 +2576,10 @@ const AIChat: React.FC = () => {
                 />
                 <button
                   type="submit"
-                  className={`px-4 py-2 rounded-r flex items-center justify-center ${
+                  className={`btn-primary flex items-center justify-center rounded-l-none ${
                     isLoading || !apiKey || !input.trim()
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
+                      ? 'opacity-50 cursor-not-allowed'
+                      : ''
                   }`}
                   disabled={isLoading || !apiKey || !input.trim()}
                 >
@@ -2582,6 +2595,24 @@ const AIChat: React.FC = () => {
           </div>
         </>
       )}
+      
+      {/* Delete Chat Confirmation */}
+      <DeleteConfirmationPopup
+        isOpen={chatToDelete !== null}
+        onClose={() => setChatToDelete(null)}
+        onConfirm={() => deleteChat(chatToDelete!)}
+        itemName={chats.find(c => c.id === chatToDelete)?.title || ''}
+        itemType="chat"
+      />
+      
+      {/* Clear Chat History Confirmation */}
+      <DeleteConfirmationPopup
+        isOpen={clearingChatId !== null}
+        onClose={() => setClearingChatId(null)}
+        onConfirm={clearChatHistory}
+        itemName="chat history"
+        itemType="chat history"
+      />
     </div>
   );
 };
