@@ -286,18 +286,18 @@ const Websites: React.FC = () => {
       {/* Stats overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div 
-          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'active' ? 'ring-2 ring-blue-500' : ''}`}
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'active' ? 'ring-2 ring-indigo-500' : ''}`}
           onClick={() => setSelectedStatus(selectedStatus === 'active' ? null : 'active')}
         >
           <div className="flex items-center mb-2">
-            <FiGlobe className="mr-2 text-blue-500" />
+            <FiGlobe className="mr-2 text-indigo-500" />
             <h2 className="text-xl font-semibold">Active Websites</h2>
           </div>
           <p className="text-3xl font-bold">{getStatusCounts().active}</p>
         </div>
         
         <div 
-          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'idea' ? 'ring-2 ring-blue-500' : ''}`}
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'idea' ? 'ring-2 ring-indigo-500' : ''}`}
           onClick={() => setSelectedStatus(selectedStatus === 'idea' ? null : 'idea')}
         >
           <div className="flex items-center mb-2">
@@ -308,7 +308,7 @@ const Websites: React.FC = () => {
         </div>
         
         <div 
-          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'domains' ? 'ring-2 ring-blue-500' : ''}`}
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'domains' ? 'ring-2 ring-indigo-500' : ''}`}
           onClick={() => setSelectedStatus(selectedStatus === 'domains' ? null : 'domains')}
         >
           <div className="flex items-center mb-2">
@@ -319,7 +319,7 @@ const Websites: React.FC = () => {
         </div>
         
         <div 
-          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'archived' ? 'ring-2 ring-blue-500' : ''}`}
+          className={`bg-gray-800 p-6 rounded-lg cursor-pointer ${selectedStatus === 'archived' ? 'ring-2 ring-indigo-500' : ''}`}
           onClick={() => setSelectedStatus(selectedStatus === 'archived' ? null : 'archived')}
         >
           <div className="flex items-center mb-2">
@@ -336,7 +336,7 @@ const Websites: React.FC = () => {
           <select
             value={selectedCategory || ''}
             onChange={(e) => setSelectedCategory(e.target.value === '' ? null : e.target.value)}
-            className="w-full min-w-[200px] px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full min-w-[200px] px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
           >
             <option value="">All Categories</option>
             {getCategories().map(category => (
@@ -369,7 +369,7 @@ const Websites: React.FC = () => {
                   name="name"
                   value={newWebsite.name}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="My Website"
                 />
               </div>
@@ -380,7 +380,7 @@ const Websites: React.FC = () => {
                   name="url"
                   value={newWebsite.url}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="https://example.com"
                 />
               </div>
@@ -390,7 +390,7 @@ const Websites: React.FC = () => {
                   name="category"
                   value={newWebsite.category}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {getCategories().map(category => (
                     <option key={category} value={category}>{category}</option>
@@ -403,7 +403,7 @@ const Websites: React.FC = () => {
                   name="status"
                   value={newWebsite.status}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="active">Active Website</option>
                   <option value="idea">Side Idea</option>
@@ -418,7 +418,7 @@ const Websites: React.FC = () => {
                   name="description"
                   value={newWebsite.description}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Brief description"
                 />
               </div>
@@ -461,7 +461,7 @@ const Websites: React.FC = () => {
                   name="name"
                   value={editingWebsite.name}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
@@ -471,7 +471,7 @@ const Websites: React.FC = () => {
                   name="url"
                   value={editingWebsite.url}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div>
@@ -480,7 +480,7 @@ const Websites: React.FC = () => {
                   name="category"
                   value={editingWebsite.category}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {getCategories().map(category => (
                     <option key={category} value={category}>{category}</option>
@@ -493,7 +493,7 @@ const Websites: React.FC = () => {
                   name="status"
                   value={editingWebsite.status}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="active">Active Website</option>
                   <option value="idea">Side Idea</option>
@@ -508,7 +508,7 @@ const Websites: React.FC = () => {
                   name="description"
                   value={editingWebsite.description || ''}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div className="flex justify-end space-x-2 pt-4">
@@ -590,7 +590,7 @@ const Websites: React.FC = () => {
                       e.stopPropagation(); // Prevent triggering the card's onClick
                       openWebsite(website.url);
                     }}
-                    className="text-blue-400 hover:text-blue-300 truncate"
+                    className="text-indigo-400 hover:text-indigo-300 truncate"
                   >
                     {website.url.replace(/^https?:\/\//i, '')}
                   </a>

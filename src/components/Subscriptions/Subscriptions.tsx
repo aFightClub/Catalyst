@@ -337,7 +337,7 @@ const Subscriptions: React.FC = () => {
             
             return (
               <div key={siteId} className="flex items-center">
-                <span className="text-sm text-blue-400 truncate">{website.name}</span>
+                <span className="text-sm text-indigo-400 truncate">{website.name}</span>
               </div>
             );
           })}
@@ -373,7 +373,7 @@ const Subscriptions: React.FC = () => {
         
         <div className="bg-gray-800 p-6 rounded-lg">
           <div className="flex items-center mb-2">
-            <FiCalendar className="mr-2 text-blue-500" />
+            <FiCalendar className="mr-2 text-indigo-500" />
             <h2 className="text-xl font-semibold">Yearly Cost</h2>
           </div>
           <p className="text-3xl font-bold">{yearlyCost}</p>
@@ -387,7 +387,7 @@ const Subscriptions: React.FC = () => {
           <select
             value={selectedCategory || ''}
             onChange={(e) => setSelectedCategory(e.target.value === '' ? null : e.target.value)}
-            className="w-full min-w-[200px] px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full min-w-[200px] px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
           >
             <option value="">All Categories</option>
             {getCategories().map(category => (
@@ -420,7 +420,7 @@ const Subscriptions: React.FC = () => {
                   name="name"
                   value={newSubscription.name}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Netflix, Spotify, etc."
                 />
               </div>
@@ -432,7 +432,7 @@ const Subscriptions: React.FC = () => {
                   name="url"
                   value={newSubscription.url}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="https://example.com"
                 />
               </div>
@@ -444,7 +444,7 @@ const Subscriptions: React.FC = () => {
                   name="price"
                   value={newSubscription.price}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   min="0"
                   step="0.01"
                 />
@@ -456,7 +456,7 @@ const Subscriptions: React.FC = () => {
                   name="billingCycle"
                   value={newSubscription.billingCycle}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="yearly">Yearly</option>
@@ -470,7 +470,7 @@ const Subscriptions: React.FC = () => {
                   name="startDate"
                   value={newSubscription.startDate}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               
@@ -480,7 +480,7 @@ const Subscriptions: React.FC = () => {
                   name="category"
                   value={newSubscription.category}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {getCategories().map(category => (
                     <option key={category} value={category}>{category}</option>
@@ -523,7 +523,7 @@ const Subscriptions: React.FC = () => {
                   name="notes"
                   value={newSubscription.notes || ''}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   rows={3}
                 ></textarea>
               </div>
@@ -565,7 +565,7 @@ const Subscriptions: React.FC = () => {
                   name="name"
                   value={editingSubscription.name}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               
@@ -576,7 +576,7 @@ const Subscriptions: React.FC = () => {
                   name="url"
                   value={editingSubscription.url}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               
@@ -587,7 +587,7 @@ const Subscriptions: React.FC = () => {
                   name="price"
                   value={editingSubscription.price}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   min="0"
                   step="0.01"
                 />
@@ -599,7 +599,7 @@ const Subscriptions: React.FC = () => {
                   name="billingCycle"
                   value={editingSubscription.billingCycle}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="yearly">Yearly</option>
@@ -613,7 +613,7 @@ const Subscriptions: React.FC = () => {
                   name="startDate"
                   value={editingSubscription.startDate}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               
@@ -623,7 +623,7 @@ const Subscriptions: React.FC = () => {
                   name="category"
                   value={editingSubscription.category}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {getCategories().map(category => (
                     <option key={category} value={category}>{category}</option>
@@ -661,7 +661,7 @@ const Subscriptions: React.FC = () => {
                   name="notes"
                   value={editingSubscription.notes || ''}
                   onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   rows={3}
                 ></textarea>
               </div>
@@ -743,7 +743,7 @@ const Subscriptions: React.FC = () => {
                               href={sub.url} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              className="text-blue-400 hover:underline text-sm"
+                              className="text-indigo-400 hover:underline text-sm"
                               onClick={(e) => e.stopPropagation()} // Prevent triggering the card's onClick
                             >
                               {sub.url}

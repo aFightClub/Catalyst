@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiTrash2, FiFolder, FiCheck, FiX, FiEdit, FiMoreVertical, FiList, FiColumns, FiArrowRight, FiEye, FiEyeOff } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 // Task status enum
 enum TaskStatus {
@@ -29,7 +30,7 @@ const DEFAULT_PROJECTS: Project[] = [
   {
     id: 'default',
     name: 'General',
-    color: '#3B82F6', // blue-500
+    color: '#3B82F6', // indigo-500
     createdAt: new Date().toISOString()
   },
   {
@@ -53,7 +54,7 @@ const STORAGE_KEYS = {
 };
 
 const COLORS = [
-  '#3B82F6', // blue-500
+  '#3B82F6', // indigo-500
   '#EF4444', // red-500
   '#10B981', // emerald-500
   '#F59E0B', // amber-500
@@ -81,6 +82,10 @@ const Tasks: React.FC = () => {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editProjectName, setEditProjectName] = useState('');
   const [hideDoneTasks, setHideDoneTasks] = useState(true);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
 
   // Load tasks and projects on component mount
   useEffect(() => {
@@ -204,10 +209,23 @@ const Tasks: React.FC = () => {
   };
 
   const deleteTask = (taskId: string) => {
-    setTasks(tasks.filter(task => task.id !== taskId));
-    if (editingTaskId === taskId) {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setTaskToDelete(task);
+      setIsTaskDeleteConfirmOpen(true);
+    }
+  };
+
+  const confirmDeleteTask = () => {
+    if (!taskToDelete) return;
+    
+    setTasks(tasks.filter(task => task.id !== taskToDelete.id));
+    if (editingTaskId === taskToDelete.id) {
       setEditingTaskId(null);
     }
+    
+    setTaskToDelete(null);
+    setIsTaskDeleteConfirmOpen(false);
   };
 
   const startEditingTask = (task: Task) => {
@@ -274,19 +292,31 @@ const Tasks: React.FC = () => {
       return;
     }
 
-    if (confirm('Are you sure you want to delete this project and all its tasks?')) {
-      // Delete the project
-      const updatedProjects = projects.filter(project => project.id !== projectId);
-      setProjects(updatedProjects);
-      
-      // Delete all tasks associated with the project
-      setTasks(tasks.filter(task => task.projectId !== projectId));
-      
-      // Switch to another project if the active project was deleted
-      if (activeProjectId === projectId) {
-        setActiveProjectId(updatedProjects[0]?.id || 'default');
-      }
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setProjectToDelete(project);
+      setIsDeleteConfirmOpen(true);
+      setShowProjectActions(null);
     }
+  };
+
+  const confirmDeleteProject = () => {
+    if (!projectToDelete) return;
+    
+    // Delete the project
+    const updatedProjects = projects.filter(project => project.id !== projectToDelete.id);
+    setProjects(updatedProjects);
+    
+    // Delete all tasks associated with the project
+    setTasks(tasks.filter(task => task.projectId !== projectToDelete.id));
+    
+    // Switch to another project if the active project was deleted
+    if (activeProjectId === projectToDelete.id) {
+      setActiveProjectId(updatedProjects[0]?.id || 'default');
+    }
+    
+    setProjectToDelete(null);
+    setIsDeleteConfirmOpen(false);
   };
 
   // Get tasks for the active project
@@ -339,21 +369,17 @@ const Tasks: React.FC = () => {
     <div className="flex flex-col h-full bg-gray-900">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
         <h2 className="text-xl font-bold text-white">Tasks</h2>
-        <div className="flex items-center bg-gray-700 rounded">
+        <div className="flex items-center space-x-2">
           <button
             onClick={() => setViewMode('list')}
-            className={`px-3 py-1 rounded-l flex items-center ${
-              viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'
-            }`}
+            className={`${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
             title="List View"
           >
             <FiList className="mr-1" /> List
           </button>
           <button
             onClick={() => setViewMode('kanban')}
-            className={`px-3 py-1 rounded-r flex items-center ${
-              viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'
-            }`}
+            className={`${viewMode === 'kanban' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
             title="Kanban View"
           >
             <FiColumns className="mr-1" /> Kanban
@@ -368,7 +394,7 @@ const Tasks: React.FC = () => {
             <h3 className="text-white font-medium">Projects</h3>
             <button 
               onClick={() => setIsCreatingProject(true)}
-              className="p-1 rounded hover:bg-gray-700"
+              className="btn-ghost btn-xs"
               title="New Project"
             >
               <FiPlus className="w-4 h-4" />
@@ -381,7 +407,7 @@ const Tasks: React.FC = () => {
                 type="text"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-gray-700 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Project name"
                 autoFocus
               />
@@ -414,13 +440,13 @@ const Tasks: React.FC = () => {
               <div className="flex justify-end space-x-2">
                 <button
                   onClick={() => setIsCreatingProject(false)}
-                  className="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600"
+                  className="btn-ghost btn-sm"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={addProject}
-                  className="px-3 py-1 text-sm rounded bg-blue-600 hover:bg-blue-700"
+                  className="btn-primary btn-sm"
                   disabled={!newProjectName.trim()}
                 >
                   Create
@@ -444,7 +470,7 @@ const Tasks: React.FC = () => {
                       type="text"
                       value={editProjectName}
                       onChange={(e) => setEditProjectName(e.target.value)}
-                      className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') saveEditedProject();
@@ -457,7 +483,7 @@ const Tasks: React.FC = () => {
                         e.stopPropagation();
                         saveEditedProject();
                       }}
-                      className="px-2 py-1 bg-green-600 hover:bg-green-700"
+                      className="btn-success btn-xs"
                     >
                       <FiCheck className="w-4 h-4" />
                     </button>
@@ -466,7 +492,7 @@ const Tasks: React.FC = () => {
                         e.stopPropagation();
                         cancelEditingProject();
                       }}
-                      className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded-r"
+                      className="btn-delete btn-xs rounded-r"
                     >
                       <FiX className="w-4 h-4" />
                     </button>
@@ -512,7 +538,7 @@ const Tasks: React.FC = () => {
                               deleteProject(project.id);
                               setShowProjectActions(null);
                             }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-600 text-white text-sm flex items-center"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-600 text-white text-sm flex items-center text-red-400"
                           >
                             <FiTrash2 className="w-4 h-4 mr-2" />
                             Delete
@@ -538,7 +564,7 @@ const Tasks: React.FC = () => {
               {projects.find(p => p.id === activeProjectId)?.name || 'Tasks'}
             </h3>
             
-            <div className="flex">
+            <div className="flex gap-2">
               <input
                 type="text"
                 value={newTaskTitle}
@@ -546,19 +572,15 @@ const Tasks: React.FC = () => {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') addTask();
                 }}
-                className="flex-1 px-4 py-2 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Add a new task..."
               />
               <button
                 onClick={addTask}
-                className={`px-4 py-2 rounded-r flex items-center justify-center ${
-                  !newTaskTitle.trim()
-                    ? 'bg-gray-600 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
+                className="btn-primary rounded-l-none"
                 disabled={!newTaskTitle.trim()}
               >
-                <FiPlus className="w-5 h-5" />
+                <FiPlus />
               </button>
             </div>
           </div>
@@ -572,7 +594,7 @@ const Tasks: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setHideDoneTasks(!hideDoneTasks)}
-                  className="flex items-center px-3 py-1 bg-gray-700 rounded text-sm hover:bg-gray-600"
+                  className="btn-ghost btn-sm"
                   title={hideDoneTasks ? "Show completed tasks" : "Hide completed tasks"}
                 >
                   {hideDoneTasks ? (
@@ -608,7 +630,7 @@ const Tasks: React.FC = () => {
                             type="text"
                             value={editTaskTitle}
                             onChange={(e) => setEditTaskTitle(e.target.value)}
-                            className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 px-3 py-1 bg-gray-700 rounded-l focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') saveEditedTask();
@@ -617,13 +639,13 @@ const Tasks: React.FC = () => {
                           />
                           <button
                             onClick={saveEditedTask}
-                            className="px-2 py-1 bg-green-600 hover:bg-green-700"
+                            className="btn-success btn-xs"
                           >
                             <FiCheck className="w-4 h-4" />
                           </button>
                           <button
                             onClick={cancelEditingTask}
-                            className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded-r"
+                            className="btn-delete btn-xs rounded-r"
                           >
                             <FiX className="w-4 h-4" />
                           </button>
@@ -649,7 +671,7 @@ const Tasks: React.FC = () => {
                               <span 
                                 className={`px-2 py-0.5 rounded ${
                                   task.status === TaskStatus.BACKLOG ? 'bg-gray-600' :
-                                  task.status === TaskStatus.DOING ? 'bg-blue-900' :
+                                  task.status === TaskStatus.DOING ? 'bg-indigo-900' :
                                   'bg-green-900'
                                 }`}
                               >
@@ -670,17 +692,17 @@ const Tasks: React.FC = () => {
                             </select>
                             <button
                               onClick={() => startEditingTask(task)}
-                              className="p-1 rounded hover:bg-gray-600"
+                              className="btn-secondary btn-xs rounded"
                               title="Edit Task"
                             >
-                              <FiEdit className="w-4 h-4" />
+                              <FiEdit className="w-3 h-3" />
                             </button>
                             <button
                               onClick={() => deleteTask(task.id)}
-                              className="p-1 rounded hover:bg-red-600"
+                              className="btn-delete btn-xs rounded"
                               title="Delete Task"
                             >
-                              <FiTrash2 className="w-4 h-4" />
+                              <FiTrash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
@@ -721,21 +743,21 @@ const Tasks: React.FC = () => {
                               <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => updateTaskStatus(task.id, TaskStatus.DOING)}
-                                  className="p-1 rounded hover:bg-blue-600 text-white"
+                                  className="btn-primary btn-xs rounded"
                                   title="Move to Doing"
                                 >
                                   <FiArrowRight className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => startEditingTask(task)}
-                                  className="p-1 rounded hover:bg-gray-500"
+                                  className="btn-secondary btn-xs rounded"
                                   title="Edit Task"
                                 >
                                   <FiEdit className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => deleteTask(task.id)}
-                                  className="p-1 rounded hover:bg-red-600"
+                                  className="btn-delete btn-xs rounded"
                                   title="Delete Task"
                                 >
                                   <FiTrash2 className="w-3 h-3" />
@@ -753,7 +775,7 @@ const Tasks: React.FC = () => {
                 <div className="flex-1 flex flex-col bg-gray-800 rounded-lg overflow-hidden min-w-[150px]">
                   <div className="p-3 bg-gray-800 border-b border-gray-700">
                     <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0 bg-blue-600"></div>
+                      <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0 bg-indigo-600"></div>
                       <h4 className="font-medium text-white">Doing</h4>
                     </div>
                   </div>
@@ -776,28 +798,28 @@ const Tasks: React.FC = () => {
                               <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => updateTaskStatus(task.id, TaskStatus.BACKLOG)}
-                                  className="p-1 rounded hover:bg-gray-500 rotate-180"
+                                  className="btn-secondary btn-xs rounded rotate-180"
                                   title="Move to Backlog"
                                 >
                                   <FiArrowRight className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => updateTaskStatus(task.id, TaskStatus.DONE)}
-                                  className="p-1 rounded hover:bg-green-600"
+                                  className="btn-success btn-xs rounded"
                                   title="Move to Done"
                                 >
                                   <FiArrowRight className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => startEditingTask(task)}
-                                  className="p-1 rounded hover:bg-gray-500"
+                                  className="btn-secondary btn-xs rounded"
                                   title="Edit Task"
                                 >
                                   <FiEdit className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => deleteTask(task.id)}
-                                  className="p-1 rounded hover:bg-red-600"
+                                  className="btn-delete btn-xs rounded"
                                   title="Delete Task"
                                 >
                                   <FiTrash2 className="w-3 h-3" />
@@ -838,14 +860,14 @@ const Tasks: React.FC = () => {
                               <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => updateTaskStatus(task.id, TaskStatus.DOING)}
-                                  className="p-1 rounded hover:bg-blue-600 rotate-180"
+                                  className="btn-primary btn-xs rounded rotate-180"
                                   title="Move to Doing"
                                 >
                                   <FiArrowRight className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => deleteTask(task.id)}
-                                  className="p-1 rounded hover:bg-red-600"
+                                  className="btn-delete btn-xs rounded"
                                   title="Delete Task"
                                 >
                                   <FiTrash2 className="w-3 h-3" />
@@ -872,7 +894,7 @@ const Tasks: React.FC = () => {
                     type="text"
                     value={editTaskTitle}
                     onChange={(e) => setEditTaskTitle(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     autoFocus
                   />
                 </div>
@@ -891,13 +913,13 @@ const Tasks: React.FC = () => {
                 <div className="flex justify-end space-x-2">
                   <button
                     onClick={cancelEditingTask}
-                    className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                    className="btn-ghost"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={saveEditedTask}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="btn-primary"
                   >
                     Save
                   </button>
@@ -907,6 +929,24 @@ const Tasks: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Task Confirmation Popup */}
+      <DeleteConfirmationPopup
+        isOpen={isTaskDeleteConfirmOpen}
+        onClose={() => setIsTaskDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteTask}
+        itemName={taskToDelete?.title || ''}
+        itemType="task"
+      />
+      
+      {/* Delete Project Confirmation Popup */}
+      <DeleteConfirmationPopup
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteProject}
+        itemName={projectToDelete?.name || ''}
+        itemType="project"
+      />
     </div>
   );
 };
