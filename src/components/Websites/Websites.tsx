@@ -331,7 +331,7 @@ const Websites: React.FC = () => {
         
         <button
           onClick={openAddPopup}
-          className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700 h-[38px] mt-auto"
+          className="btn-primary"
         >
           <FiPlus className="mr-2" />
           Add Website
@@ -407,7 +407,7 @@ const Websites: React.FC = () => {
               <div className="flex justify-end space-x-2 pt-4">
                 <button
                   onClick={closeAddPopup}
-                  className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+                  className="btn-ghost"
                 >
                   <FiX className="inline mr-1" />
                   Cancel
@@ -415,10 +415,10 @@ const Websites: React.FC = () => {
                 <button
                   onClick={addWebsite}
                   disabled={!newWebsite.name.trim() || !newWebsite.url.trim()}
-                  className={`px-4 py-2 rounded ${
+                  className={`btn-primary ${
                     !newWebsite.name.trim() || !newWebsite.url.trim()
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
+                      ? 'opacity-50 cursor-not-allowed'
+                      : ''
                   }`}
                 >
                   <FiSave className="inline mr-1" />
@@ -496,14 +496,14 @@ const Websites: React.FC = () => {
               <div className="flex justify-end space-x-2 pt-4">
                 <button
                   onClick={cancelEditing}
-                  className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+                  className="btn-ghost"
                 >
                   <FiX className="inline mr-1" />
                   Cancel
                 </button>
                 <button
                   onClick={saveEditing}
-                  className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+                  className="btn-primary"
                 >
                   <FiSave className="inline mr-1" />
                   Save
@@ -534,7 +534,7 @@ const Websites: React.FC = () => {
           {!isAddPopupOpen && (
             <button
               onClick={openAddPopup}
-              className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+              className="btn-primary"
             >
               <FiPlus className="inline mr-2" />
               Add Website
@@ -611,19 +611,19 @@ const Websites: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'active')}
-                      className="text-xs px-2 py-1 bg-blue-700 rounded hover:bg-blue-600"
+                      className="btn-primary btn-xs"
                     >
                       Activate
                     </button>
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'domains')}
-                      className="text-xs px-2 py-1 bg-green-800 rounded hover:bg-green-700"
+                      className="btn-success btn-xs"
                     >
                       Mark as Domain
                     </button>
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'archived')}
-                      className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                      className="btn-secondary btn-xs"
                     >
                       Archive
                     </button>
@@ -634,19 +634,19 @@ const Websites: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'active')}
-                      className="text-xs px-2 py-1 bg-blue-700 rounded hover:bg-blue-600"
+                      className="btn-primary btn-xs"
                     >
                       Activate
                     </button>
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'idea')}
-                      className="text-xs px-2 py-1 bg-yellow-800 text-yellow-200 rounded hover:bg-yellow-700"
+                      className="btn-secondary btn-xs"
                     >
                       Move to Ideas
                     </button>
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'archived')}
-                      className="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                      className="btn-ghost btn-xs"
                     >
                       Archive
                     </button>
@@ -657,19 +657,19 @@ const Websites: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-gray-700 flex justify-end space-x-2">
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'active')}
-                      className="text-xs px-2 py-1 bg-blue-700 rounded hover:bg-blue-600"
+                      className="btn-primary btn-xs"
                     >
                       Restore
                     </button>
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'idea')}
-                      className="text-xs px-2 py-1 bg-yellow-800 text-yellow-200 rounded hover:bg-yellow-700"
+                      className="btn-secondary btn-xs"
                     >
                       Move to Ideas
                     </button>
                     <button
                       onClick={() => changeWebsiteStatus(website.id, 'domains')}
-                      className="text-xs px-2 py-1 bg-green-800 text-green-200 rounded hover:bg-green-700"
+                      className="btn-success btn-xs"
                     >
                       Mark as Domain
                     </button>

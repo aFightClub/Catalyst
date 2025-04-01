@@ -50,3 +50,356 @@ body {
 .user-msg p {
   margin: 0;
 }
+
+/* Custom Button Styles */
+
+/* Primary Button */
+.btn-primary {
+  appearance: button;
+  background-color: #4d4ae8;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0)
+  );
+  border: 1px solid #4d4ae8;
+  border-radius: 1rem;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px;
+  box-sizing: border-box;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  font-family: Inter, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  text-transform: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+}
+
+.btn-primary:focus:not(:focus-visible),
+.btn-primary:focus {
+  outline: 0;
+}
+
+.btn-primary:hover {
+  background-color: #3733e5;
+  border-color: #3733e5;
+}
+
+.btn-primary:focus {
+  background-color: #413fc5;
+  border-color: #3e3bba;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px, rgba(104, 101, 235, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-primary:active {
+  background-color: #3e3bba;
+  background-image: none;
+  border-color: #3a38ae;
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset;
+}
+
+.btn-primary:active:focus {
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset,
+    rgba(104, 101, 235, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-primary:disabled {
+  background-image: none;
+  box-shadow: none;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* Secondary Button */
+.btn-secondary {
+  appearance: button;
+  background-color: #6b7280;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0)
+  );
+  border: 1px solid #6b7280;
+  border-radius: 1rem;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px;
+  box-sizing: border-box;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  font-family: Inter, sans-serif;
+  font-size: 1rem;
+  align-items: center;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  text-transform: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+}
+
+.btn-secondary:focus:not(:focus-visible),
+.btn-secondary:focus {
+  outline: 0;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
+  border-color: #4b5563;
+}
+
+.btn-secondary:focus {
+  background-color: #4b5563;
+  border-color: #374151;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px, rgba(107, 114, 128, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-secondary:active {
+  background-color: #374151;
+  background-image: none;
+  border-color: #374151;
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset;
+}
+
+.btn-secondary:active:focus {
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset,
+    rgba(107, 114, 128, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-secondary:disabled {
+  background-image: none;
+  box-shadow: none;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* Success Button */
+.btn-success {
+  appearance: button;
+  background-color: #22c55e;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0)
+  );
+  border: 1px solid #22c55e;
+  border-radius: 1rem;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px;
+  box-sizing: border-box;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  font-family: Inter, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  text-transform: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+}
+
+.btn-success:focus:not(:focus-visible),
+.btn-success:focus {
+  outline: 0;
+}
+
+.btn-success:hover {
+  background-color: #16a34a;
+  border-color: #16a34a;
+}
+
+.btn-success:focus {
+  background-color: #16a34a;
+  border-color: #15803d;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px, rgba(34, 197, 94, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-success:active {
+  background-color: #15803d;
+  background-image: none;
+  border-color: #15803d;
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset;
+}
+
+.btn-success:active:focus {
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset,
+    rgba(34, 197, 94, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-success:disabled {
+  background-image: none;
+  box-shadow: none;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* Delete Button */
+.btn-delete {
+  appearance: button;
+  background-color: #ef4444;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0)
+  );
+  border: 1px solid #ef4444;
+  border-radius: 1rem;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px;
+  box-sizing: border-box;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  font-family: Inter, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  text-transform: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+}
+
+.btn-delete:focus:not(:focus-visible),
+.btn-delete:focus {
+  outline: 0;
+}
+
+.btn-delete:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-delete:focus {
+  background-color: #dc2626;
+  border-color: #b91c1c;
+  box-shadow: rgba(255, 255, 255, 0.15) 0 1px 0 inset,
+    rgba(46, 54, 80, 0.075) 0 1px 1px, rgba(239, 68, 68, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-delete:active {
+  background-color: #b91c1c;
+  background-image: none;
+  border-color: #b91c1c;
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset;
+}
+
+.btn-delete:active:focus {
+  box-shadow: rgba(46, 54, 80, 0.125) 0 3px 5px inset,
+    rgba(239, 68, 68, 0.5) 0 0 0 0.2rem;
+}
+
+.btn-delete:disabled {
+  background-image: none;
+  box-shadow: none;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* Ghost Button */
+.btn-ghost {
+  appearance: button;
+  background-color: transparent;
+  background-image: none;
+  border: 1px solid rgba(107, 114, 128, 0.5);
+  border-radius: 1rem;
+  box-sizing: border-box;
+  color: #e5e7eb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-family: Inter, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  text-transform: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+}
+
+.btn-ghost:focus:not(:focus-visible),
+.btn-ghost:focus {
+  outline: 0;
+}
+
+.btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(209, 213, 219, 0.7);
+}
+
+.btn-ghost:focus {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(209, 213, 219, 0.7);
+  box-shadow: rgba(209, 213, 219, 0.3) 0 0 0 0.2rem;
+}
+
+.btn-ghost:active {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(209, 213, 219, 0.8);
+}
+
+.btn-ghost:active:focus {
+  box-shadow: rgba(209, 213, 219, 0.3) 0 0 0 0.2rem;
+}
+
+.btn-ghost:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* For smaller buttons like those in the website cards */
+.btn-sm {
+  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+}
+
+/* For tiny buttons */
+.btn-xs {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.75rem;
+}
