@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiClock, FiCalendar, FiPlay, FiTrash2, FiEdit, FiSave, FiX, FiToggleLeft, FiToggleRight } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 // Define interfaces for our automation data
 interface ScheduledAutomation {
@@ -29,7 +30,7 @@ interface Workflow {
   startUrl?: string;
 }
 
-// Declare the Electron API for opening new windows
+// Define the Electron API for opening new windows
 declare global {
   interface Window {
     electron?: {
@@ -46,6 +47,8 @@ const Automations: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [lastCheckTime, setLastCheckTime] = useState<Date>(new Date());
   const [workflowVariables, setWorkflowVariables] = useState<{[key: string]: {[varName: string]: string}}>({});
+  const [automationToDelete, setAutomationToDelete] = useState<ScheduledAutomation | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // New automation form state with correct typing
   const [newAutomation, setNewAutomation] = useState<{
@@ -453,10 +456,23 @@ const Automations: React.FC = () => {
 
   // Delete an automation
   const deleteAutomation = async (id: string) => {
+    const automation = automations.find(a => a.id === id);
+    if (automation) {
+      setAutomationToDelete(automation);
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  // Confirm delete automation
+  const confirmDeleteAutomation = async () => {
+    if (!automationToDelete) return;
+    
     try {
-      const updatedAutomations = automations.filter(a => a.id !== id);
+      const updatedAutomations = automations.filter(a => a.id !== automationToDelete.id);
       setAutomations(updatedAutomations);
       await storeService.saveAutomations(updatedAutomations);
+      setAutomationToDelete(null);
+      setIsDeleteConfirmOpen(false);
     } catch (error) {
       console.error("Failed to delete automation:", error);
     }
@@ -543,7 +559,7 @@ const Automations: React.FC = () => {
             name="name"
             value={newAutomation.name}
             onChange={handleInputChange}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="Daily Website Check"
           />
         </div>
@@ -556,7 +572,7 @@ const Automations: React.FC = () => {
             name="workflowId"
             value={newAutomation.workflowId}
             onChange={handleInputChange}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">Select a workflow</option>
             {workflows.map(workflow => (
@@ -575,7 +591,7 @@ const Automations: React.FC = () => {
             name="schedule.type"
             value={newAutomation.schedule?.type}
             onChange={handleInputChange}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="once">Once (Specific Date)</option>
             <option value="daily">Daily</option>
@@ -593,7 +609,7 @@ const Automations: React.FC = () => {
             name="schedule.time"
             value={newAutomation.schedule?.time}
             onChange={handleInputChange}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
         
@@ -608,7 +624,7 @@ const Automations: React.FC = () => {
               value={newAutomation.schedule?.date}
               onChange={handleInputChange}
               min={new Date().toISOString().split('T')[0]}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
         )}
@@ -657,7 +673,7 @@ const Automations: React.FC = () => {
               name="schedule.dayOfMonth"
               value={newAutomation.schedule?.dayOfMonth}
               onChange={handleInputChange}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
                 <option key={day} value={day}>
@@ -672,7 +688,7 @@ const Automations: React.FC = () => {
       <div className="flex justify-end space-x-2">
         <button
           onClick={cancelForm}
-          className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+          className="btn-ghost"
         >
           <FiX className="inline mr-1" />
           Cancel
@@ -680,10 +696,10 @@ const Automations: React.FC = () => {
         <button
           onClick={saveAutomation}
           disabled={!newAutomation.name || !newAutomation.workflowId}
-          className={`px-4 py-2 rounded ${
+          className={`btn-primary ${
             !newAutomation.name || !newAutomation.workflowId
-              ? 'bg-gray-600 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700'
+              ? 'opacity-50 cursor-not-allowed'
+              : ''
           }`}
         >
           <FiSave className="inline mr-1" />
@@ -764,28 +780,28 @@ const Automations: React.FC = () => {
             <div className="flex space-x-2">
               <button
                 onClick={() => toggleAutomationState(automation.id)}
-                className={`p-2 rounded ${automation.enabled ? 'text-green-500' : 'text-gray-500'}`}
+                className={`btn-ghost btn-sm ${automation.enabled ? 'text-green-500' : 'text-gray-500'}`}
                 title={automation.enabled ? 'Disable' : 'Enable'}
               >
                 {automation.enabled ? <FiToggleRight className="w-5 h-5" /> : <FiToggleLeft className="w-5 h-5" />}
               </button>
               <button
                 onClick={() => runAutomationManually(automation.id)}
-                className="p-2 rounded text-blue-500 hover:bg-gray-700"
+                className="btn-primary btn-sm"
                 title="Run Now"
               >
                 <FiPlay className="w-5 h-5" />
               </button>
               <button
                 onClick={() => editAutomation(automation.id)}
-                className="p-2 rounded text-yellow-500 hover:bg-gray-700"
+                className="btn-secondary btn-sm"
                 title="Edit"
               >
                 <FiEdit className="w-5 h-5" />
               </button>
               <button
                 onClick={() => deleteAutomation(automation.id)}
-                className="p-2 rounded text-red-500 hover:bg-gray-700"
+                className="btn-delete btn-sm"
                 title="Delete"
               >
                 <FiTrash2 className="w-5 h-5" />
@@ -817,7 +833,7 @@ const Automations: React.FC = () => {
             <div className="mb-6">
               <button
                 onClick={() => setIsCreating(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded flex items-center hover:bg-blue-700"
+                className="btn-primary"
               >
                 <FiPlus className="mr-2" />
                 Schedule New Automation
@@ -842,6 +858,15 @@ const Automations: React.FC = () => {
           {automations.length > 0 && !isCreating && !isEditing && renderAutomationsList()}
         </div>
       )}
+      
+      {/* Delete Confirmation Popup */}
+      <DeleteConfirmationPopup
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteAutomation}
+        itemName={automationToDelete?.name || ''}
+        itemType="automation"
+      />
     </div>
   );
 };

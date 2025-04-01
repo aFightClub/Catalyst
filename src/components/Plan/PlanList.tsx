@@ -77,18 +77,7 @@ const PlanList: React.FC<PlanListProps> = ({ plans, onSelectPlan, onDeletePlan }
               >
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeletePlan(plan.id);
-                      }}
-                      className="btn-delete btn-xs"
-                      title="Delete Plan"
-                    >
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                 
                 </div>
                 
                 {plan.description && (
