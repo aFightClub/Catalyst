@@ -5,7 +5,12 @@ const UpdateChecker: React.FC = () => {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'>('idle');
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const currentVersion = (window as any).electron?.appInfo?.version || '1.0.0';
+  
+  // Default version as a fallback
+  const defaultVersion = '0.0.3';
+  const [version, setVersion] = useState(defaultVersion);
+  
+  const electronVersion = (window as any).electron?.appInfo?.version;
 
   useEffect(() => {
     const electron = (window as any).electron;
@@ -40,6 +45,59 @@ const UpdateChecker: React.FC = () => {
       // Cleanup listeners if needed
     };
   }, []);
+  
+  useEffect(() => {
+    // Try to read version.txt from multiple locations
+    const fetchVersion = async () => {
+      try {
+        // First try the root path
+        const response = await fetch('/version.txt');
+        if (response.ok) {
+          const data = await response.text();
+          setVersion(data.trim());
+          console.log('Version from /version.txt:', data.trim());
+          return;
+        }
+        
+        // Try relative path
+        const fallbackResponse = await fetch('./version.txt');
+        if (fallbackResponse.ok) {
+          const data = await fallbackResponse.text();
+          setVersion(data.trim());
+          console.log('Version from ./version.txt:', data.trim());
+          return;
+        }
+        
+        // Try src folder path for development
+        const srcResponse = await fetch('./src/version.txt');
+        if (srcResponse.ok) {
+          const data = await srcResponse.text();
+          setVersion(data.trim());
+          console.log('Version from src/version.txt:', data.trim());
+          return;
+        }
+        
+        // If we get here and have electron version, use that
+        if (electronVersion) {
+          setVersion(electronVersion);
+          return;
+        }
+        
+        // If we get here, we couldn't find the file
+        console.log('Using default version:', defaultVersion);
+      } catch (error) {
+        console.error('Error fetching version.txt:', error);
+        // If electron version is available, use it as fallback
+        if (electronVersion) {
+          setVersion(electronVersion);
+        } else {
+          console.log('Using default version:', defaultVersion);
+        }
+      }
+    };
+    
+    fetchVersion();
+  }, [electronVersion]);
 
   const checkForUpdates = async () => {
     const electron = (window as any).electron;
@@ -70,7 +128,7 @@ const UpdateChecker: React.FC = () => {
   return (
     <div className="p-4 bg-gray-700 rounded-lg">
       <h2 className="text-lg font-medium text-white mb-2">Software Updates</h2>
-      <p className="text-gray-300 mb-4">Current Version: {currentVersion}</p>
+      <p className="text-gray-300 mb-4">Current Version: {version}</p>
       
       {updateStatus === 'idle' && (
         <button
