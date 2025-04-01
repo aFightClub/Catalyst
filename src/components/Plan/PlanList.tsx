@@ -83,7 +83,7 @@ const PlanList: React.FC<PlanListProps> = ({ plans, onSelectPlan, onDeletePlan }
                         e.stopPropagation();
                         onDeletePlan(plan.id);
                       }}
-                      className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-700"
+                      className="btn-delete btn-xs"
                       title="Delete Plan"
                     >
                       <FiTrash2 className="w-4 h-4" />

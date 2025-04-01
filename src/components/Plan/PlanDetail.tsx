@@ -152,7 +152,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
             <div className="flex justify-end space-x-2">
               <button
                 onClick={cancelEditing}
-                className="px-3 py-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 flex items-center"
+                className="btn-ghost"
               >
                 <FiX className="mr-1" />
                 Cancel
@@ -160,11 +160,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
               <button
                 onClick={savePlanEdits}
                 disabled={!editName.trim()}
-                className={`px-3 py-1.5 rounded border flex items-center ${
-                  editName.trim() 
-                    ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'border-gray-600 bg-gray-600 text-gray-400 cursor-not-allowed'
-                }`}
+                className={`btn-success ${!editName.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <FiSave className="mr-1" />
                 Save
@@ -184,14 +180,14 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
               <div className="flex space-x-2">
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="p-1.5 rounded text-blue-400 hover:text-blue-300 hover:bg-gray-700"
+                  className="btn-secondary btn-sm"
                   title="Edit Plan"
                 >
                   <FiEdit className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => onDeletePlan(plan.id)}
-                  className="p-1.5 rounded text-red-400 hover:text-red-300 hover:bg-gray-700"
+                  className="btn-delete btn-sm"
                   title="Delete Plan"
                 >
                   <FiTrash2 className="w-5 h-5" />
@@ -214,7 +210,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
         <h3 className="text-lg font-semibold text-white">Content</h3>
         <button
           onClick={() => setShowAddChannelModal(true)}
-          className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center"
+          className="btn-primary"
         >
           <FiPlus className="mr-1" />
           Add Content
@@ -250,7 +246,7 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
                         e.stopPropagation();
                         onDeleteChannel(plan.id, channel.id);
                       }}
-                      className="p-1 rounded text-gray-500 hover:text-red-400"
+                      className="btn-delete btn-xs"
                       title="Delete Content"
                     >
                       <FiTrash2 className="w-4 h-4" />
@@ -323,14 +319,14 @@ const PlanDetail: React.FC<PlanDetailProps> = ({
             <div className="flex justify-end space-x-3">
               <button
                 onClick={resetChannelForm}
-                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                className="btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={addChannel}
                 disabled={!newChannelName.trim()}
-                className={`px-4 py-2 rounded text-white ${newChannelName.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600 cursor-not-allowed'}`}
+                className={`btn-primary ${!newChannelName.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 Add Content
               </button>

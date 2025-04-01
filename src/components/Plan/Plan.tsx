@@ -5,6 +5,7 @@ import { ContentPlan, Channel, ChannelType, PlanDocument } from '../../types';
 import PlanList from './PlanList';
 import PlanDetail from './PlanDetail';
 import ChannelDetail from './ChannelDetail';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 const Plan: React.FC = () => {
   const [plans, setPlans] = useState<ContentPlan[]>([]);
@@ -18,6 +19,10 @@ const Plan: React.FC = () => {
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [newPlanDescription, setNewPlanDescription] = useState('');
+  
+  // Delete confirmation states
+  const [planToDelete, setPlanToDelete] = useState<ContentPlan | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // Load plans from storage
   useEffect(() => {
@@ -95,15 +100,27 @@ const Plan: React.FC = () => {
 
   // Delete a plan
   const deletePlan = (planId: string) => {
-    if (confirm('Are you sure you want to delete this plan? This action cannot be undone.')) {
-      setPlans(plans.filter(plan => plan.id !== planId));
-      
-      // If the deleted plan was selected, go back to list view
-      if (selectedPlanId === planId) {
-        setSelectedPlanId(null);
-        setActiveView('list');
-      }
+    const plan = plans.find(p => p.id === planId);
+    if (plan) {
+      setPlanToDelete(plan);
+      setIsDeleteConfirmOpen(true);
     }
+  };
+
+  // Confirm plan deletion
+  const confirmDeletePlan = () => {
+    if (!planToDelete) return;
+    
+    setPlans(plans.filter(plan => plan.id !== planToDelete.id));
+    
+    // If the deleted plan was selected, go back to list view
+    if (selectedPlanId === planToDelete.id) {
+      setSelectedPlanId(null);
+      setActiveView('list');
+    }
+    
+    setPlanToDelete(null);
+    setIsDeleteConfirmOpen(false);
   };
 
   // Add a channel to a plan
@@ -194,7 +211,7 @@ const Plan: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex flex-col h-full items-center justify-center bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
         <p className="text-gray-400">Loading content plans...</p>
       </div>
     );
@@ -209,7 +226,7 @@ const Plan: React.FC = () => {
         </div>
         <button 
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="btn-primary"
         >
           Reload
         </button>
@@ -231,7 +248,7 @@ const Plan: React.FC = () => {
             <div className="flex items-center">
               <button 
                 onClick={backToPlans}
-                className="mr-2 p-1 rounded hover:bg-gray-700 text-gray-400"
+                className="btn-ghost btn-sm mr-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -246,7 +263,7 @@ const Plan: React.FC = () => {
             <div className="flex items-center">
               <button 
                 onClick={backToPlan}
-                className="mr-2 p-1 rounded hover:bg-gray-700 text-gray-400"
+                className="btn-ghost btn-sm mr-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -263,7 +280,7 @@ const Plan: React.FC = () => {
         {activeView === 'list' && (
           <button
             onClick={() => setShowAddPlanModal(true)}
-            className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center"
+            className="btn-primary"
           >
             <FiPlus className="w-5 h-5 mr-1" />
             <span>New Plan</span>
@@ -314,7 +331,7 @@ const Plan: React.FC = () => {
                 type="text"
                 value={newPlanName}
                 onChange={(e) => setNewPlanName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-white"
+                className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-white"
                 placeholder="E.g., Q2 Marketing Campaign"
               />
             </div>
@@ -324,7 +341,7 @@ const Plan: React.FC = () => {
               <textarea
                 value={newPlanDescription}
                 onChange={(e) => setNewPlanDescription(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-white"
+                className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-white"
                 placeholder="Brief description of this content plan"
                 rows={3}
               />
@@ -333,14 +350,14 @@ const Plan: React.FC = () => {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowAddPlanModal(false)}
-                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                className="btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={createPlan}
                 disabled={!newPlanName.trim()}
-                className={`px-4 py-2 rounded text-white ${newPlanName.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600 cursor-not-allowed'}`}
+                className={`btn-primary ${!newPlanName.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 Create Plan
               </button>
@@ -348,6 +365,15 @@ const Plan: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Delete Confirmation Popup */}
+      <DeleteConfirmationPopup
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={confirmDeletePlan}
+        itemName={planToDelete?.name || ''}
+        itemType="plan"
+      />
     </div>
   );
 };
