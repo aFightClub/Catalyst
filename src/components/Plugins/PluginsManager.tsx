@@ -79,12 +79,11 @@ const PluginsManager: React.FC = () => {
   };
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Plugins Manager</h2>
         <button
           onClick={handleCreateNew}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
+          className="btn-primary"
         >
           <FiPlus className="mr-2" />
           Create New Plugin
@@ -94,12 +93,6 @@ const PluginsManager: React.FC = () => {
       {plugins.length === 0 ? (
         <div className="text-center py-10 text-gray-400">
           <p className="mb-4">No plugins have been created yet.</p>
-          <button
-            onClick={handleCreateNew}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Create Your First Plugin
-          </button>
         </div>
       ) : (
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 overflow-auto">

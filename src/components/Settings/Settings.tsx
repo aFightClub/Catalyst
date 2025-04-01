@@ -6,6 +6,7 @@ import { storeService } from '../../services/storeService';
 import { FiKey, FiPackage, FiActivity, FiClock, FiPlay, FiEdit, FiTrash2, FiExternalLink, FiUser, FiMessageCircle, FiPlus, FiX, FiImage, FiSave } from 'react-icons/fi';
 import PluginsManager from '../Plugins/PluginsManager';
 import UpdateChecker from './UpdateChecker';
+import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
 // Define Workflow and ActionType interfaces since we can't import from App
 interface WorkflowAction {
@@ -59,13 +60,16 @@ interface Assistant {
   createdAt: string;
 }
 
-// Add type definition for window.electron
+// Define Electron API interface explicitly to match the window.electron usage
+interface ElectronAPI {
+  send: (channel: string, data: any) => void;
+  invoke: (channel: string, data?: any) => Promise<any>;
+}
+
+// Extend the Window interface to include electron property
 declare global {
   interface Window {
-    electron?: {
-      send: (channel: string, data: any) => void;
-      invoke: (channel: string, data?: any) => Promise<any>;
-    };
+    electron?: ElectronAPI;
   }
 }
 
@@ -119,6 +123,14 @@ const Settings: React.FC = () => {
     importWebsiteCategories: true,
     importSubscriptionCategories: true
   });
+  
+  // Delete confirmation states
+  const [workflowToDelete, setWorkflowToDelete] = useState<string | null>(null);
+  const [assistantToDelete, setAssistantToDelete] = useState<string | null>(null);
+  const [pluginToDelete, setPluginToDelete] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [websiteCategoryToDelete, setWebsiteCategoryToDelete] = useState<number | null>(null);
+  const [subscriptionCategoryToDelete, setSubscriptionCategoryToDelete] = useState<number | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputBackupRef = useRef<HTMLInputElement>(null);
@@ -266,8 +278,15 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Confirm delete workflow
+  const confirmDeleteWorkflow = (id: string) => {
+    setWorkflowToDelete(id);
+  };
+
   // Function to delete a workflow
   const deleteWorkflow = async (id: string) => {
+    if (!id) return;
+    
     const updatedWorkflows = workflows.filter(workflow => workflow.id !== id);
     setWorkflows(updatedWorkflows);
     
@@ -280,6 +299,8 @@ const Settings: React.FC = () => {
     if (selectedWorkflow?.id === id) {
       setSelectedWorkflow(null);
     }
+    
+    setWorkflowToDelete(null);
   };
 
   // Save user context
@@ -334,22 +355,29 @@ const Settings: React.FC = () => {
     setEditingAssistantId(null);
   };
 
-  // Delete assistant
-  const deleteAssistant = async (id: string) => {
+  // Confirm delete assistant
+  const confirmDeleteAssistant = (id: string) => {
     // Don't delete if it's the only assistant
     if (assistants.length <= 1) {
       alert('You must have at least one assistant');
       return;
     }
     
-    if (confirm('Are you sure you want to delete this assistant?')) {
-      const updatedAssistants = assistants.filter(a => a.id !== id);
-      await saveAssistants(updatedAssistants);
-      
-      if (editingAssistantId === id) {
-        setEditingAssistantId(null);
-      }
+    setAssistantToDelete(id);
+  };
+
+  // Delete assistant
+  const deleteAssistant = async (id: string) => {
+    if (!id) return;
+    
+    const updatedAssistants = assistants.filter(a => a.id !== id);
+    await saveAssistants(updatedAssistants);
+    
+    if (editingAssistantId === id) {
+      setEditingAssistantId(null);
     }
+    
+    setAssistantToDelete(null);
   };
 
   // Handle profile image upload
@@ -407,10 +435,18 @@ const Settings: React.FC = () => {
     setSelectedPlugin(updatedPlugin);
   };
 
+  // Confirm delete plugin
+  const confirmDeletePlugin = (pluginId: string) => {
+    setPluginToDelete(pluginId);
+  };
+
   const deletePlugin = (pluginId: string) => {
+    if (!pluginId) return;
+    
     pluginManager.deletePlugin(pluginId);
     setPlugins(pluginManager.getPlugins());
     setSelectedPlugin(null);
+    setPluginToDelete(null);
   };
 
   const handleTypeChange = (type: 'css' | 'js' | 'html') => {
@@ -468,98 +504,6 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Handle import button click
-  const handleImportClick = async () => {
-    if (!fileInputBackupRef.current?.files?.length) {
-      setImportStatus("No file selected");
-      return;
-    }
-    
-    try {
-      const file = fileInputBackupRef.current.files[0];
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-        try {
-          const fileContent = e.target?.result as string;
-          if (!fileContent) throw new Error("Failed to read file content");
-          
-          setImportStatus("Importing data...");
-          
-          // If we're using Electron, we can use the more robust import via IPC
-          if (window.electron) {
-            try {
-              const result = await window.electron.invoke('import-data', {
-                jsonData: fileContent,
-                options: importOptions
-              });
-              
-              if (result.success) {
-                setImportStatus("Import successful! Reloading...");
-                // Reload the app after 1 second to apply changes
-                setTimeout(() => window.location.reload(), 1000);
-              } else {
-                setImportStatus(`Import failed: ${result.message}`);
-              }
-            } catch (error) {
-              console.error('IPC import failed:', error);
-              setImportStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
-            }
-          } else {
-            // Browser-based import
-            const result = await storeService.importFromJSON(fileContent, {
-              overwrite: importOptions.overwrite,
-              importWorkspaces: importOptions.importWorkspaces,
-              importWorkflows: importOptions.importWorkflows,
-              importTasks: importOptions.importTasks,
-              importSubscriptions: importOptions.importSubscriptions,
-              importErasedElements: importOptions.importErasedElements,
-              importAssistants: importOptions.importAssistants,
-              importChats: importOptions.importChats,
-              importWebsites: importOptions.importWebsites,
-              importDocuments: importOptions.importDocuments,
-              importProjects: importOptions.importProjects,
-              importAutomations: importOptions.importAutomations,
-              importWorkflowVariables: importOptions.importWorkflowVariables,
-              importApiKeys: importOptions.importApiKeys,
-              importUserContext: importOptions.importUserContext,
-              importWebsiteCategories: importOptions.importWebsiteCategories,
-              importSubscriptionCategories: importOptions.importSubscriptionCategories
-            });
-            
-            if (result.success) {
-              setImportStatus("Import successful! Reloading...");
-              // Reload the app after 1 second to apply changes
-              setTimeout(() => window.location.reload(), 1000);
-            } else {
-              setImportStatus(`Import failed: ${result.message}`);
-            }
-          }
-        } catch (error) {
-          console.error('Import processing error:', error);
-          setImportStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      };
-      
-      reader.onerror = () => {
-        setImportStatus("Error reading file");
-      };
-      
-      reader.readAsText(file);
-    } catch (error) {
-      console.error('File handling error:', error);
-      setImportStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  // Toggle import options
-  const toggleOption = (option: keyof typeof importOptions) => {
-    setImportOptions(prev => ({
-      ...prev,
-      [option]: !prev[option]
-    }));
-  };
-
   // Handle exporting data
   const handleExportData = async () => {
     try {
@@ -608,12 +552,13 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Confirm delete all data
+  const confirmDeleteAllData = () => {
+    setConfirmDeleteAll(true);
+  };
+
   // Handle deleting all data
   const handleDeleteAllData = async () => {
-    if (!confirm("WARNING: This will permanently delete ALL your data including workspaces, workflows, assistants, and settings. This action CANNOT be undone. Are you absolutely sure?")) {
-      return;
-    }
-    
     try {
       setDeleteStatus("Deleting all data...");
       
@@ -649,6 +594,8 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error("Error deleting data:", error);
       setDeleteStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setConfirmDeleteAll(false);
     }
   };
 
@@ -695,18 +642,25 @@ const Settings: React.FC = () => {
     }
   };
   
+  // Confirm delete website category
+  const confirmDeleteWebsiteCategory = (index: number) => {
+    setWebsiteCategoryToDelete(index);
+  };
+  
   const deleteWebsiteCategory = async (index: number) => {
-    if (confirm('Are you sure you want to delete this category? This may affect websites that use it.')) {
-      const updatedCategories = [...websiteCategories];
-      updatedCategories.splice(index, 1);
-      setWebsiteCategories(updatedCategories);
-      
-      try {
-        await storeService.saveWebsiteCategories(updatedCategories);
-      } catch (error) {
-        console.error('Failed to delete website category:', error);
-      }
+    if (index === null) return;
+    
+    const updatedCategories = [...websiteCategories];
+    updatedCategories.splice(index, 1);
+    setWebsiteCategories(updatedCategories);
+    
+    try {
+      await storeService.saveWebsiteCategories(updatedCategories);
+    } catch (error) {
+      console.error('Failed to delete website category:', error);
     }
+    
+    setWebsiteCategoryToDelete(null);
   };
   
   const addSubscriptionCategory = async () => {
@@ -751,18 +705,25 @@ const Settings: React.FC = () => {
     }
   };
   
+  // Confirm delete subscription category
+  const confirmDeleteSubscriptionCategory = (index: number) => {
+    setSubscriptionCategoryToDelete(index);
+  };
+  
   const deleteSubscriptionCategory = async (index: number) => {
-    if (confirm('Are you sure you want to delete this category? This may affect subscriptions that use it.')) {
-      const updatedCategories = [...subscriptionCategories];
-      updatedCategories.splice(index, 1);
-      setSubscriptionCategories(updatedCategories);
-      
-      try {
-        await storeService.saveSubscriptionCategories(updatedCategories);
-      } catch (error) {
-        console.error('Failed to delete subscription category:', error);
-      }
+    if (index === null) return;
+    
+    const updatedCategories = [...subscriptionCategories];
+    updatedCategories.splice(index, 1);
+    setSubscriptionCategories(updatedCategories);
+    
+    try {
+      await storeService.saveSubscriptionCategories(updatedCategories);
+    } catch (error) {
+      console.error('Failed to delete subscription category:', error);
     }
+    
+    setSubscriptionCategoryToDelete(null);
   };
 
   // Add this new function before the renderAssistantsPage function
@@ -826,10 +787,8 @@ const Settings: React.FC = () => {
   };
 
   const renderNavigation = () => (
-    <div className="flex flex-col h-full border-r border-gray-700 bg-gray-800 w-64 overflow-y-auto">
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-xl font-semibold text-white">Settings</h2>
-      </div>
+    <div className="flex flex-col h-full border-r border-gray-700 bg-gray-800">
+   
       
       {/* Navigation Items */}
       <div className="flex-1 overflow-y-auto py-2">
@@ -988,16 +947,16 @@ const Settings: React.FC = () => {
   );
 
   const renderAssistantsPage = () => (
-    <div className="p-6 bg-gray-900 overflow-y-auto">
-      <h3 className="text-xl font-bold mb-6 text-white">AI Assistants</h3>
-      <p className="text-gray-400 mb-6">
-        Create custom AI assistants with different personalities and expertise by configuring their system prompts.
+    <div className="space-y-6">
+      <h3 className="text-xl font-semibold text-white">AI Assistants</h3>
+      <p className="text-gray-400">
+        Configure the AI assistants you can chat with in the Chat tab.
       </p>
       
-      {!isAddingAssistant && !editingAssistantId && (
+      {!isAddingAssistant && (
         <button
           onClick={() => setIsAddingAssistant(true)}
-          className="mb-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
+          className="btn-primary mb-6"
         >
           <FiPlus className="mr-2" /> Add New Assistant
         </button>
@@ -1013,7 +972,7 @@ const Settings: React.FC = () => {
               type="text"
               value={newAssistant.name}
               onChange={(e) => setNewAssistant({...newAssistant, name: e.target.value})}
-              className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="My Custom Assistant"
             />
           </div>
@@ -1030,7 +989,7 @@ const Settings: React.FC = () => {
                   />
                   <button
                     onClick={() => setNewAssistant({...newAssistant, profileImage: ''})}
-                    className="absolute -top-2 -right-2 bg-red-600 rounded-full p-1 text-white"
+                    className="btn-delete btn-xs absolute -top-2 -right-2 p-1"
                   >
                     <FiX size={12} />
                   </button>
@@ -1055,7 +1014,7 @@ const Settings: React.FC = () => {
               <div>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 mr-2"
+                  className="btn-secondary btn-sm mr-2"
                 >
                   {newAssistant.profileImage ? 'Change Image' : 'Upload Image'}
                 </button>
@@ -1068,7 +1027,7 @@ const Settings: React.FC = () => {
               <textarea
                 value={imagePrompt}
                 onChange={(e) => setImagePrompt(e.target.value)}
-                className="w-full bg-gray-600 text-white border border-gray-600 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                className="w-full bg-gray-600 text-white border border-gray-600 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-3"
                 placeholder="Avatar photo of a man in a suite in pixar style..."
                 rows={2}
               ></textarea>
@@ -1076,8 +1035,8 @@ const Settings: React.FC = () => {
                 <button
                   onClick={() => generateProfileImage(imagePrompt, true)}
                   disabled={isGeneratingImage || !imagePrompt.trim()}
-                  className={`px-4 py-2 rounded flex items-center ${
-                    isGeneratingImage || !imagePrompt.trim() ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                  className={`btn-primary ${
+                    isGeneratingImage || !imagePrompt.trim() ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
                   {isGeneratingImage ? 'Generating...' : 'Generate Image'}
@@ -1096,7 +1055,7 @@ const Settings: React.FC = () => {
                 setNewAssistant({...newAssistant, systemPrompt: e.target.value});
                 adjustTextareaHeight(newSystemPromptRef.current);
               }}
-              className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] overflow-hidden"
+              className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] overflow-hidden"
               placeholder="You are a helpful assistant..."
             ></textarea>
             <p className="text-gray-500 text-sm mt-1">Set the personality, expertise, and behavior of your assistant</p>
@@ -1109,14 +1068,14 @@ const Settings: React.FC = () => {
                 setImagePrompt('');
                 setImageError(null);
               }}
-              className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+              className="btn-ghost"
             >
               Cancel
             </button>
             <button
               onClick={addAssistant}
               disabled={!newAssistant.name}
-              className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${!newAssistant.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`btn-success ${!newAssistant.name ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               Create Assistant
             </button>
@@ -1144,7 +1103,7 @@ const Settings: React.FC = () => {
                       updated[index] = { ...updated[index], name: e.target.value };
                       setAssistants(updated);
                     }}
-                    className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
                 
@@ -1165,7 +1124,7 @@ const Settings: React.FC = () => {
                             updated[index] = { ...updated[index], profileImage: '' };
                             setAssistants(updated);
                           }}
-                          className="absolute -top-2 -right-2 bg-red-600 rounded-full p-1 text-white"
+                          className="btn-delete btn-xs absolute -top-2 -right-2 p-1"
                         >
                           <FiX size={12} />
                         </button>
@@ -1190,7 +1149,7 @@ const Settings: React.FC = () => {
                     <div>
                       <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 mr-2"
+                        className="btn-secondary btn-sm mr-2"
                       >
                         {assistant.profileImage ? 'Change Image' : 'Upload Image'}
                       </button>
@@ -1203,7 +1162,7 @@ const Settings: React.FC = () => {
                     <textarea
                       value={imagePrompt}
                       onChange={(e) => setImagePrompt(e.target.value)}
-                      className="w-full bg-gray-600 text-white border border-gray-600 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                      className="w-full bg-gray-600 text-white border border-gray-600 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-3"
                       placeholder="Avatar photo of a man in a suite in pixar style..."
                       rows={2}
                     ></textarea>
@@ -1211,8 +1170,8 @@ const Settings: React.FC = () => {
                       <button
                         onClick={() => generateProfileImage(imagePrompt, false)}
                         disabled={isGeneratingImage || !imagePrompt.trim()}
-                        className={`px-4 py-2 rounded flex items-center ${
-                          isGeneratingImage || !imagePrompt.trim() ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        className={`btn-primary ${
+                          isGeneratingImage || !imagePrompt.trim() ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       >
                         {isGeneratingImage ? 'Generating...' : 'Generate Image'}
@@ -1234,7 +1193,7 @@ const Settings: React.FC = () => {
                       setAssistants(updated);
                       adjustTextareaHeight(editSystemPromptRef.current);
                     }}
-                    className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] overflow-hidden"
+                    className="w-full bg-gray-700 text-white border border-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] overflow-hidden"
                   ></textarea>
                   <p className="text-gray-500 text-sm mt-1">Set the personality, expertise, and behavior of your assistant</p>
                 </div>
@@ -1246,13 +1205,13 @@ const Settings: React.FC = () => {
                       setImagePrompt('');
                       setImageError(null);
                     }}
-                    className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                    className="btn-ghost"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => updateAssistant(assistant)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="btn-success"
                   >
                     Save Changes
                   </button>
@@ -1297,7 +1256,7 @@ const Settings: React.FC = () => {
                   <FiEdit size={18} />
                 </button>
                 <button
-                  onClick={() => deleteAssistant(assistant.id)}
+                  onClick={() => confirmDeleteAssistant(assistant.id)}
                   className="p-2 text-gray-400 hover:text-red-500 rounded hover:bg-gray-700"
                 >
                   <FiTrash2 size={18} />
@@ -1391,7 +1350,7 @@ const Settings: React.FC = () => {
                   Run in New Tab
                 </button>
                 <button
-                  onClick={() => deleteWorkflow(selectedWorkflow.id)}
+                  onClick={() => confirmDeleteWorkflow(selectedWorkflow.id)}
                   className="flex items-center px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
                 >
                   <FiTrash2 className="mr-2" />
@@ -1518,40 +1477,38 @@ const Settings: React.FC = () => {
 
   const renderDataBackupPage = () => {
     return (
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-900 text-white">
-        <h2 className="text-2xl font-bold mb-6">Data Backup & Restore</h2>
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold text-white">Data Backup & Import</h3>
+        <p className="text-gray-400">
+          Export your data for backup or import from a previous export.
+        </p>
         
-        {/* Export Section */}
-        <div className="bg-gray-800 p-6 rounded-lg mb-6">
-          <h3 className="text-xl font-semibold mb-4">Export Data</h3>
+        <div className="bg-gray-800 p-6 rounded-lg">
+          <h4 className="text-lg font-semibold mb-4 text-white">Export Data</h4>
           <p className="text-gray-400 mb-4">
-            Export all your data to a JSON file that you can save and import later.
+            Export all your data as a JSON file. This includes workspaces, workflows, assistants, and all other app data.
           </p>
-          
-          <div className="flex items-center">
-            <button
-              onClick={handleExportData}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-              disabled={!!exportStatus && exportStatus.includes('Exporting')}
-            >
-              <FiSave className="mr-2" />
-              Export All Data
-            </button>
-            {exportStatus && (
-              <span className="ml-3 text-sm text-gray-300">{exportStatus}</span>
-            )}
-          </div>
+          <button
+            onClick={handleExportData}
+            className="btn-primary"
+          >
+            Export All Data
+          </button>
+          {exportStatus && (
+            <p className={`mt-2 ${exportStatus.includes('Error') ? 'text-red-400' : 'text-green-500'}`}>
+              {exportStatus}
+            </p>
+          )}
         </div>
         
-        {/* Import Section */}
-        <div className="bg-gray-800 p-6 rounded-lg mb-6">
-          <h3 className="text-xl font-semibold mb-4">Import Data</h3>
+        <div className="bg-gray-800 p-6 rounded-lg">
+          <h4 className="text-lg font-semibold mb-4 text-white">Import Data</h4>
           <p className="text-gray-400 mb-4">
-            Import previously exported data from a JSON file.
+            Import data from a previous export. You can choose what to import.
           </p>
           
           <div className="mb-4">
-            <label className="font-semibold mb-2 block">Import Options</label>
+            <label className="font-semibold mb-2 block">Options</label>
             
             <div className="bg-gray-700 p-4 rounded-lg mb-4">
               <div className="flex items-center mb-3">
@@ -1784,63 +1741,39 @@ const Settings: React.FC = () => {
               ref={fileInputBackupRef}
               type="file"
               accept=".json"
-              onChange={handleFileChange}
               className="hidden"
+              onChange={handleFileChange}
             />
             <button
               onClick={() => fileInputBackupRef.current?.click()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+              className="btn-primary"
             >
               <FiSave className="mr-2" />
               Choose JSON File
             </button>
             {importStatus && (
-              <span className="ml-3 text-sm text-gray-300">{importStatus}</span>
+              <p className={`ml-4 ${importStatus.includes('Error') ? 'text-red-400' : 'text-green-500'}`}>
+                {importStatus}
+              </p>
             )}
           </div>
         </div>
         
-        {/* Delete Data Section */}
         <div className="bg-gray-800 p-6 rounded-lg">
-          <h3 className="text-xl font-semibold mb-4 text-red-500">Delete All Data</h3>
+          <h4 className="text-lg font-semibold mb-4 text-red-500">Delete All Data</h4>
           <p className="text-gray-400 mb-4">
-            This will permanently delete all your data and cannot be undone.
-            Make sure to export a backup first if you want to save your data.
+            Delete all your data from this app. This action cannot be undone.
           </p>
-          
-          {!showDeleteConfirm ? (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
-            >
-              <FiTrash2 className="mr-2" />
-              Delete All Data
-            </button>
-          ) : (
-            <div>
-              <p className="text-red-400 font-semibold mb-3">
-                Are you absolutely sure? This cannot be undone!
-              </p>
-              <div className="flex items-center">
-                <button
-                  onClick={handleDeleteAllData}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center mr-3"
-                >
-                  <FiTrash2 className="mr-2" />
-                  Yes, Delete Everything
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-          
+          <button
+            onClick={confirmDeleteAllData}
+            className="btn-delete"
+          >
+            Delete All Data
+          </button>
           {deleteStatus && (
-            <p className="mt-3 text-sm text-gray-300">{deleteStatus}</p>
+            <p className={`mt-2 ${deleteStatus.includes('Error') ? 'text-red-400' : 'text-green-500'}`}>
+              {deleteStatus}
+            </p>
           )}
         </div>
       </div>
@@ -1848,196 +1781,177 @@ const Settings: React.FC = () => {
   };
 
   const renderCategoriesPage = () => (
-    <div className="flex-1 overflow-y-auto p-6 bg-gray-900 text-white">
-      <h2 className="text-2xl font-bold mb-6">Categories Management</h2>
+    <div className="space-y-6">
+      <h3 className="text-xl font-semibold text-white">Categories Management</h3>
+      <p className="text-gray-400">
+        Manage categories for websites and subscriptions.
+      </p>
       
       {/* Website Categories */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-semibold">Website Categories</h3>
-          <div className="flex items-center">
-            <input
-              type="text"
-              value={newWebsiteCategory}
-              onChange={(e) => setNewWebsiteCategory(e.target.value)}
-              placeholder="New category"
-              className="px-3 py-2 mr-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={addWebsiteCategory}
-              disabled={!newWebsiteCategory.trim()}
-              className={`px-4 py-2 rounded flex items-center ${!newWebsiteCategory.trim() ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+      <div className="bg-gray-800 p-6 rounded-lg">
+        <h4 className="text-lg font-semibold mb-4 text-white">Website Categories</h4>
+        
+        <div className="space-y-2 mb-4">
+          {websiteCategories.map((category, index) => (
+            <div 
+              key={index}
+              className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"
             >
-              <FiPlus className="mr-2" />
-              Add
-            </button>
-          </div>
+              {editingWebsiteCategory?.index === index ? (
+                <input
+                  type="text"
+                  value={editingWebsiteCategory.value}
+                  onChange={(e) => setEditingWebsiteCategory({...editingWebsiteCategory, value: e.target.value})}
+                  className="bg-gray-600 text-white border border-gray-600 rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 mr-2"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') updateWebsiteCategory(index, editingWebsiteCategory.value);
+                    if (e.key === 'Escape') setEditingWebsiteCategory(null);
+                  }}
+                />
+              ) : (
+                <span className="text-white">{category}</span>
+              )}
+              
+              <div className="flex space-x-2">
+                {editingWebsiteCategory?.index === index ? (
+                  <>
+                    <button
+                      onClick={() => updateWebsiteCategory(index, editingWebsiteCategory.value)}
+                      className="btn-success btn-sm"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingWebsiteCategory(null)}
+                      className="btn-ghost btn-sm"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setEditingWebsiteCategory({index, value: category})}
+                      className="btn-secondary btn-sm"
+                    >
+                      <FiEdit size={16} />
+                    </button>
+                    <button
+                      onClick={() => confirmDeleteWebsiteCategory(index)}
+                      className="btn-delete btn-sm"
+                    >
+                      <FiTrash2 size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
         
-        <div className="bg-gray-800 rounded-lg overflow-hidden">
-          {websiteCategories.length === 0 ? (
-            <div className="p-6 text-center text-gray-400">
-              No categories found. Add your first website category.
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-700">
-              {websiteCategories.map((category, index) => (
-                <div key={index} className="flex items-center justify-between p-4 hover:bg-gray-700">
-                  {editingWebsiteCategory && editingWebsiteCategory.index === index ? (
-                    <input
-                      type="text"
-                      value={editingWebsiteCategory.value}
-                      onChange={(e) => setEditingWebsiteCategory({...editingWebsiteCategory, value: e.target.value})}
-                      className="flex-1 px-3 py-2 mr-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          updateWebsiteCategory(index, editingWebsiteCategory.value);
-                        } else if (e.key === 'Escape') {
-                          setEditingWebsiteCategory(null);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span>{category}</span>
-                  )}
-                  
-                  <div className="flex items-center">
-                    {editingWebsiteCategory && editingWebsiteCategory.index === index ? (
-                      <>
-                        <button
-                          onClick={() => updateWebsiteCategory(index, editingWebsiteCategory.value)}
-                          className="p-2 text-blue-400 hover:text-blue-300"
-                          title="Save"
-                        >
-                          <FiSave />
-                        </button>
-                        <button
-                          onClick={() => setEditingWebsiteCategory(null)}
-                          className="p-2 text-gray-400 hover:text-gray-300"
-                          title="Cancel"
-                        >
-                          <FiX />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setEditingWebsiteCategory({index, value: category})}
-                          className="p-2 text-gray-400 hover:text-white"
-                          title="Edit"
-                        >
-                          <FiEdit />
-                        </button>
-                        <button
-                          onClick={() => deleteWebsiteCategory(index)}
-                          className="p-2 text-gray-400 hover:text-red-500"
-                          title="Delete"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex mt-4">
+          <input
+            type="text"
+            value={newWebsiteCategory}
+            onChange={(e) => setNewWebsiteCategory(e.target.value)}
+            className="bg-gray-700 text-white border border-gray-700 rounded-l px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1"
+            placeholder="New category name"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newWebsiteCategory.trim()) addWebsiteCategory();
+            }}
+          />
+          <button
+            onClick={addWebsiteCategory}
+            disabled={!newWebsiteCategory.trim()}
+            className={`btn-primary rounded-l-none ${!newWebsiteCategory.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Add Category
+          </button>
         </div>
       </div>
       
       {/* Subscription Categories */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-semibold">Subscription Categories</h3>
-          <div className="flex items-center">
-            <input
-              type="text"
-              value={newSubscriptionCategory}
-              onChange={(e) => setNewSubscriptionCategory(e.target.value)}
-              placeholder="New category"
-              className="px-3 py-2 mr-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={addSubscriptionCategory}
-              disabled={!newSubscriptionCategory.trim()}
-              className={`px-4 py-2 rounded flex items-center ${!newSubscriptionCategory.trim() ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+      <div className="bg-gray-800 p-6 rounded-lg">
+        <h4 className="text-lg font-semibold mb-4 text-white">Subscription Categories</h4>
+        
+        <div className="space-y-2 mb-4">
+          {subscriptionCategories.map((category, index) => (
+            <div 
+              key={index}
+              className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"
             >
-              <FiPlus className="mr-2" />
-              Add
-            </button>
-          </div>
+              {editingSubscriptionCategory?.index === index ? (
+                <input
+                  type="text"
+                  value={editingSubscriptionCategory.value}
+                  onChange={(e) => setEditingSubscriptionCategory({...editingSubscriptionCategory, value: e.target.value})}
+                  className="bg-gray-600 text-white border border-gray-600 rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 mr-2"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') updateSubscriptionCategory(index, editingSubscriptionCategory.value);
+                    if (e.key === 'Escape') setEditingSubscriptionCategory(null);
+                  }}
+                />
+              ) : (
+                <span className="text-white">{category}</span>
+              )}
+              
+              <div className="flex space-x-2">
+                {editingSubscriptionCategory?.index === index ? (
+                  <>
+                    <button
+                      onClick={() => updateSubscriptionCategory(index, editingSubscriptionCategory.value)}
+                      className="btn-success btn-sm"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingSubscriptionCategory(null)}
+                      className="btn-ghost btn-sm"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setEditingSubscriptionCategory({index, value: category})}
+                      className="btn-secondary btn-sm"
+                    >
+                      <FiEdit size={16} />
+                    </button>
+                    <button
+                      onClick={() => confirmDeleteSubscriptionCategory(index)}
+                      className="btn-delete btn-sm"
+                    >
+                      <FiTrash2 size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
         
-        <div className="bg-gray-800 rounded-lg overflow-hidden">
-          {subscriptionCategories.length === 0 ? (
-            <div className="p-6 text-center text-gray-400">
-              No categories found. Add your first subscription category.
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-700">
-              {subscriptionCategories.map((category, index) => (
-                <div key={index} className="flex items-center justify-between p-4 hover:bg-gray-700">
-                  {editingSubscriptionCategory && editingSubscriptionCategory.index === index ? (
-                    <input
-                      type="text"
-                      value={editingSubscriptionCategory.value}
-                      onChange={(e) => setEditingSubscriptionCategory({...editingSubscriptionCategory, value: e.target.value})}
-                      className="flex-1 px-3 py-2 mr-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          updateSubscriptionCategory(index, editingSubscriptionCategory.value);
-                        } else if (e.key === 'Escape') {
-                          setEditingSubscriptionCategory(null);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span>{category}</span>
-                  )}
-                  
-                  <div className="flex items-center">
-                    {editingSubscriptionCategory && editingSubscriptionCategory.index === index ? (
-                      <>
-                        <button
-                          onClick={() => updateSubscriptionCategory(index, editingSubscriptionCategory.value)}
-                          className="p-2 text-blue-400 hover:text-blue-300"
-                          title="Save"
-                        >
-                          <FiSave />
-                        </button>
-                        <button
-                          onClick={() => setEditingSubscriptionCategory(null)}
-                          className="p-2 text-gray-400 hover:text-gray-300"
-                          title="Cancel"
-                        >
-                          <FiX />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setEditingSubscriptionCategory({index, value: category})}
-                          className="p-2 text-gray-400 hover:text-white"
-                          title="Edit"
-                        >
-                          <FiEdit />
-                        </button>
-                        <button
-                          onClick={() => deleteSubscriptionCategory(index)}
-                          className="p-2 text-gray-400 hover:text-red-500"
-                          title="Delete"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex mt-4">
+          <input
+            type="text"
+            value={newSubscriptionCategory}
+            onChange={(e) => setNewSubscriptionCategory(e.target.value)}
+            className="bg-gray-700 text-white border border-gray-700 rounded-l px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1"
+            placeholder="New category name"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newSubscriptionCategory.trim()) addSubscriptionCategory();
+            }}
+          />
+          <button
+            onClick={addSubscriptionCategory}
+            disabled={!newSubscriptionCategory.trim()}
+            className={`btn-primary rounded-l-none ${!newSubscriptionCategory.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Add Category
+          </button>
         </div>
       </div>
     </div>
@@ -2066,12 +1980,69 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Add the DeleteConfirmationPopups to the end of the component return
   return (
-    <div className="flex h-full overflow-hidden">
-      {renderNavigation()}
-      <div className="flex-1 overflow-y-auto">
-        {renderCurrentPage()}
+    <div className="flex flex-col h-full bg-gray-900 text-white">
+      <div className="flex h-full overflow-hidden">
+        {/* Navigation sidebar */}
+        <div className="w-56 bg-gray-800 border-r border-gray-700 h-full overflow-y-auto">
+          {renderNavigation()}
+        </div>
+        
+        {/* Main content area */}
+        <div className="flex-1 p-6 overflow-y-auto">
+          {renderCurrentPage()}
+        </div>
       </div>
+
+      {/* Confirmation Popups */}
+      <DeleteConfirmationPopup
+        isOpen={workflowToDelete !== null}
+        onClose={() => setWorkflowToDelete(null)}
+        onConfirm={() => workflowToDelete && deleteWorkflow(workflowToDelete)}
+        itemName={workflows.find(w => w.id === workflowToDelete)?.name || ''}
+        itemType="workflow"
+      />
+      
+      <DeleteConfirmationPopup
+        isOpen={assistantToDelete !== null}
+        onClose={() => setAssistantToDelete(null)}
+        onConfirm={() => assistantToDelete && deleteAssistant(assistantToDelete)}
+        itemName={assistants.find(a => a.id === assistantToDelete)?.name || ''}
+        itemType="assistant"
+      />
+      
+      <DeleteConfirmationPopup
+        isOpen={pluginToDelete !== null}
+        onClose={() => setPluginToDelete(null)}
+        onConfirm={() => pluginToDelete && deletePlugin(pluginToDelete)}
+        itemName={plugins.find(p => p.id === pluginToDelete)?.name || ''}
+        itemType="plugin"
+      />
+      
+      <DeleteConfirmationPopup
+        isOpen={confirmDeleteAll}
+        onClose={() => setConfirmDeleteAll(false)}
+        onConfirm={handleDeleteAllData}
+        itemName="ALL DATA"
+        itemType="all application data"
+      />
+      
+      <DeleteConfirmationPopup
+        isOpen={websiteCategoryToDelete !== null}
+        onClose={() => setWebsiteCategoryToDelete(null)}
+        onConfirm={() => websiteCategoryToDelete !== null && deleteWebsiteCategory(websiteCategoryToDelete)}
+        itemName={websiteCategoryToDelete !== null ? websiteCategories[websiteCategoryToDelete] : ''}
+        itemType="website category"
+      />
+      
+      <DeleteConfirmationPopup
+        isOpen={subscriptionCategoryToDelete !== null}
+        onClose={() => setSubscriptionCategoryToDelete(null)}
+        onConfirm={() => subscriptionCategoryToDelete !== null && deleteSubscriptionCategory(subscriptionCategoryToDelete)}
+        itemName={subscriptionCategoryToDelete !== null ? subscriptionCategories[subscriptionCategoryToDelete] : ''}
+        itemType="subscription category"
+      />
     </div>
   );
 };

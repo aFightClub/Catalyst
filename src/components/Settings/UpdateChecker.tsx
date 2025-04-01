@@ -127,13 +127,12 @@ const UpdateChecker: React.FC = () => {
 
   return (
     <div className="p-4 bg-gray-700 rounded-lg">
-      <h2 className="text-lg font-medium text-white mb-2">Software Updates</h2>
       <p className="text-gray-300 mb-4">Current Version: {version}</p>
       
       {updateStatus === 'idle' && (
         <button
           onClick={checkForUpdates}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+          className="btn-primary"
           disabled={checking}
         >
           Check for Updates

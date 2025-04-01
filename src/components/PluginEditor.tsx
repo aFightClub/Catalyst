@@ -135,7 +135,7 @@ const PluginEditor: React.FC<PluginEditorProps> = ({ onClose, initialPlugin }) =
           <div className="flex space-x-2">
             <button
               onClick={() => setShowAIPrompt(true)}
-              className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center"
+              className="btn-primary"
               title="Generate code with AI"
             >
               <FiCode className="mr-1" />
@@ -234,13 +234,13 @@ const PluginEditor: React.FC<PluginEditorProps> = ({ onClose, initialPlugin }) =
           <div className="flex space-x-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              className="btn-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
+              className="btn-primary"
             >
               <FiSave className="mr-2" />
               {initialPlugin ? 'Update' : 'Create'}
@@ -267,14 +267,14 @@ const PluginEditor: React.FC<PluginEditorProps> = ({ onClose, initialPlugin }) =
               <div className="flex justify-end space-x-2">
                 <button
                   onClick={() => setShowAIPrompt(false)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="btn-secondary"
                   disabled={isGenerating}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={generateCodeFromAI}
-                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center"
+                  className="btn-primary"
                   disabled={isGenerating}
                 >
                   {isGenerating ? (
