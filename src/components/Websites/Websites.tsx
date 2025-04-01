@@ -513,6 +513,13 @@ const Websites: React.FC = () => {
               </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <button
+                  onClick={() => deleteWebsite(editingWebsiteId!)}
+                  className="btn-delete mr-auto"
+                >
+                  <FiTrash2 className="inline mr-1" />
+                  Delete
+                </button>
+                <button
                   onClick={cancelEditing}
                   className="btn-ghost"
                 >
@@ -564,26 +571,14 @@ const Websites: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredWebsites.map(website => (
-            <div key={website.id} className="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+            <div 
+              key={website.id} 
+              className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:bg-gray-750 cursor-pointer transition-colors duration-200"
+              onClick={() => startEditing(website.id)}
+            >
               <div className="p-4">
                 <div className="flex justify-between items-start">
                   <h3 className="text-lg font-semibold mb-1">{website.name}</h3>
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => startEditing(website.id)}
-                      className="p-1 rounded hover:bg-gray-700"
-                      title="Edit"
-                    >
-                      <FiEdit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteWebsite(website.id)}
-                      className="p-1 rounded hover:bg-gray-700"
-                      title="Delete"
-                    >
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
                 
                 <div className="flex items-center mb-2 text-sm text-gray-400">
@@ -592,6 +587,7 @@ const Websites: React.FC = () => {
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
+                      e.stopPropagation(); // Prevent triggering the card's onClick
                       openWebsite(website.url);
                     }}
                     className="text-blue-400 hover:text-blue-300 truncate"
@@ -608,11 +604,7 @@ const Websites: React.FC = () => {
                   <span className="inline-block px-2 py-1 text-xs rounded-full bg-gray-700">
                     {website.category}
                   </span>
-                 
                 </div>
-            
-                
-              
               </div>
             </div>
           ))}

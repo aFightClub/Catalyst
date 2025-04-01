@@ -328,7 +328,7 @@ const Subscriptions: React.FC = () => {
     return (
       <div className="mt-3 pt-3 border-t border-gray-700">
         <h4 className="text-sm font-medium mb-2 flex items-center">
-          <FiLink className="mr-1" /> Linked Websites
+          <FiLink className="mr-1" /> Websites
         </h4>
         <div className="space-y-1">
           {linkedSites.map(siteId => {
@@ -338,14 +338,6 @@ const Subscriptions: React.FC = () => {
             return (
               <div key={siteId} className="flex items-center">
                 <span className="text-sm text-blue-400 truncate">{website.name}</span>
-                <a 
-                  href={website.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="ml-1 text-xs text-gray-400 hover:text-gray-300"
-                >
-                  (visit)
-                </a>
               </div>
             );
           })}
@@ -676,6 +668,12 @@ const Subscriptions: React.FC = () => {
               
               <div className="flex justify-end space-x-2 pt-4">
                 <button
+                  onClick={() => deleteSubscription(editingSubscriptionId!)}
+                  className="btn-delete mr-auto"
+                >
+                  <FiTrash2 className="mr-2" /> Delete
+                </button>
+                <button
                   onClick={cancelEditing}
                   className="btn-ghost"
                 >
@@ -731,7 +729,11 @@ const Subscriptions: React.FC = () => {
               <h2 className="text-lg font-semibold mb-4 border-b border-gray-700 pb-2">{category}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {subs.map(sub => (
-                  <div key={sub.id} className="bg-gray-800 rounded-lg p-4">
+                  <div 
+                    key={sub.id} 
+                    className="bg-gray-800 rounded-lg p-4 hover:bg-gray-750 cursor-pointer transition-colors duration-200"
+                    onClick={() => startEditing(sub.id)}
+                  >
                     <div>
                       <div className="flex justify-between items-start">
                         <div>
@@ -742,6 +744,7 @@ const Subscriptions: React.FC = () => {
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="text-blue-400 hover:underline text-sm"
+                              onClick={(e) => e.stopPropagation()} // Prevent triggering the card's onClick
                             >
                               {sub.url}
                             </a>
@@ -769,21 +772,6 @@ const Subscriptions: React.FC = () => {
                       
                       {/* Linked websites section */}
                       {renderWebsiteSection(sub)}
-                      
-                      <div className="mt-4 flex justify-end space-x-2">
-                        <button
-                          onClick={() => startEditing(sub.id)}
-                          className="btn-secondary btn-sm"
-                        >
-                          <FiEdit />
-                        </button>
-                        <button
-                          onClick={() => deleteSubscription(sub.id)}
-                          className="btn-delete btn-sm"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 ))}
