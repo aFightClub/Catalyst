@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiFolder, FiCheck, FiX, FiEdit, FiMoreVertical, FiList, FiColumns, FiArrowRight } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiFolder, FiCheck, FiX, FiEdit, FiMoreVertical, FiList, FiColumns, FiArrowRight, FiEye, FiEyeOff } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 
 // Task status enum
@@ -80,6 +80,7 @@ const Tasks: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editProjectName, setEditProjectName] = useState('');
+  const [hideDoneTasks, setHideDoneTasks] = useState(true);
 
   // Load tasks and projects on component mount
   useEffect(() => {
@@ -301,23 +302,25 @@ const Tasks: React.FC = () => {
   };
 
   // For list view, sort tasks
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    // Sort by completion status (incomplete tasks first)
-    if (a.completed !== b.completed) {
-      return a.completed ? 1 : -1;
-    }
-    // Then sort by status
-    if (a.status !== b.status) {
-      const statusOrder = { [TaskStatus.BACKLOG]: 0, [TaskStatus.DOING]: 1, [TaskStatus.DONE]: 2 };
-      return statusOrder[a.status] - statusOrder[b.status];
-    }
-    // Then sort by creation date (newest first for incomplete, oldest first for complete)
-    if (a.completed) {
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    } else {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }
-  });
+  const sortedTasks = [...filteredTasks]
+    .filter(task => viewMode !== 'list' || !hideDoneTasks || (!task.completed && task.status !== TaskStatus.DONE))
+    .sort((a, b) => {
+      // Sort by completion status (incomplete tasks first)
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      // Then sort by status
+      if (a.status !== b.status) {
+        const statusOrder = { [TaskStatus.BACKLOG]: 0, [TaskStatus.DOING]: 1, [TaskStatus.DONE]: 2 };
+        return statusOrder[a.status] - statusOrder[b.status];
+      }
+      // Then sort by creation date (newest first for incomplete, oldest first for complete)
+      if (a.completed) {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      } else {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
 
   if (isLoading) {
     return (
@@ -563,6 +566,27 @@ const Tasks: React.FC = () => {
           {viewMode === 'list' ? (
             // List View
             <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-sm text-gray-400">
+                  {hideDoneTasks ? 'Showing active tasks' : 'Showing all tasks'}
+                </div>
+                <button
+                  onClick={() => setHideDoneTasks(!hideDoneTasks)}
+                  className="flex items-center px-3 py-1 bg-gray-700 rounded text-sm hover:bg-gray-600"
+                  title={hideDoneTasks ? "Show completed tasks" : "Hide completed tasks"}
+                >
+                  {hideDoneTasks ? (
+                    <>
+                      <FiEye className="w-4 h-4 mr-1" /> Show completed
+                    </>
+                  ) : (
+                    <>
+                      <FiEyeOff className="w-4 h-4 mr-1" /> Hide completed
+                    </>
+                  )}
+                </button>
+              </div>
+              
               {sortedTasks.length === 0 ? (
                 <div className="text-center text-gray-400 mt-10">
                   <FiFolder className="w-12 h-12 mx-auto mb-4" />
