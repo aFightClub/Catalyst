@@ -14,6 +14,10 @@ interface ConsoleViewerProps {
   webviewRefs: React.MutableRefObject<{ [key: string]: Electron.WebviewTag }>;
 }
 
+// For development-only features, always show in development
+// This will be removed during production builds by tree-shaking
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 const ConsoleViewer: React.FC<ConsoleViewerProps> = ({ activeTabId, webviewRefs }) => {
   const [logs, setLogs] = useState<ConsoleLog[]>([]);
   const [showConsole, setShowConsole] = useState(false);
@@ -47,12 +51,16 @@ const ConsoleViewer: React.FC<ConsoleViewerProps> = ({ activeTabId, webviewRefs 
   }, [activeTabId, webviewRefs]);
 
   if (!showConsole) {
+    // Only render the console button in development mode
+    if (!isDevelopment) {
+      return null;
+    }
+    
     return (
       <button 
         className="fixed bottom-5 left-4 bg-gray-800 text-white p-1 rounded z-50"
         onClick={() => setShowConsole(true)}
         style={{
-
           left: '280px'
         }}
       >

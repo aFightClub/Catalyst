@@ -15,7 +15,7 @@ function createWindow() {
       contextIsolation: false, // Needed for IPC to work properly
       webviewTag: true, // Enable webviews
     },
-    icon: path.join(__dirname, "../src/images/icon.png"),
+    icon: path.join(__dirname, "../src/images/mac-icon.png"),
   });
 
   // Check if app is running in development or production mode
@@ -74,7 +74,7 @@ ipcMain.on("run-workflow-in-new-window", async (event, data) => {
         contextIsolation: false,
         webviewTag: true,
       },
-      icon: path.join(__dirname, "../src/images/icon.png"),
+      icon: path.join(__dirname, "../src/images/mac-icon.png"),
     });
 
     const isDevelopment = !app.isPackaged;
@@ -181,7 +181,7 @@ if (process.platform === "linux" || process.platform === "win32") {
   app.on("ready", () => {
     app.whenReady().then(() => {
       try {
-        const iconPath = path.join(__dirname, "../src/images/icon.png");
+        const iconPath = path.join(__dirname, "../src/images/mac-icon.png");
         console.log("Setting application icon:", iconPath);
         app.setAppUserModelId(app.name); // Set app ID for Windows
       } catch (err) {
