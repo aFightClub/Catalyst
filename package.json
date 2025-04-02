@@ -1,6 +1,6 @@
 {
   "name": "catalyst-browser",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "The secondary web browser of digital creatives.",
   "author": "Wynter Jones <wynter@monetizedesign.com> (https://wynter.ai)",
   "main": "electron/main.js",
