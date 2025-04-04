@@ -121,7 +121,9 @@ const Settings: React.FC = () => {
     importApiKeys: true,
     importUserContext: true,
     importWebsiteCategories: true,
-    importSubscriptionCategories: true
+    importSubscriptionCategories: true,
+    importMonthlyBudget: true,
+    importAISummarySettings: true
   });
   
   // Delete confirmation states
@@ -784,6 +786,14 @@ const Settings: React.FC = () => {
     } finally {
       setIsGeneratingImage(false);
     }
+  };
+
+  // Add this function before the generateProfileImage function
+  const toggleOption = (option: keyof typeof importOptions) => {
+    setImportOptions(prev => ({
+      ...prev,
+      [option]: !prev[option]
+    }));
   };
 
   const renderNavigation = () => (
@@ -1730,6 +1740,32 @@ const Settings: React.FC = () => {
                   />
                   <label htmlFor="importUserContext" className="cursor-pointer">
                     User Context
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importMonthlyBudget"
+                    checked={importOptions.importMonthlyBudget}
+                    onChange={() => toggleOption('importMonthlyBudget')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importMonthlyBudget" className="cursor-pointer">
+                    Monthly Budget
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importAISummarySettings"
+                    checked={importOptions.importAISummarySettings}
+                    onChange={() => toggleOption('importAISummarySettings')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importAISummarySettings" className="cursor-pointer">
+                    AI Summary Settings
                   </label>
                 </div>
               </div>

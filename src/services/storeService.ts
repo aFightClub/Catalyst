@@ -497,22 +497,22 @@ export const storeService = {
       websiteCategories: await s.get("websiteCategories"),
       subscriptions: await s.get("subscriptions"),
       subscriptionCategories: await s.get("subscriptionCategories"),
+      monthlyBudget: await s.get("budget"),
+      aiSummarySettings: await s.get("aiSummarySettings"),
       contentPlans: await s.get("contentPlans"),
       planReminders: await s.get("planReminders"),
       userContext: await s.get("userContext"),
       assistants: await s.get("assistants"),
       chats: await s.get("chats"),
       automations: await s.get("automations"),
-      // Add calendar events
       calendarEvents: localStorage.getItem("calendar_events")
         ? JSON.parse(localStorage.getItem("calendar_events") || "[]")
         : [],
-      // Export dashboard cards
       dashboardCards: localStorage.getItem("dashboard_cards")
         ? JSON.parse(localStorage.getItem("dashboard_cards") || "[]")
         : [],
       exportDate: new Date().toISOString(),
-      appVersion: "1.0.0", // Add version for future compatibility checks
+      appVersion: "1.0.0",
     };
 
     // Convert to JSON string
@@ -544,6 +544,8 @@ export const storeService = {
       importPlanReminders?: boolean;
       importCalendarEvents?: boolean;
       importDashboardCards?: boolean;
+      importMonthlyBudget?: boolean;
+      importAISummarySettings?: boolean;
     } = {}
   ): Promise<{ success: boolean; message: string }> => {
     try {
@@ -952,6 +954,16 @@ export const storeService = {
 
           localStorage.setItem("dashboard_cards", JSON.stringify(newCards));
         }
+      }
+
+      // Import Monthly Budget
+      if (options.importMonthlyBudget !== false && data.monthlyBudget) {
+        await s.set("budget", data.monthlyBudget);
+      }
+
+      // Import AI Summary Settings
+      if (options.importAISummarySettings !== false && data.aiSummarySettings) {
+        await s.set("aiSummarySettings", data.aiSummarySettings);
       }
 
       return { success: true, message: "Data imported successfully" };
