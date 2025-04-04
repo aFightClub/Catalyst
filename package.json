@@ -1,6 +1,6 @@
 {
   "name": "catalyst-browser",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "The secondary web browser of digital creatives.",
   "author": "Wynter Jones <wynter@monetizedesign.com> (https://wynter.ai)",
   "main": "electron/main.js",
@@ -8,9 +8,9 @@
     "start": "vite",
     "build": "vite build",
     "update-version": "node scripts/update-version.js",
-    "electron:dev": "npm run update-version && concurrently \"vite\" \"electron .\"",
-    "electron:build": "npm run update-version && vite build && electron-builder",
-    "publish": "npm run update-version && vite build && electron-builder build --mac --publish always"
+    "electron:dev": "concurrently \"vite\" \"electron .\"",
+    "electron:build": "vite build && electron-builder",
+    "publish": "vite build && electron-builder build --mac --publish always"
   },
   "build": {
     "appId": "com.catalystbrowser.app",

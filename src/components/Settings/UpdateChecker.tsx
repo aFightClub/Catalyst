@@ -6,11 +6,11 @@ const UpdateChecker: React.FC = () => {
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Default version as a fallback
-  const defaultVersion = '0.0.3';
-  const [version, setVersion] = useState(defaultVersion);
-  
+  // Get version from package.json via electron preload
   const electronVersion = (window as any).electron?.appInfo?.version;
+  // Use package.json version from electron or fallback to development value from package.json (0.0.6)
+  const [version, setVersion] = useState<string>(electronVersion || '0.0.6');
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
 
   useEffect(() => {
     const electron = (window as any).electron;
@@ -47,62 +47,67 @@ const UpdateChecker: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    // Try to read version.txt from multiple locations
-    const fetchVersion = async () => {
-      try {
-        // First try the root path
-        const response = await fetch('/version.txt');
-        if (response.ok) {
-          const data = await response.text();
-          setVersion(data.trim());
-          console.log('Version from /version.txt:', data.trim());
-          return;
-        }
+    // Update version if electron version becomes available
+    if (electronVersion) {
+      setVersion(electronVersion);
+    }
+    
+    // Fetch the latest version from GitHub releases
+    fetchLatestReleaseVersion();
+  }, [electronVersion]);
+
+  const fetchLatestReleaseVersion = async () => {
+    try {
+      const response = await fetch('https://api.github.com/repos/aFightClub/Catalyst/releases/latest');
+      
+      if (!response.ok) {
+        throw new Error(`GitHub API returned ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const latestVersion = data.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+      
+      setLatestVersion(latestVersion);
+      console.log('Latest version from GitHub:', latestVersion);
+      
+      // Compare versions to automatically detect if update is available
+      const currentVersionParts = version.split('.').map(Number);
+      const latestVersionParts = latestVersion.split('.').map(Number);
+      
+      // Simple version comparison
+      for (let i = 0; i < Math.max(currentVersionParts.length, latestVersionParts.length); i++) {
+        const current = currentVersionParts[i] || 0;
+        const latest = latestVersionParts[i] || 0;
         
-        // Try relative path
-        const fallbackResponse = await fetch('./version.txt');
-        if (fallbackResponse.ok) {
-          const data = await fallbackResponse.text();
-          setVersion(data.trim());
-          console.log('Version from ./version.txt:', data.trim());
-          return;
-        }
-        
-        // Try src folder path for development
-        const srcResponse = await fetch('./src/version.txt');
-        if (srcResponse.ok) {
-          const data = await srcResponse.text();
-          setVersion(data.trim());
-          console.log('Version from src/version.txt:', data.trim());
-          return;
-        }
-        
-        // If we get here and have electron version, use that
-        if (electronVersion) {
-          setVersion(electronVersion);
-          return;
-        }
-        
-        // If we get here, we couldn't find the file
-        console.log('Using default version:', defaultVersion);
-      } catch (error) {
-        console.error('Error fetching version.txt:', error);
-        // If electron version is available, use it as fallback
-        if (electronVersion) {
-          setVersion(electronVersion);
-        } else {
-          console.log('Using default version:', defaultVersion);
+        if (latest > current) {
+          setUpdateStatus('available');
+          setUpdateInfo({ version: latestVersion });
+          break;
+        } else if (current > latest) {
+          setUpdateStatus('not-available');
+          break;
         }
       }
-    };
-    
-    fetchVersion();
-  }, [electronVersion]);
+    } catch (error) {
+      console.error('Error fetching latest release:', error);
+      setErrorMessage('Failed to check for updates from GitHub');
+    }
+  };
 
   const checkForUpdates = async () => {
     const electron = (window as any).electron;
     if (!electron?.updater) {
-      setErrorMessage('Update functionality not available');
+      setChecking(true);
+      setUpdateStatus('checking');
+      
+      try {
+        await fetchLatestReleaseVersion();
+        setChecking(false);
+      } catch (error) {
+        setUpdateStatus('error');
+        setErrorMessage((error as Error).message || 'Failed to check for updates');
+        setChecking(false);
+      }
       return;
     }
 
@@ -128,6 +133,9 @@ const UpdateChecker: React.FC = () => {
   return (
     <div className="p-4 bg-gray-700 rounded-lg">
       <p className="text-gray-300 mb-4">Current Version: {version}</p>
+      {latestVersion && version !== latestVersion && (
+        <p className="text-yellow-400 mb-4">Latest Version: {latestVersion}</p>
+      )}
       
       {updateStatus === 'idle' && (
         <button
@@ -175,9 +183,23 @@ const UpdateChecker: React.FC = () => {
       {updateStatus === 'available' && (
         <div>
           <p className="text-yellow-400 mb-2">
-            Update available: v{updateInfo?.version || 'newer version'}
+            Update available: v{updateInfo?.version || latestVersion || 'newer version'}
           </p>
-          <p className="text-gray-300 mb-4">Update is downloading automatically...</p>
+          <p className="text-gray-300 mb-4">
+            {(window as any).electron?.updater ? 
+              "Update is downloading automatically..." : 
+              "Please download the latest version from GitHub"}
+          </p>
+          {!(window as any).electron?.updater && (
+            <a 
+              href="https://github.com/aFightClub/Catalyst/releases/latest" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors inline-block"
+            >
+              Download Latest Release
+            </a>
+          )}
         </div>
       )}
       
