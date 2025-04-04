@@ -110,6 +110,10 @@ const schema = {
     type: "array",
     default: [],
   },
+  accountability_goals: {
+    type: "array",
+    default: [],
+  },
   userContext: {
     type: "object",
     default: {
@@ -479,6 +483,16 @@ export const storeService = {
     return s.set("automations", automations);
   },
 
+  // Accountability Goals
+  getAccountabilityGoals: async () => {
+    const s = await ensureStore();
+    return s.get("accountability_goals") as any[];
+  },
+  saveAccountabilityGoals: async (goals: any[]) => {
+    const s = await ensureStore();
+    return s.set("accountability_goals", goals);
+  },
+
   // Export all data to a JSON file
   exportAllData: async (): Promise<string> => {
     const s = await ensureStore();
@@ -505,6 +519,7 @@ export const storeService = {
       assistants: await s.get("assistants"),
       chats: await s.get("chats"),
       automations: await s.get("automations"),
+      accountability_goals: await s.get("accountability_goals"),
       calendarEvents: localStorage.getItem("calendar_events")
         ? JSON.parse(localStorage.getItem("calendar_events") || "[]")
         : [],
@@ -546,6 +561,7 @@ export const storeService = {
       importDashboardCards?: boolean;
       importMonthlyBudget?: boolean;
       importAISummarySettings?: boolean;
+      importAccountabilityGoals?: boolean;
     } = {}
   ): Promise<{ success: boolean; message: string }> => {
     try {
@@ -964,6 +980,29 @@ export const storeService = {
       // Import AI Summary Settings
       if (options.importAISummarySettings !== false && data.aiSummarySettings) {
         await s.set("aiSummarySettings", data.aiSummarySettings);
+      }
+
+      // Import Accountability Goals
+      if (
+        options.importAccountabilityGoals !== false &&
+        data.accountability_goals
+      ) {
+        if (options.overwrite) {
+          await s.set("accountability_goals", data.accountability_goals);
+        } else {
+          const currentGoals = (await s.get("accountability_goals")) as any[];
+          const existingIds = new Set(currentGoals.map((goal: any) => goal.id));
+          const newGoals = [...currentGoals];
+
+          for (const goal of data.accountability_goals) {
+            if (!existingIds.has(goal.id)) {
+              newGoals.push(goal);
+              existingIds.add(goal.id);
+            }
+          }
+
+          await s.set("accountability_goals", newGoals);
+        }
       }
 
       return { success: true, message: "Data imported successfully" };

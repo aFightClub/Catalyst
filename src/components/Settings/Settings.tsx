@@ -123,7 +123,8 @@ const Settings: React.FC = () => {
     importWebsiteCategories: true,
     importSubscriptionCategories: true,
     importMonthlyBudget: true,
-    importAISummarySettings: true
+    importAISummarySettings: true,
+    importAccountabilityGoals: true
   });
   
   // Delete confirmation states
@@ -407,11 +408,13 @@ const Settings: React.FC = () => {
   };
 
   const saveApiKeys = (keys: ApiKeys) => {
+    console.log("Settings: Saving API keys:", keys.openai ? `${keys.openai.substring(0, 5)}...` : "not set");
     setApiKeys(keys);
     // Save API keys using async method
     const saveKeys = async () => {
       try {
         await storeService.saveApiKeys(keys as Record<string, string>);
+        console.log("Settings: API keys saved successfully");
       } catch (error) {
         console.error("Failed to save API keys:", error);
       }
@@ -1766,6 +1769,19 @@ const Settings: React.FC = () => {
                   />
                   <label htmlFor="importAISummarySettings" className="cursor-pointer">
                     AI Summary Settings
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox"
+                    id="importAccountabilityGoals"
+                    checked={importOptions.importAccountabilityGoals}
+                    onChange={() => toggleOption('importAccountabilityGoals')}
+                    className="mr-2"
+                  />
+                  <label htmlFor="importAccountabilityGoals" className="cursor-pointer">
+                    Accountability Goals
                   </label>
                 </div>
               </div>

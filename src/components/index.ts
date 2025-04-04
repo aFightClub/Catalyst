@@ -36,3 +36,7 @@ export { default as CodeEditor } from "./CodeEditor";
 // export { default as SplitPane } from "./CodeEditor/SplitPane";
 // export { default as TabBar } from "./CodeEditor/TabBar";
 // export { default as Terminal } from "./CodeEditor/Terminal";
+
+// Accountability
+export { default as Accountability } from "./Accountability/Accountability";
+export { default as GatekeeperChat } from "./Accountability/GatekeeperChat";

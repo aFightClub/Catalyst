@@ -22,7 +22,8 @@ import {
   BrowserLayout,
   WorkflowModal,
   ToastContainer,
-  Media
+  Media,
+  Accountability
 } from './components'
 import ConsoleViewer from './components/ConsoleViewer'
 
@@ -35,6 +36,11 @@ interface Toast {
   message: string;
   type: 'success' | 'error' | 'info';
 }
+
+// Add imports for the Accountability system
+import { useAccountability } from './contexts/AccountabilityContext';
+import GatekeeperChat from './components/Accountability/GatekeeperChat';
+import GlobalGatekeeperChat from './components/Accountability/GlobalGatekeeperChat';
 
 export default function App() {
   // Initialize store and migrate data from localStorage on first render
@@ -148,6 +154,7 @@ export default function App() {
   const [showSubscriptions, setShowSubscriptions] = useState(false)
   const [showWebsites, setShowWebsites] = useState(false)
   const [showAutomations, setShowAutomations] = useState(false)
+  const [showAccountability, setShowAccountability] = useState(false)
   
   // Add state for tracking loading status
   const [loadingTabs, setLoadingTabs] = useState<Set<string>>(new Set());
@@ -1069,6 +1076,7 @@ export default function App() {
     setShowSubscriptions(false);
     setShowWebsites(false);
     setShowAutomations(false);
+    setShowAccountability(false);
   };
   
   const navigateToUrl = (url: string) => {
@@ -1748,6 +1756,7 @@ export default function App() {
     setShowSubscriptions(false);
     setShowWebsites(false);
     setShowAutomations(false);
+    setShowAccountability(false);
   };
   
   const deleteWorkspace = (id: string) => {
@@ -2043,6 +2052,7 @@ export default function App() {
         setShowSubscriptions(false);
         setShowWebsites(false);
         setShowAutomations(false);
+        setShowAccountability(false);
       });
     }
   }, [activeWorkspaceId]);
@@ -2075,26 +2085,7 @@ export default function App() {
     setWorkflowModalMode('create');
   };
 
-  // Listen for event to show Media component
-  useEffect(() => {
-    const handleShowMedia = () => {
-      setShowDashboard(false);
-      setShowAIChat(false);
-      setShowWriter(false);
-      setShowTasks(false);
-      setShowImages(false);
-      setShowAutomations(false);
-      setShowWebsites(false);
-      setShowSubscriptions(false);
-      setShowMedia(true);
-    };
 
-    window.addEventListener('show-media-component', handleShowMedia);
-    
-    return () => {
-      window.removeEventListener('show-media-component', handleShowMedia);
-    };
-  }, []);
 
   const openWebviewDevTools = () => {
     const webview = webviewRefs.current[activeTabId];
@@ -2121,6 +2112,9 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
+      {/* Add GlobalGatekeeperChat at the top level so it works on all screens */}
+      <GlobalGatekeeperChat />
+      
       {/* Sidebar */}
       <Sidebar 
         activeWorkspaceId={activeWorkspaceId}
@@ -2148,6 +2142,7 @@ export default function App() {
         setShowWebsites={setShowWebsites}
         setShowSubscriptions={setShowSubscriptions}
         setShowAutomations={setShowAutomations}
+        setShowAccountability={setShowAccountability}
         showSettings={showSettings}
         showDashboard={showDashboard}
         showAIChat={showAIChat}
@@ -2159,6 +2154,7 @@ export default function App() {
         showWebsites={showWebsites}
         showSubscriptions={showSubscriptions}
         showAutomations={showAutomations}
+        showAccountability={showAccountability}
         startEditingWorkspace={startEditingWorkspace}
         saveWorkspaceEdit={saveWorkspaceEdit}
         cancelEdit={cancelEdit}
@@ -2170,6 +2166,7 @@ export default function App() {
       />
 
       <div className="flex-1 flex flex-col">
+        {/* Restore the conditional rendering logic for different screens */}
         {showSettings ? (
           <Settings />
         ) : showAIChat ? (
@@ -2184,14 +2181,16 @@ export default function App() {
           <Images />
         ) : showMedia ? (
           <Media />
-        ) : showAutomations ? (
-          <Automations />
-        ) : showWebsites ? (
-          <Websites />
-        ) : showSubscriptions ? (
-          <Subscriptions />
         ) : showDashboard ? (
           <Dashboard />
+        ) : showSubscriptions ? (
+          <Subscriptions />
+        ) : showWebsites ? (
+          <Websites />
+        ) : showAutomations ? (
+          <Automations />
+        ) : showAccountability ? (
+          <Accountability />
         ) : (
           <>
             {/* Header Nav Component */}
@@ -2319,7 +2318,7 @@ export default function App() {
       {/* Add the console viewer component */}
       {!showSettings && !showAIChat && !showWriter && !showTasks && 
        !showPlan && !showImages && !showDashboard && !showSubscriptions && 
-       !showWebsites && !showAutomations && (
+       !showWebsites && !showAutomations && !showAccountability && (
         <ConsoleViewer activeTabId={activeTabId} webviewRefs={webviewRefs} />
       )}
     </div>

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { 
   FiHome, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, 
   FiGlobe, FiDollarSign, FiClock, FiSettings, FiPlus, 
-  FiPackage, FiTrash2, FiChrome, FiCalendar, FiChevronLeft, FiChevronRight
+  FiPackage, FiTrash2, FiChrome, FiCalendar, FiChevronLeft, FiChevronRight,
+  FiTarget
 } from 'react-icons/fi';
 import { Workspace, Tab } from '../../types';
 
@@ -30,6 +31,7 @@ interface SidebarProps {
   showSubscriptions: boolean;
   showWebsites: boolean;
   showAutomations: boolean;
+  showAccountability: boolean;
   setShowDashboard: (show: boolean) => void;
   setShowSettings: (show: boolean) => void;
   setShowAIChat: (show: boolean) => void;
@@ -40,6 +42,7 @@ interface SidebarProps {
   setShowSubscriptions: (show: boolean) => void;
   setShowWebsites: (show: boolean) => void;
   setShowAutomations: (show: boolean) => void;
+  setShowAccountability: (show: boolean) => void;
   setIsAddingWorkspace: (isAdding: boolean) => void;
   setNewWorkspaceName: (name: string) => void;
   addWorkspace: () => void;
@@ -75,6 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   showSubscriptions,
   showWebsites,
   showAutomations,
+  showAccountability,
   setShowDashboard,
   setShowSettings,
   setShowAIChat,
@@ -85,6 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setShowSubscriptions,
   setShowWebsites,
   setShowAutomations,
+  setShowAccountability,
   setIsAddingWorkspace,
   setNewWorkspaceName,
   addWorkspace,
@@ -123,6 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               setShowSubscriptions(false)
               setShowWebsites(false)
               setShowAutomations(false)
+              setShowAccountability(false)
             }}
             className={`w-full border border-gray-700 p-1 my-3 rounded-lg text-white font-medium shadow-lg transition-all duration-200 hover:shadow-xl flex items-center justify-center
               ${showDashboard 
@@ -148,6 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               setShowSubscriptions(false)
               setShowWebsites(false)
               setShowAutomations(false)
+              setShowAccountability(false)
             }}
             className={`w-full border border-gray-700 p-3 my-3 rounded-lg text-white font-medium shadow-lg transition-all duration-200 hover:shadow-xl 
               ${showDashboard 
@@ -247,6 +254,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 setShowSubscriptions(false);
                 setShowWebsites(false);
                 setShowAutomations(false);
+                setShowAccountability(false);
               }}
               style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
             >
@@ -335,7 +343,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Show tabs for active workspace */}
             {activeWorkspaceId === workspace.id && !showDashboard && 
              !showSettings && !showAIChat && !showWriter && !showTasks && 
-             !showPlan && !showImages && !showSubscriptions && !showWebsites && !showAutomations && (
+             !showPlan && !showImages && !showSubscriptions && !showWebsites && !showAutomations && !showAccountability && (
               <div className={`${isMinimized ? '' : 'ml-4 pl-2'} border-l border-gray-700`}>
                 {workspace.tabs.map(tab => (
                   <div
@@ -466,6 +474,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
             setShowAutomations(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showAIChat ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -486,6 +495,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
             setShowAutomations(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showWriter ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -506,12 +516,34 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
             setShowAutomations(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showTasks ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
           <FiCheckSquare className="w-6 h-6" />
           {!isMinimized && <span>Tasks</span>}
+        </button>
+
+        <button 
+          onClick={() => {
+            setShowAccountability(true)
+            setShowDashboard(false)
+            setShowSettings(false)
+            setShowAIChat(false)
+            setShowWriter(false)
+            setShowTasks(false)
+            setShowPlan(false)
+            setShowImages(false)
+            setShowSubscriptions(false)
+            setShowWebsites(false)
+            setShowAutomations(false)
+          }}
+          className={`w-full p-2 rounded-lg ${showAccountability ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
+          style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
+        >
+          <FiTarget className="w-6 h-6" />
+          {!isMinimized && <span>Accountability</span>}
         </button>
 
         <button 
@@ -526,6 +558,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSubscriptions(false)
             setShowWebsites(false)
             setShowAutomations(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showPlan ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -547,6 +580,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowWriter(false)
             setShowWebsites(false)
             setShowAutomations(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showSubscriptions ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -567,6 +601,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowAIChat(false)
             setShowWriter(false)
             setShowAutomations(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showWebsites ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -587,6 +622,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowSettings(false)
             setShowAIChat(false)
             setShowWriter(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showAutomations ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
@@ -607,6 +643,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             setShowDashboard(false)
             setShowAIChat(false)
             setShowWriter(false)
+            setShowAccountability(false)
           }}
           className={`w-full p-2 rounded-lg ${showSettings ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
