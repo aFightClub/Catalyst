@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2, FiEdit, FiDollarSign, FiSave, FiX, FiCalendar, FiLink } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiEdit, FiDollarSign, FiSave, FiX, FiCalendar, FiLink, FiMaximize2, FiMinimize2, FiRefreshCw } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 import DeleteConfirmationPopup from '../Common/DeleteConfirmationPopup';
 
@@ -24,6 +24,10 @@ interface Website {
   description?: string;
   createdAt: string;
 }
+
+const STORAGE_KEYS = {
+  API_KEY: 'openai_api_key',
+};
 
 const Subscriptions: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -50,6 +54,26 @@ const Subscriptions: React.FC = () => {
   const [subscriptionToDelete, setSubscriptionToDelete] = useState<Subscription | null>(null);
   const [monthlyBudget, setMonthlyBudget] = useState<number>(0);
   const [isBudgetSettingsOpen, setIsBudgetSettingsOpen] = useState(false);
+  // New state for AI Summary
+  const [isAISummaryPopupOpen, setIsAISummaryPopupOpen] = useState(false);
+  const [aiSummary, setAISummary] = useState<string>('');
+  const [isGeneratingAISummary, setIsGeneratingAISummary] = useState(false);
+  const [isAISummaryExpanded, setIsAISummaryExpanded] = useState(true);
+  const [userContext, setUserContext] = useState<{
+    name: string;
+    company: string;
+    voice: string;
+    backStory: string;
+    websiteLinks: string;
+    additionalInfo: string;
+  }>({
+    name: '',
+    company: '',
+    voice: '',
+    backStory: '',
+    websiteLinks: '',
+    additionalInfo: ''
+  });
 
   // Load subscriptions from store
   useEffect(() => {
@@ -91,6 +115,15 @@ const Subscriptions: React.FC = () => {
             "Gaming",
             "Other"
           ]);
+        }
+        
+        // Load user context
+        const storedContext = await storeService.getUserContext();
+        if (storedContext) {
+          setUserContext(prevContext => ({
+            ...prevContext,
+            ...storedContext
+          }));
         }
       } catch (error) {
         console.error("Failed to load data:", error);
@@ -166,6 +199,9 @@ const Subscriptions: React.FC = () => {
     let monthlyCost = 0;
     let yearlyCost = 0;
     let businessMonthlyCost = 0;
+    let businessYearlyCost = 0;
+    let personalMonthlyCost = 0;
+    let personalYearlyCost = 0;
     
     subscriptions.forEach(sub => {
       const price = parseFloat(sub.price.toString());
@@ -174,12 +210,20 @@ const Subscriptions: React.FC = () => {
         yearlyCost += price * 12;
         if (sub.isBusinessExpense) {
           businessMonthlyCost += price;
+          businessYearlyCost += price * 12;
+        } else {
+          personalMonthlyCost += price;
+          personalYearlyCost += price * 12;
         }
       } else {
         monthlyCost += price / 12;
         yearlyCost += price;
         if (sub.isBusinessExpense) {
           businessMonthlyCost += price / 12;
+          businessYearlyCost += price;
+        } else {
+          personalMonthlyCost += price / 12;
+          personalYearlyCost += price;
         }
       }
     });
@@ -188,9 +232,13 @@ const Subscriptions: React.FC = () => {
       monthlyCost: formatCurrency(monthlyCost),
       yearlyCost: formatCurrency(yearlyCost),
       businessMonthlyCost: formatCurrency(businessMonthlyCost),
-      isOverBudget: monthlyBudget > 0 && monthlyCost > monthlyBudget,
-      budgetDifference: formatCurrency(monthlyCost - monthlyBudget),
-      rawMonthlyCost: monthlyCost
+      businessYearlyCost: formatCurrency(businessYearlyCost),
+      personalMonthlyCost: formatCurrency(personalMonthlyCost),
+      personalYearlyCost: formatCurrency(personalYearlyCost),
+      isOverBudget: monthlyBudget > 0 && personalMonthlyCost > monthlyBudget,
+      budgetDifference: formatCurrency(personalMonthlyCost - monthlyBudget),
+      rawMonthlyCost: monthlyCost,
+      rawPersonalMonthlyCost: personalMonthlyCost
     };
   };
 
@@ -399,6 +447,138 @@ const Subscriptions: React.FC = () => {
     setIsBudgetSettingsOpen(false);
   };
 
+  // Function to generate AI summary
+  const generateAISummary = async (isRegenerate = false) => {
+    if (subscriptions.length === 0) return;
+    
+    setIsGeneratingAISummary(true);
+    
+    try {
+      // Prepare data to send to OpenAI
+      const costs = calculateCosts();
+      
+      // Organize subscriptions by category and sort by price
+      const subsByCategory = Object.entries(subscriptionsByCategory).map(([category, subs]) => ({
+        category,
+        subscriptions: subs.map(sub => ({
+          name: sub.name,
+          price: sub.price,
+          billingCycle: sub.billingCycle,
+          isBusinessExpense: sub.isBusinessExpense
+        }))
+      }));
+      
+      // Sort subscriptions by price (highest to lowest)
+      const sortedSubscriptions = [...subscriptions].sort((a, b) => {
+        const aMonthlyPrice = a.billingCycle === 'monthly' ? a.price : a.price / 12;
+        const bMonthlyPrice = b.billingCycle === 'monthly' ? b.price : b.price / 12;
+        return bMonthlyPrice - aMonthlyPrice;
+      });
+      
+      const top5Subscriptions = sortedSubscriptions.slice(0, 5).map(sub => ({
+        name: sub.name,
+        price: sub.price,
+        billingCycle: sub.billingCycle,
+        monthlyPrice: sub.billingCycle === 'monthly' ? sub.price : sub.price / 12
+      }));
+      
+      // Get API key from localStorage
+      const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+      
+      // Try getting from settings storage if not found in localStorage
+      let finalApiKey = apiKey;
+      if (!finalApiKey) {
+        try {
+          const storedKeys = await storeService.getApiKeys();
+          if (storedKeys && storedKeys.openai) {
+            finalApiKey = storedKeys.openai;
+            // Save it to localStorage for future use
+            localStorage.setItem(STORAGE_KEYS.API_KEY, storedKeys.openai);
+          }
+        } catch (error) {
+          console.error('Error retrieving API key from settings:', error);
+        }
+      }
+      
+      if (!finalApiKey) {
+        throw new Error('OpenAI API key is missing. Please set it in Settings > AI Configuration.');
+      }
+      
+      // Create user context message
+      let userContextMessage = '';
+      if (userContext.name) {
+        userContextMessage += `This analysis is for ${userContext.name}`;
+        if (userContext.company) {
+          userContextMessage += ` who works at ${userContext.company}`;
+        }
+        userContextMessage += '. ';
+      }
+      
+      if (userContext.backStory) {
+        userContextMessage += `${userContext.backStory} `;
+      }
+      
+      // Prepare prompt for OpenAI
+      const prompt = {
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are an AI assistant that provides concise, helpful analysis of subscription expenses. Personalize your response and align your advice with the user's context. Use HTML tags like <strong>, <em>, and <u> for emphasis when appropriate."
+          },
+          {
+            role: "user",
+            content: `Please provide a brief analysis of my subscription expenses. Keep it short and actionable.
+            
+            ${userContextMessage ? 'Personal context: ' + userContextMessage : ''}
+            
+            Monthly total: ${costs.personalMonthlyCost}
+            Yearly total: ${costs.personalYearlyCost}
+            Budget: ${monthlyBudget > 0 ? formatCurrency(monthlyBudget) : 'Not set'}
+            ${costs.isOverBudget ? `Over budget by: ${costs.budgetDifference}` : ''}
+            
+            Top expenses: ${JSON.stringify(top5Subscriptions)}
+            Subscriptions by category: ${JSON.stringify(subsByCategory)}
+            
+            Include: 
+            1. Quick overview of my subscription situation
+            2. My biggest expenses 
+            3. Any categories where I might be overspending
+            4. 1-2 practical suggestions to reduce costs
+            
+            Format with bullet points where appropriate. Keep response under 200 words. You can use basic html tags for strong, em, lists, and links. You can use tailwind classes for basic styling for layout, spacing, etc. Don't provide a title for the summary or outro. Write each sentence in a p tag with mb-2 class.`
+          }
+        ]
+      };
+      
+      // Fetch API response
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${finalApiKey}`
+        },
+        body: JSON.stringify(prompt)
+      });
+      
+      const data = await response.json();
+      
+      if (data.choices && data.choices.length > 0) {
+        setAISummary(data.choices[0].message.content);
+      } else {
+        throw new Error('No response from OpenAI');
+      }
+    } catch (error) {
+      console.error('Error generating AI summary:', error);
+      setAISummary('Unable to generate summary. ' + (error instanceof Error ? error.message : 'Please try again later.'));
+    } finally {
+      setIsGeneratingAISummary(false);
+      if (!isRegenerate) {
+        setIsAISummaryPopupOpen(false);
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-full bg-gray-900">
@@ -421,10 +601,10 @@ const Subscriptions: React.FC = () => {
             <h2 className="text-xl font-semibold">Monthly Cost</h2>
           </div>
           <p className={`text-3xl font-bold ${costs.isOverBudget ? 'text-red-500' : ''}`}>
-            {costs.monthlyCost}
+            {costs.personalMonthlyCost}
             {costs.isOverBudget && (
               <span className="text-red-500 text-sm ml-2">
-                ({costs.budgetDifference} over budget)
+                (+{costs.budgetDifference})
               </span>
             )}
           </p>
@@ -432,7 +612,7 @@ const Subscriptions: React.FC = () => {
             <p className="text-sm text-gray-400 mt-2">across {subscriptions.length} subscriptions</p>
             {costs.businessMonthlyCost !== "$0.00" && (
               <p className="text-sm text-blue-400 mt-1">
-                Business expenses: {costs.businessMonthlyCost}/mo
+                + Business expenses: {costs.businessMonthlyCost}/mo
               </p>
             )}
           </div>
@@ -443,8 +623,15 @@ const Subscriptions: React.FC = () => {
             <FiCalendar className="mr-2 text-indigo-500" />
             <h2 className="text-xl font-semibold">Yearly Cost</h2>
           </div>
-          <p className="text-3xl font-bold">{costs.yearlyCost}</p>
-          <p className="text-sm text-gray-400 mt-2">annual total</p>
+          <p className="text-3xl font-bold">{costs.personalYearlyCost}</p>
+          <div className="flex flex-col">
+            <p className="text-sm text-gray-400 mt-2">annual personal total</p>
+            {costs.businessYearlyCost !== "$0.00" && (
+              <p className="text-sm text-blue-400 mt-1">
+                + {costs.businessYearlyCost}/yr
+              </p>
+            )}
+          </div>
         </div>
       </div>
       
@@ -467,6 +654,19 @@ const Subscriptions: React.FC = () => {
         
         <div className="flex gap-2">
           <button
+            onClick={() => setIsAISummaryPopupOpen(true)}
+            className="btn-ghost"
+            title="AI Summary"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24">
+              <g fill="none">
+                <path d="m12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036q-.016-.004-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/>
+                <path fill="currentColor" d="M9.107 5.448c.598-1.75 3.016-1.803 3.725-.159l.06.16l.807 2.36a4 4 0 0 0 2.276 2.411l.217.081l2.36.806c1.75.598 1.803 3.016.16 3.725l-.16.06l-2.36.807a4 4 0 0 0-2.412 2.276l-.081.216l-.806 2.361c-.598 1.75-3.016 1.803-3.724.16l-.062-.16l-.806-2.36a4 4 0 0 0-2.276-2.412l-.216-.081l-2.36-.806c-1.751-.598-1.804-3.016-.16-3.724l.16-.062l2.36-.806A4 4 0 0 0 8.22 8.025l.081-.216zM19 2a1 1 0 0 1 .898.56l.048.117l.35 1.026l1.027.35a1 1 0 0 1 .118 1.845l-.118.048l-1.026.35l-.35 1.027a1 1 0 0 1-1.845.117l-.048-.117l-.35-1.026l-1.027-.35a1 1 0 0 1-.118-1.845l.118-.048l1.026-.35l.35-1.027A1 1 0 0 1 19 2"/>
+              </g>
+            </svg>
+          </button>
+          
+          <button
             onClick={() => setIsBudgetSettingsOpen(true)}
             className="btn-ghost"
             title="Budget Settings"
@@ -486,6 +686,109 @@ const Subscriptions: React.FC = () => {
           </button>
         </div>
       </div>
+      
+      {/* AI Summary Section */}
+      {aiSummary && (
+        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-start items-center">
+            <h3 className="text-lg font-semibold flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2 text-indigo-400" viewBox="0 0 24 24">
+                <g fill="none">
+                  <path d="m12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036q-.016-.004-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/>
+                  <path fill="currentColor" d="M9.107 5.448c.598-1.75 3.016-1.803 3.725-.159l.06.16l.807 2.36a4 4 0 0 0 2.276 2.411l.217.081l2.36.806c1.75.598 1.803 3.016.16 3.725l-.16.06l-2.36.807a4 4 0 0 0-2.412 2.276l-.081.216l-.806 2.361c-.598 1.75-3.016 1.803-3.724.16l-.062-.16l-.806-2.36a4 4 0 0 0-2.276-2.412l-.216-.081l-2.36-.806c-1.751-.598-1.804-3.016-.16-3.724l.16-.062l2.36-.806A4 4 0 0 0 8.22 8.025l.081-.216zM19 2a1 1 0 0 1 .898.56l.048.117l.35 1.026l1.027.35a1 1 0 0 1 .118 1.845l-.118.048l-1.026.35l-.35 1.027a1 1 0 0 1-1.845.117l-.048-.117l-.35-1.026l-1.027-.35a1 1 0 0 1-.118-1.845l.118-.048l1.026-.35l.35-1.027A1 1 0 0 1 19 2"/>
+                </g>
+              </svg>
+              AI Summary
+            </h3>
+            <div className="flex space-x-2 items-center">
+              <button 
+                onClick={() => setIsAISummaryExpanded(!isAISummaryExpanded)} 
+                className="text-gray-400 hover:text-white"
+                title={isAISummaryExpanded ? "Collapse" : "Expand"}
+              >
+                {isAISummaryExpanded ? <FiMinimize2 /> : <FiMaximize2 />}
+              </button>
+              <button 
+                onClick={() => generateAISummary(true)} 
+                className="text-gray-400 hover:text-white"
+                title="Regenerate Summary"
+                disabled={isGeneratingAISummary}
+              >
+                {isGeneratingAISummary ? (
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <FiRefreshCw />
+                )}
+              </button>
+            </div>
+          </div>
+          
+          {isAISummaryExpanded && (
+            <div className="bg-gray-700 p-3 rounded mt-2">
+              {isGeneratingAISummary ? (
+                <div className="flex justify-center items-center py-4">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Updating summary...</span>
+                </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: aiSummary }} className="text-gray-200 text-sm" />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* AI Summary Popup */}
+      {isAISummaryPopupOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2 text-indigo-400" viewBox="0 0 24 24">
+                <g fill="none">
+                  <path d="m12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036q-.016-.004-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z"/>
+                  <path fill="currentColor" d="M9.107 5.448c.598-1.75 3.016-1.803 3.725-.159l.06.16l.807 2.36a4 4 0 0 0 2.276 2.411l.217.081l2.36.806c1.75.598 1.803 3.016.16 3.725l-.16.06l-2.36.807a4 4 0 0 0-2.412 2.276l-.081.216l-.806 2.361c-.598 1.75-3.016 1.803-3.724.16l-.062-.16l-.806-2.36a4 4 0 0 0-2.276-2.412l-.216-.081l-2.36-.806c-1.751-.598-1.804-3.016-.16-3.724l.16-.062l2.36-.806A4 4 0 0 0 8.22 8.025l.081-.216zM19 2a1 1 0 0 1 .898.56l.048.117l.35 1.026l1.027.35a1 1 0 0 1 .118 1.845l-.118.048l-1.026.35l-.35 1.027a1 1 0 0 1-1.845.117l-.048-.117l-.35-1.026l-1.027-.35a1 1 0 0 1-.118-1.845l.118-.048l1.026-.35l.35-1.027A1 1 0 0 1 19 2"/>
+                </g>
+              </svg>
+              AI Summary
+            </h2>
+            <p className="text-gray-400 mb-6">
+              Generate an AI-powered summary of your subscription expenses, with insights on spending patterns and potential cost-saving opportunities.
+            </p>
+            
+            <div className="flex justify-end space-x-2 pt-4">
+              <button
+                onClick={() => setIsAISummaryPopupOpen(false)}
+                className="btn-ghost"
+              >
+                <FiX className="mr-2" /> Cancel
+              </button>
+              <button
+                onClick={() => generateAISummary(true)}
+                className="btn-primary"
+                disabled={isGeneratingAISummary || subscriptions.length === 0}
+              >
+                {isGeneratingAISummary ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  <>Generate Summary</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Budget Settings Popup */}
       {isBudgetSettingsOpen && (
