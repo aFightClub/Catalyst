@@ -1096,6 +1096,17 @@ export const storeService = {
   waitForReady: async () => {
     return await storePromise;
   },
+
+  // Add these methods to the storeService object
+  getBudget: async (): Promise<string> => {
+    const s = await ensureStore();
+    return s.get("budget") || "0";
+  },
+
+  saveBudget: async (budget: string): Promise<void> => {
+    const s = await ensureStore();
+    return s.set("budget", budget);
+  },
 };
 
 export default storeService;

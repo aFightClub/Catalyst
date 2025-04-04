@@ -100,50 +100,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   closeTab,
   setEditName
 }) => {
-  const [version, setVersion] = useState(defaultVersion);
   const [isMinimized, setIsMinimized] = useState(false);
   
-  useEffect(() => {
-    // Try to read version.txt from multiple locations
-    const fetchVersion = async () => {
-      try {
-        // First try the root path
-        const response = await fetch('/version.txt');
-        if (response.ok) {
-          const data = await response.text();
-          setVersion(data.trim());
-          console.log('Version from /version.txt:', data.trim());
-          return;
-        }
-        
-        // Try relative path
-        const fallbackResponse = await fetch('./version.txt');
-        if (fallbackResponse.ok) {
-          const data = await fallbackResponse.text();
-          setVersion(data.trim());
-          console.log('Version from ./version.txt:', data.trim());
-          return;
-        }
-        
-        // Try src folder path for development
-        const srcResponse = await fetch('./src/version.txt');
-        if (srcResponse.ok) {
-          const data = await srcResponse.text();
-          setVersion(data.trim());
-          console.log('Version from src/version.txt:', data.trim());
-          return;
-        }
-        
-        // If we get here, we couldn't find the file
-        console.log('Using default version:', defaultVersion);
-      } catch (error) {
-        console.error('Error fetching version.txt:', error);
-        console.log('Using default version:', defaultVersion);
-      }
-    };
-    
-    fetchVersion();
-  }, []);
 
   return (
     <aside 
@@ -201,7 +159,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             <FiHome className="w-6 h-6" />
             <div className="flex flex-col items-start">
               <span>Catalyst</span>
-              <span className="text-xs opacity-70">v{version}</span>
             </div>
           </button>
         )}
