@@ -2,6 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FiSend, FiX, FiList, FiCheck, FiClock, FiCalendar, FiMessageSquare } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 
+// Helper function for unique IDs
+const generateUniqueId = (prefix: string = 'msg') => {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+};
+
 interface Goal {
   id: string;
   title: string;
@@ -56,11 +61,43 @@ interface Message {
   sender: 'user' | 'gatekeeper';
   text: string;
   timestamp: Date;
+  actionsPerformed?: ActionDetail[];
 }
 
 interface FunctionCall {
   name: string;
   arguments: Record<string, any>;
+}
+
+// Define the ActionDetail interface
+interface ActionDetail {
+  type: 'task' | 'event' | 'goal';
+  action: string; // e.g., 'created', 'updated', 'deleted', 'completed'
+  details: string; // e.g., Task title, Event title, Status change
+}
+
+// Define the ProcessedResponse interface (matching AI output structure)
+interface ProcessedResponse {
+  isCompleted: boolean;
+  newCurrentState: string | null;
+  tasks: Array<{
+    action: "create" | "complete" | "update";
+    title?: string;
+    taskId?: string;
+    newStatus?: "backlog" | "doing" | "done";
+  }>;
+  calendarEvents: Array<{
+    action: "create" | "update" | "delete";
+    eventId?: string;
+    title?: string;
+    date?: string;
+    time?: string;
+    type?: "event" | "milestone";
+    isRecurring?: boolean;
+    recurrenceType?: "daily" | "weekly" | "monthly";
+    recurrenceEndDate?: string;
+  }>;
+  reply: string;
 }
 
 // Add UserContext interface
@@ -257,16 +294,18 @@ const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdate
               // Pass loaded tasks/events to generateInitialAiMessage
               console.log("[API Call Point] History + Scheduled: Calling generateInitialAiMessage...");
               const checkinMessageText = await generateInitialAiMessage(loadedTasks, loadedEvents);
+              const uniqueFollowupId = generateUniqueId('followup');
               setMessages(prev => [
                 ...prev,
-                { id: Date.now().toString() + '-followup', sender: 'gatekeeper', text: checkinMessageText, timestamp: new Date() }
+                { id: uniqueFollowupId, sender: 'gatekeeper', text: checkinMessageText, timestamp: new Date() }
               ]);
               console.log("GatekeeperChat: Follow-up message added.");
             } catch (genError) {
               console.error("GatekeeperChat: Error generating scheduled follow-up message:", genError);
+              const uniqueErrorId = generateUniqueId('followup-error');
               setMessages(prev => [
                 ...prev,
-                { id: Date.now().toString() + '-followup-error', sender: 'gatekeeper', text: "Just checking in! How are things progressing?", timestamp: new Date() }
+                { id: uniqueErrorId, sender: 'gatekeeper', text: "Just checking in! How are things progressing?", timestamp: new Date() }
               ]);
             }
           } else {
@@ -281,15 +320,17 @@ const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdate
             // Pass loaded tasks/events to generateInitialAiMessage
             console.log("[API Call Point] No History: Calling generateInitialAiMessage...");
             const initialMessageText = await generateInitialAiMessage(loadedTasks, loadedEvents);
+            const uniqueId = generateUniqueId('initial');
             setMessages([
-              { id: Date.now().toString(), sender: 'gatekeeper', text: initialMessageText, timestamp: new Date() }
+              { id: uniqueId, sender: 'gatekeeper', text: initialMessageText, timestamp: new Date() }
             ]);
             console.log("GatekeeperChat: Initial message set.");
           } catch (genError) {
             console.error('GatekeeperChat: Error generating initial AI message:', genError);
             const staticWelcome = generateWelcomeMessage(goal, loadedTasks, loadedEvents); // Use loaded tasks/events
+            const uniqueErrorId = generateUniqueId('initial-error');
             setMessages([
-              { id: Date.now().toString() + '-error', sender: 'gatekeeper', text: staticWelcome, timestamp: new Date() }
+              { id: uniqueErrorId, sender: 'gatekeeper', text: staticWelcome, timestamp: new Date() }
             ]);
           }
         }
@@ -298,8 +339,9 @@ const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdate
         // Fallback for major errors during loading sequence
         console.error('GatekeeperChat: Error during chat initialization:', error);
         const staticWelcome = generateWelcomeMessage(goal, [], []); // Use empty arrays on major error
+        const uniqueErrorId = generateUniqueId('initial-error');
         setMessages([
-          { id: Date.now().toString() + '-error', sender: 'gatekeeper', text: staticWelcome, timestamp: new Date() }
+          { id: uniqueErrorId, sender: 'gatekeeper', text: staticWelcome, timestamp: new Date() }
         ]);
       } finally {
         // Ensure loading is turned off after all initialization steps
@@ -412,7 +454,7 @@ ${userContext?.voice ? `User's Preferred Style: ${userContext.voice}` : ''}
 
 ${goal.projectId ? `Project: ${projects.find(p => p.id === goal.projectId)?.name || 'Unknown'}` : ''}
 ${currentRelatedTasks.length > 0 ?
-  `Related Tasks (${currentRelatedTasks.length}):\n${currentRelatedTasks.map((task, i) => `${i+1}. ${task.title} (Status: ${task.status})`).join('\n')}`
+  `Related Tasks (${currentRelatedTasks.length}):\n${currentRelatedTasks.map((task, i) => `${i+1}. Title: "${task.title}", Status: ${task.status}, ID: ${task.id}`).join('\n')}`
   : 'No related tasks.'}
 ${currentRelatedEvents.length > 0 ?
   `Related Events (${currentRelatedEvents.length}):\n${currentRelatedEvents.map((event, i) => `${i+1}. ${event.title} (${new Date(event.date).toLocaleDateString()}${event.time ? ' at ' + event.time : ''})`).join('\n')}`
@@ -426,7 +468,9 @@ Generate a concise, engaging opening message to check in with the user.
 - Keep the tone generally encouraging but adjust urgency based on the deadline (e.g., more direct if the deadline is close or passed).
 - Maintain the user's preferred communication style if provided.
 - Do NOT ask if they want help setting up tasks/events in this initial message.
-- Respond ONLY with the text for the chat message, nothing else.`;
+- Respond ONLY with the text for the chat message, nothing else.
+
+It's currently ${new Date().toLocaleTimeString()}.`;
 
     try {
       console.log("GatekeeperChat: Generating initial AI message...");
@@ -474,7 +518,7 @@ Generate a concise, engaging opening message to check in with the user.
     
     // Add user message
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUniqueId('user'),
       sender: 'user',
       text: inputMessage,
       timestamp: new Date()
@@ -487,13 +531,15 @@ Generate a concise, engaging opening message to check in with the user.
     try {
       // Process the message with OpenAI to determine appropriate response
       const gatekeeperResponse = await processUserResponse(userMessage.text);
+      console.log("GatekeeperChat: Response from processUserResponse:", gatekeeperResponse); // Log response
       
       // Add gatekeeper response
       setMessages(prev => [...prev, {
-        id: Date.now().toString(),
+        id: generateUniqueId('gatekeeper'),
         sender: 'gatekeeper',
         text: gatekeeperResponse.reply || "Got it! Processing your update.",
-        timestamp: new Date()
+        timestamp: new Date(),
+        actionsPerformed: gatekeeperResponse.actions
       }]);
       
       // Update goal if needed
@@ -501,6 +547,7 @@ Generate a concise, engaging opening message to check in with the user.
       
       // Reload tasks if they were modified
       if (gatekeeperResponse.tasksModified) {
+        console.log("GatekeeperChat: tasksModified is true, reloading tasks..."); // Log task reload trigger
         const updatedTasks = await storeService.getTasks();
         if (Array.isArray(updatedTasks)) {
           setTasks(updatedTasks);
@@ -537,7 +584,7 @@ Generate a concise, engaging opening message to check in with the user.
       
       // Add error response from gatekeeper
       setMessages(prev => [...prev, {
-        id: Date.now().toString(),
+        id: generateUniqueId('gatekeeper-error'),
         sender: 'gatekeeper',
         text: "I'm sorry, I had trouble processing your response. Can you try again?",
         timestamp: new Date()
@@ -563,6 +610,7 @@ Generate a concise, engaging opening message to check in with the user.
       
       const updatedTasks = [...tasks, newTask];
       await storeService.saveTasks(updatedTasks);
+      setTasks(updatedTasks); // Update component state
       return true;
     } catch (error) {
       console.error('Error creating task:', error);
@@ -570,27 +618,32 @@ Generate a concise, engaging opening message to check in with the user.
     }
   };
   
-  const updateTaskStatus = async (taskId: string, newStatus: TaskStatus): Promise<boolean> => {
+  const updateTaskStatus = async (taskId: string, newStatus: TaskStatus): Promise<Task | null> => {
+    let updatedTask: Task | null = null;
     try {
       const updatedTasks = tasks.map(task => {
         if (task.id === taskId) {
           // Update completed state based on status
           const completed = newStatus === TaskStatus.DONE;
-          return { ...task, status: newStatus, completed };
+          updatedTask = { ...task, status: newStatus, completed }; // Store the updated task
+          return updatedTask;
         }
         return task;
       });
       
       await storeService.saveTasks(updatedTasks);
-      return true;
+      setTasks(updatedTasks); // Update component state
+      console.log("updateTaskStatus returning:", updatedTask); // Add log before returning
+      return updatedTask; // Return the updated task object
     } catch (error) {
       console.error('Error updating task status:', error);
-      return false;
+      return null; // Return null on error
     }
   };
   
   const completeTask = async (taskId: string): Promise<boolean> => {
-    return updateTaskStatus(taskId, TaskStatus.DONE);
+    const result = await updateTaskStatus(taskId, TaskStatus.DONE);
+    return !!result; // Return true if updateTaskStatus returned a task object
   };
 
   // Calendar event management functions
@@ -677,6 +730,7 @@ Generate a concise, engaging opening message to check in with the user.
     updates: Partial<Goal>;
     tasksModified: boolean;
     eventsModified: boolean;
+    actions: ActionDetail[];
   }> => {
     // Ensure we have a working API key by checking localStorage directly if provided key is missing
     let workingApiKey = apiKey;
@@ -696,6 +750,7 @@ Generate a concise, engaging opening message to check in with the user.
       // Create system message that instructs the AI on how to process the response
       const systemMessage = `You are an AI assistant acting as an Accountability Gatekeeper.
       You're checking in on the user's progress for their goal: "${goal.title}".
+      Today's date is ${new Date().toLocaleDateString()}.
       
       ${userContext?.name ? `The user's name is ${userContext.name}.` : ''}
       ${userContext?.company ? `They work at ${userContext.company}.` : ''}
@@ -713,17 +768,17 @@ Generate a concise, engaging opening message to check in with the user.
       
       ${goal.projectId ? `This goal is associated with the project "${projects.find(p => p.id === goal.projectId)?.name || 'Unknown'}"` : ''}
       
-      ${relatedTasks.length > 0 ? 
-        `There are ${relatedTasks.length} tasks related to this goal:
-        ${relatedTasks.map((task, i) => `${i+1}. ${task.title} (Status: ${task.status})`).join('\n')}` 
-        : 'There are no tasks associated with this goal yet.'}
+      ${relatedTasks.length > 0 ?
+        `There are ${relatedTasks.length} active tasks related to this goal (tasks that are not 'done'):
+        ${relatedTasks.map((task, i) => `${i+1}. Title: "${task.title}", Status: ${task.status}, ID: ${task.id}`).join('\n')}`
+        : 'There are no active tasks associated with this goal yet.'}
       
-      ${relatedEvents.length > 0 ? 
+      ${relatedEvents.length > 0 ?
         `There are ${relatedEvents.length} calendar events related to this goal:
         ${relatedEvents.map((event, i) => {
           const eventDate = new Date(event.date);
-          return `${i+1}. ${event.title} (${eventDate.toLocaleDateString()}${event.time ? ' at ' + event.time : ''})`;
-        }).join('\n')}` 
+          return `${i+1}. Title: "${event.title}", Date: ${eventDate.toLocaleDateString()}${event.time ? ' at ' + event.time : ''}, Type: ${event.type}, ID: ${event.id}`;
+        }).join('\n')}`
         : 'There are no calendar events associated with this goal yet.'}
       
       ${userContext?.additionalInfo ? `Additional context about the user: ${userContext.additionalInfo}` : ''}
@@ -741,13 +796,13 @@ Generate a concise, engaging opening message to check in with the user.
       
       TASK ACTIONS:
       - Create a new task for this goal project
-      - Mark an existing task as complete
-      - Update a task status to "doing" to indicate it's in progress
+      - Mark an existing task as complete (Use the actual task ID)
+      - Update a task status to "doing" to indicate it's in progress (Use the actual task ID)
       
       CALENDAR ACTIONS:
-      - Create a new calendar event/reminder related to this goal
-      - Update an existing calendar event/reminder
-      - Delete a calendar event/reminder
+      - Create a new calendar event/reminder related to this goal (Assume the current year, ${new Date().getFullYear()}, unless specified otherwise by the user)
+      - Update an existing calendar event/reminder (Use the actual event ID)
+      - Delete a calendar event/reminder (Use the actual event ID)
       
       Format your response as a JSON object with these fields:
       {
@@ -757,14 +812,14 @@ Generate a concise, engaging opening message to check in with the user.
           {
             "action": "create" | "complete" | "update",
             "title": "string (only for create action)",
-            "taskId": "string (only for complete or update actions)",
+            "taskId": "string (MUST be the actual ID from the list above for complete or update actions)",
             "newStatus": "backlog" | "doing" | "done" (only for update action)"
           }
         ],
         "calendarEvents": [
           {
             "action": "create" | "update" | "delete",
-            "eventId": "string (only for update or delete actions)",
+            "eventId": "string (MUST be the actual ID from the list above for update or delete actions)",
             "title": "string (for create or update actions)",
             "date": "YYYY-MM-DD (for create or update actions)",
             "time": "HH:MM (optional, for create or update actions)",
@@ -803,9 +858,10 @@ Generate a concise, engaging opening message to check in with the user.
       }
       
       const data = await response.json();
-      const processedResponse = JSON.parse(data.choices[0].message.content);
+      const processedResponse: ProcessedResponse = JSON.parse(data.choices[0].message.content);
+      console.log("GatekeeperChat: Processed AI Response:", processedResponse); // Log raw response
       
-      // Prepare updates for the goal
+      // Prepare updates for the goal and initialize actions array
       const updates: Partial<Goal> = {
         lastChecked: new Date().toISOString()
       };
@@ -842,23 +898,34 @@ Generate a concise, engaging opening message to check in with the user.
       
       // Process task updates
       let tasksModified = false;
+      const actions: ActionDetail[] = [];
       if (processedResponse.tasks && Array.isArray(processedResponse.tasks) && goal.projectId) {
         for (const taskAction of processedResponse.tasks) {
           if (taskAction.action === 'create' && taskAction.title) {
             const success = await createTask(taskAction.title);
             tasksModified = tasksModified || success;
+            if (success) {
+              actions.push({ type: 'task', action: 'created', details: `Task "${taskAction.title}" created` });
+            }
           } 
           else if (taskAction.action === 'complete' && taskAction.taskId) {
             const success = await completeTask(taskAction.taskId);
             tasksModified = tasksModified || success;
+            if (success) {
+              actions.push({ type: 'task', action: 'completed', details: `Task "${taskAction.taskId}" marked as completed` });
+            }
           } 
           else if (taskAction.action === 'update' && taskAction.taskId && taskAction.newStatus) {
-            const status = 
+            const status =
               taskAction.newStatus === 'backlog' ? TaskStatus.BACKLOG :
               taskAction.newStatus === 'doing' ? TaskStatus.DOING :
               TaskStatus.DONE;
-            const success = await updateTaskStatus(taskAction.taskId, status);
-            tasksModified = tasksModified || success;
+            const updatedTaskResult = await updateTaskStatus(taskAction.taskId, status);
+            console.log(`GatekeeperChat: Task update attempt - ID: ${taskAction.taskId}, Status: ${status}, Success: ${!!updatedTaskResult}`); // Log update attempt
+            if (updatedTaskResult) {
+              actions.push({ type: 'task', action: 'updated', details: `Task "${updatedTaskResult.title}" status changed to: ${status}` });
+              tasksModified = true; // Mark as modified if update was successful
+            }
           }
         }
       }
@@ -878,6 +945,9 @@ Generate a concise, engaging opening message to check in with the user.
               eventAction.recurrenceEndDate
             );
             eventsModified = eventsModified || success;
+            if (success) {
+              actions.push({ type: 'event', action: 'created', details: `Event "${eventAction.title}" created` });
+            }
           } 
           else if (eventAction.action === 'update' && eventAction.eventId) {
             const updates: Partial<CalendarEvent> = {};
@@ -891,19 +961,32 @@ Generate a concise, engaging opening message to check in with the user.
             
             const success = await updateCalendarEvent(eventAction.eventId, updates);
             eventsModified = eventsModified || success;
+            if (success) {
+              actions.push({ type: 'event', action: 'updated', details: `Event "${eventAction.title}" updated` });
+            }
           } 
           else if (eventAction.action === 'delete' && eventAction.eventId) {
+            // Find the event title *before* deleting it
+            const eventToDelete = calendarEvents.find(e => e.id === eventAction.eventId);
+            const eventTitle = eventToDelete ? eventToDelete.title : 'Unknown Event';
+            
             const success = await deleteCalendarEvent(eventAction.eventId);
             eventsModified = eventsModified || success;
+            if (success) {
+              actions.push({ type: 'event', action: 'deleted', details: `Event "${eventTitle}" deleted` });
+            }
           }
         }
       }
       
+      console.log("GatekeeperChat: Actions recorded:", actions); // Log recorded actions
+
       return {
         reply: processedResponse.reply,
         updates,
         tasksModified,
-        eventsModified
+        eventsModified,
+        actions
       };
     } catch (error) {
       console.error('Error in OpenAI call:', error);
@@ -975,28 +1058,42 @@ Generate a concise, engaging opening message to check in with the user.
         {activeTab === 'chat' && (
           <div className="h-full flex flex-col">
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {messages.map(message => (
                 <div
                   key={message.id}
-                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex flex-col ${message.sender === 'user' ? 'items-end' : 'items-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] p-3 rounded-lg ${
-                      message.sender === 'user'
+                    className={`max-w-[80%] p-3 rounded-lg ${ 
+                      message.sender === 'user' 
                         ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none' 
                     }`}
                   >
                     <div className="whitespace-pre-wrap">{message.text}</div>
-                    <div className={`text-xs mt-1 ${
+                    <div className={`text-xs mt-1 ${ 
                       message.sender === 'user' ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'
                     }`}>
-                      {typeof message.timestamp === 'string'
+                      {typeof message.timestamp === 'string' 
                         ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         : message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
+
+                  {/* Actions Performed Notice */}
+                  {message.sender === 'gatekeeper' && message.actionsPerformed && message.actionsPerformed.length > 0 && (
+                    <div className="mt-1 max-w-[80%] p-2 rounded-lg bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-tl-none">
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Actions taken:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        {message.actionsPerformed.map((action, index) => (
+                          <li key={index} className="text-xs text-gray-600 dark:text-gray-400">
+                            <strong className="capitalize">{action.type} {action.action}:</strong> {action.details}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ))}
               {/* Typing Indicator */}
@@ -1011,7 +1108,7 @@ Generate a concise, engaging opening message to check in with the user.
             </div>
             
             {/* Input Area */}
-            <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+            <div className="border-t border-gray-200 dark:border-gray-800 p-4">
               <div className="flex items-center space-x-2">
                 <textarea
                   className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-800 dark:text-white"
