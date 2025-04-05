@@ -521,7 +521,7 @@ const Accountability: React.FC = () => {
         endState: processedGoal.endState,
         frequency: processedGoal.frequency,
         startDate: new Date().toISOString(),
-        endDate: processedGoal.endDate,
+        endDate: new Date().toISOString(),
         isCompleted: false,
         lastChecked: new Date().toISOString(),
         projectId: selectedProjectId || undefined,
