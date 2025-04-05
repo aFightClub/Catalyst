@@ -14,6 +14,7 @@ interface Subscription {
   notes?: string;
   linkedWebsites?: string[]; // Array of website IDs
   isBusinessExpense?: boolean; // New field for business expense flag
+  favicon?: string; // Store the favicon URL
 }
 
 interface Website {
@@ -42,7 +43,8 @@ const Subscriptions: React.FC = () => {
     startDate: new Date().toISOString().split('T')[0],
     category: 'Other',
     linkedWebsites: [],
-    isBusinessExpense: false
+    isBusinessExpense: false,
+    favicon: ''
   });
   const [isAddPopupOpen, setIsAddPopupOpen] = useState(false);
   const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | null>(null);
@@ -74,6 +76,7 @@ const Subscriptions: React.FC = () => {
     websiteLinks: '',
     additionalInfo: ''
   });
+  const [isFetchingFavicon, setIsFetchingFavicon] = useState(false);
 
   // Load subscriptions from store
   useEffect(() => {
@@ -312,7 +315,8 @@ const Subscriptions: React.FC = () => {
       startDate: new Date().toISOString().split('T')[0],
       category: 'Other',
       linkedWebsites: [],
-      isBusinessExpense: false
+      isBusinessExpense: false,
+      favicon: ''
     });
   };
 
@@ -334,7 +338,8 @@ const Subscriptions: React.FC = () => {
       startDate: new Date().toISOString().split('T')[0],
       category: 'Other',
       linkedWebsites: [],
-      isBusinessExpense: false
+      isBusinessExpense: false,
+      favicon: ''
     });
     setIsAddPopupOpen(false);
   };
@@ -576,6 +581,43 @@ const Subscriptions: React.FC = () => {
       if (!isRegenerate) {
         setIsAISummaryPopupOpen(false);
       }
+    }
+  };
+
+  // Function to fetch favicon
+  const fetchFavicon = async (url: string, isEditing: boolean = false) => {
+    if (!url) return;
+    
+    try {
+      setIsFetchingFavicon(true);
+      
+      // Make sure URL has http/https prefix
+      let processedUrl = url;
+      if (!/^https?:\/\//i.test(processedUrl)) {
+        processedUrl = 'https://' + processedUrl;
+      }
+      
+      // Extract domain
+      const domain = new URL(processedUrl).hostname;
+      
+      // Use Google's favicon service
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+      
+      if (isEditing && editingSubscription) {
+        setEditingSubscription(prev => ({
+          ...prev!,
+          favicon: faviconUrl
+        }));
+      } else {
+        setNewSubscription(prev => ({
+          ...prev,
+          favicon: faviconUrl
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch favicon:", error);
+    } finally {
+      setIsFetchingFavicon(false);
     }
   };
 
@@ -848,14 +890,33 @@ const Subscriptions: React.FC = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Website URL</label>
-                <input
-                  type="text"
-                  name="url"
-                  value={newSubscription.url}
-                  onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="https://example.com"
-                />
+                <div className="flex">
+                  <input
+                    type="text"
+                    name="url"
+                    value={newSubscription.url}
+                    onChange={handleInputChange}
+                    className="w-full bg-gray-700 rounded-l px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="https://example.com"
+                  />
+                  <button
+                    onClick={() => fetchFavicon(newSubscription.url)}
+                    disabled={isFetchingFavicon || !newSubscription.url}
+                    className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-r flex items-center"
+                    title="Fetch Favicon"
+                  >
+                    {isFetchingFavicon ? (
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               
               <div>
@@ -1006,13 +1067,32 @@ const Subscriptions: React.FC = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Website URL</label>
-                <input
-                  type="text"
-                  name="url"
-                  value={editingSubscription.url}
-                  onChange={handleInputChange}
-                  className="w-full bg-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <div className="flex">
+                  <input
+                    type="text"
+                    name="url"
+                    value={editingSubscription.url}
+                    onChange={handleInputChange}
+                    className="w-full bg-gray-700 rounded-l px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    onClick={() => fetchFavicon(editingSubscription.url, true)}
+                    disabled={isFetchingFavicon || !editingSubscription.url}
+                    className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-r flex items-center"
+                    title="Fetch Favicon"
+                  >
+                    {isFetchingFavicon ? (
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               
               <div>
@@ -1186,7 +1266,20 @@ const Subscriptions: React.FC = () => {
                     <div>
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-lg font-semibold">{sub.name}</h3>
+                          <h3 className="text-lg font-semibold flex items-center">
+                            {sub.favicon && (
+                              <img 
+                                src={sub.favicon} 
+                                alt="" 
+                                className="w-4 h-4 mr-2"
+                                onError={(e) => {
+                                  // Hide broken favicon images
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }} 
+                              />
+                            )}
+                            {sub.name}
+                          </h3>
                           {sub.url && (
                             <a 
                               href={sub.url} 

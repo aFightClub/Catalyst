@@ -22,10 +22,14 @@ interface Card {
 
 interface Subscription {
   id: string;
+  name: string;
+  url: string;
   price: number;
   billingCycle: 'monthly' | 'yearly';
   category: string;
+  startDate: string;
   isBusinessExpense?: boolean;
+  favicon?: string;
 }
 
 interface Website {
@@ -44,6 +48,8 @@ interface CalendarEvent {
   isRecurring?: boolean;
   recurrenceType?: 'daily' | 'weekly' | 'monthly';
   recurrenceEndDate?: string; // ISO string, optional end date for recurring events
+  isSubscription?: boolean;
+  subscription?: Subscription;
 }
 
 interface ContentReminder {
@@ -567,7 +573,11 @@ const Dashboard: React.FC = () => {
   const getEventsForDate = (date: Date) => {
     const dateString = date.toISOString().split('T')[0];
     
-    return calendarEvents.filter(event => {
+    // First get regular calendar events
+    const regularEvents = calendarEvents.filter(event => {
+      // Skip any event that's actually a temporary subscription representation
+      if ('isSubscription' in event && event.isSubscription) return false;
+      
       // Check for direct date match
       const eventDate = new Date(event.date).toISOString().split('T')[0];
       if (eventDate === dateString) return true;
@@ -600,6 +610,36 @@ const Dashboard: React.FC = () => {
       
       return false;
     });
+    
+    // Include subscriptions that start on this date or recur monthly on this day
+    const subscriptionEvents = subscriptions.filter(sub => {
+      if (!sub.startDate) return false;
+      
+      // Make sure we're working with a proper date object for the start date
+      const startDate = new Date(sub.startDate);
+      
+      // Get just the date part for initial comparison (first occurrence)
+      const subStartDateStr = startDate.toISOString().split('T')[0];
+      
+      // First occurrence - exact date match
+      if (subStartDateStr === dateString) return true;
+      
+      // For recurring monthly billing - match the day of month
+      const currentDate = new Date(date);
+      
+      // Only show for dates after the start date
+      if (currentDate > startDate) {
+        // If same day of month (e.g., every 15th), show it
+        return currentDate.getDate() === startDate.getDate();
+      }
+      
+      return false;
+    });
+    
+    return {
+      regularEvents,
+      subscriptionEvents
+    };
   };
   
   const addEvent = () => {
@@ -870,6 +910,48 @@ const Dashboard: React.FC = () => {
     setNewReminderNotes('');
   };
 
+  // Add a function to handle subscription hover events
+  const handleSubscriptionMouseEnter = (subscription: Subscription, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = calendarRef.current?.getBoundingClientRect();
+    // Get the target element (the dot)
+    const target = e.currentTarget;
+    const targetRect = target.getBoundingClientRect();
+    
+    if (rect) {
+      // Position directly adjacent to the dot
+      const top = targetRect.top - rect.top - 5;
+      const left = targetRect.left - rect.left + targetRect.width + 5;
+      
+      setTooltipPosition({ top, left });
+      
+      // Create a fake event ID for the subscription
+      const fakeEventId = `sub-${subscription.id}`;
+      setHoveredEvent(fakeEventId);
+
+      // Get the date that was hovered (from parent cell)
+      const dateCell = target.closest('[data-date]');
+      const dateStr = dateCell?.getAttribute('data-date') || subscription.startDate;
+      
+      // Store the subscription in calendarEvents temporarily
+      const fakeEvent: CalendarEvent = {
+        id: fakeEventId,
+        title: subscription.name,
+        date: dateStr, // Use the actual date of the cell
+        type: 'event',
+        color: '#10B981', // Green
+        isSubscription: true,
+        subscription
+      };
+      
+      // Add the fake event to the events array temporarily
+      setCalendarEvents(prev => {
+        // Remove any previous fake events for this subscription
+        const filtered = prev.filter(e => e.id !== fakeEventId);
+        return [...filtered, fakeEvent];
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-gray-900 overflow-auto">
       <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center sticky top-0 z-10">
@@ -1069,11 +1151,15 @@ const Dashboard: React.FC = () => {
             {calendarDays.map((date, index) => {
               const isToday = new Date().toDateString() === date.toDateString();
               const isCurrentMonth = date.getMonth() === currentCalendarDate.getMonth();
-              const events = getEventsForDate(date);
+              const { regularEvents, subscriptionEvents } = getEventsForDate(date);
+              
+              // Format date for data attribute
+              const dateStr = date.toISOString().split('T')[0];
               
               return (
                 <div 
                   key={`day-${index}`}
+                  data-date={dateStr}
                   className={`h-9 p-1 rounded border ${
                     isToday 
                       ? 'border-blue-500 bg-blue-900 bg-opacity-20' 
@@ -1089,9 +1175,9 @@ const Dashboard: React.FC = () => {
                       {date.getDate()}
                     </span>
                     
-                    {events.length > 0 && (
+                    {(regularEvents.length > 0 || subscriptionEvents.length > 0) && (
                       <div className="flex items-center space-x-1">
-                        {events.map(event => (
+                        {regularEvents.map(event => (
                           <div 
                             key={event.id}
                             className="w-2 h-2 rounded-full cursor-pointer"
@@ -1101,6 +1187,31 @@ const Dashboard: React.FC = () => {
                             onMouseLeave={handleEventMouseLeave}
                             title={`${event.title} (${event.type})`}
                           />
+                        ))}
+                        
+                        {subscriptionEvents.map(sub => (
+                          <div 
+                            key={`sub-${sub.id}`}
+                            className={`cursor-pointer flex items-center justify-center ${sub.favicon ? '' : 'w-2 h-2 rounded-full bg-[#10B981]'}`}
+                            onClick={(e) => e.stopPropagation()} 
+                            onMouseEnter={(e) => handleSubscriptionMouseEnter(sub, e)}
+                            onMouseLeave={handleEventMouseLeave}
+                            title={`${sub.name} (subscription)`}
+                          >
+                            {sub.favicon && (
+                              <img 
+                                src={sub.favicon} 
+                                alt=""
+                                className="w-3" 
+                                onError={(e) => {
+                                  // If favicon fails to load, show a green dot instead
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  target.parentElement!.classList.add('w-2', 'h-2', 'rounded-full', 'bg-[#10B981]');
+                                }}
+                              />
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1114,12 +1225,16 @@ const Dashboard: React.FC = () => {
               const event = calendarEvents.find(e => e.id === hoveredEvent);
               if (!event) return null;
               
+              // Check if this is a subscription event
+              const isSubscription = 'isSubscription' in event && event.isSubscription;
+              const subscription = isSubscription ? (event as any).subscription as Subscription : null;
+              
               // Find project name if it's a milestone
-              const projectName = event.type === 'milestone' && event.projectId 
+              const projectName = !isSubscription && event.type === 'milestone' && event.projectId 
                 ? availableProjects.find(p => p.id === event.projectId)?.name || 'Unknown Project'
                 : null;
               
-              // Format date for display
+              // Format date for display - ensure we're displaying the correct date
               const eventDate = new Date(event.date);
               const formattedDate = eventDate.toLocaleDateString('en-US', { 
                 weekday: 'short', 
@@ -1130,7 +1245,7 @@ const Dashboard: React.FC = () => {
               
               // Format recurrence info
               let recurrenceInfo = '';
-              if (event.isRecurring) {
+              if (!isSubscription && event.isRecurring) {
                 recurrenceInfo = `Repeats ${event.recurrenceType}`;
                 if (event.recurrenceEndDate) {
                   const endDate = new Date(event.recurrenceEndDate);
@@ -1140,6 +1255,8 @@ const Dashboard: React.FC = () => {
                     year: 'numeric'
                   })}`;
                 }
+              } else if (isSubscription && subscription) {
+                recurrenceInfo = 'Renews monthly';
               }
               
               return (
@@ -1151,27 +1268,58 @@ const Dashboard: React.FC = () => {
                   }}
                 >
                   <div className="flex items-center mb-2">
-                    <div 
-                      className="w-4 h-4 rounded-full mr-2" 
-                      style={{ backgroundColor: event.color }}
-                    />
+                    {isSubscription && subscription?.favicon ? (
+                      <img 
+                        src={subscription.favicon} 
+                        alt=""
+                        className="w-4 h-4 mr-2" 
+                        onError={(e) => {
+                          // If favicon fails to load, show a green dot instead
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div 
+                        className="w-4 h-4 rounded-full mr-2" 
+                        style={{ backgroundColor: isSubscription ? '#10B981' : event.color }}
+                      />
+                    )}
                     <span className="font-semibold text-base">{event.title}</span>
                   </div>
                   <div className="text-gray-400 ml-6 mb-2 text-sm">
-                    {event.type === 'milestone' ? 'Milestone' : 'Event'}
+                    {isSubscription ? 'Subscription' : event.type === 'milestone' ? 'Milestone' : 'Event'}
                   </div>
                   <div className="flex items-center text-gray-300 mt-3 text-sm">
                     <FiCalendar className="mr-2 text-gray-500 flex-shrink-0" size={16} />
                     <div className="flex flex-col">
                       <span>{formattedDate}</span>
-                      {event.time && <span className="text-gray-400">{event.time}</span>}
-                      {event.isRecurring && <span className="text-gray-400 italic">{recurrenceInfo}</span>}
+                      {!isSubscription && event.time && <span className="text-gray-400">{event.time}</span>}
+                      {recurrenceInfo && <span className="text-gray-400 italic">{recurrenceInfo}</span>}
+                      {isSubscription && subscription && (
+                        <span className="text-gray-400">
+                          ${subscription.price}/{subscription.billingCycle === 'monthly' ? 'mo' : 'yr'}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {projectName && (
                     <div className="flex items-center text-gray-300 mt-2 text-sm">
                       <FiFolder className="mr-2 text-gray-500 flex-shrink-0" size={16} />
                       {projectName}
+                    </div>
+                  )}
+                  {isSubscription && subscription?.url && (
+                    <div className="mt-2 text-gray-300 text-sm">
+                      <a 
+                        href={subscription.url}
+                        className="text-indigo-400 hover:underline flex items-center"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <FiExternalLink className="mr-1" size={14} />
+                        Visit website
+                      </a>
                     </div>
                   )}
                 </div>
