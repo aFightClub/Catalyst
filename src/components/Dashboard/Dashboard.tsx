@@ -25,11 +25,12 @@ interface Subscription {
   price: number;
   billingCycle: 'monthly' | 'yearly';
   category: string;
+  isBusinessExpense?: boolean;
 }
 
 interface Website {
   id: string;
-  status: 'active' | 'idea' | 'archived';
+  status: 'active' | 'idea' | 'domains' | 'archived';
 }
 
 interface CalendarEvent {
@@ -67,6 +68,7 @@ const Dashboard: React.FC = () => {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [websites, setWebsites] = useState<Website[]>([]);
+  const [monthlyBudget, setMonthlyBudget] = useState<number>(0);
   
   // Calendar state
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -133,7 +135,18 @@ const Dashboard: React.FC = () => {
         
         const storedWebsites = await storeService.getWebsites();
         if (storedWebsites && Array.isArray(storedWebsites)) {
-          setWebsites(storedWebsites);
+          // Ensure status exists for older data if needed
+          const updatedWebsites = storedWebsites.map(site => ({
+            ...site,
+            status: site.status || 'active' // Default to active if status is missing
+          }));
+          setWebsites(updatedWebsites);
+        }
+        
+        // Load budget
+        const storedBudget = await storeService.getBudget();
+        if (storedBudget && !isNaN(parseFloat(storedBudget))) {
+          setMonthlyBudget(parseFloat(storedBudget));
         }
         
         // Load calendar events
@@ -275,24 +288,46 @@ const Dashboard: React.FC = () => {
 
   // Calculate subscription costs
   const calculateSubscriptionCosts = () => {
-    let monthlyCost = 0;
-    let yearlyCost = 0;
-    
+    let personalMonthlyCost = 0;
+    let personalYearlyCost = 0;
+    let businessMonthlyCost = 0;
+    let businessYearlyCost = 0;
+    let totalCost = 0;
+
     subscriptions.forEach(sub => {
       const price = parseFloat(sub.price.toString());
+      let currentMonthlyCost = 0;
+      let currentYearlyCost = 0;
+
       if (sub.billingCycle === 'monthly') {
-        monthlyCost += price;
-        yearlyCost += price * 12;
+        currentMonthlyCost = price;
+        currentYearlyCost = price * 12;
       } else {
-        monthlyCost += price / 12;
-        yearlyCost += price;
+        currentMonthlyCost = price / 12;
+        currentYearlyCost = price;
+      }
+      
+      totalCost += currentMonthlyCost; // Total including business
+
+      if (sub.isBusinessExpense) {
+        businessMonthlyCost += currentMonthlyCost;
+        businessYearlyCost += currentYearlyCost;
+      } else {
+        personalMonthlyCost += currentMonthlyCost;
+        personalYearlyCost += currentYearlyCost;
       }
     });
     
+    const isOverBudget = monthlyBudget > 0 && personalMonthlyCost > monthlyBudget;
+    
     return {
-      monthlyCost,
-      yearlyCost,
-      total: subscriptions.length
+      personalMonthlyCost,
+      personalYearlyCost,
+      businessMonthlyCost,
+      businessYearlyCost,
+      totalSubscriptions: subscriptions.length,
+      isOverBudget,
+      budgetDifference: isOverBudget ? personalMonthlyCost - monthlyBudget : 0,
     };
   };
   
@@ -300,11 +335,13 @@ const Dashboard: React.FC = () => {
   const getWebsiteStats = () => {
     const activeCount = websites.filter(site => site.status === 'active').length;
     const ideaCount = websites.filter(site => site.status === 'idea').length;
+    const domainCount = websites.filter(site => site.status === 'domains').length;
     const archivedCount = websites.filter(site => site.status === 'archived').length;
     
     return {
       active: activeCount,
       ideas: ideaCount,
+      domains: domainCount,
       archived: archivedCount,
       total: websites.length
     };
@@ -665,7 +702,15 @@ const Dashboard: React.FC = () => {
     setHoveredEvent(null);
   };
 
-  const { monthlyCost, yearlyCost, total: totalSubscriptions } = calculateSubscriptionCosts();
+  const { 
+    personalMonthlyCost, 
+    personalYearlyCost, 
+    businessMonthlyCost, 
+    businessYearlyCost, 
+    totalSubscriptions,
+    isOverBudget,
+    budgetDifference 
+  } = calculateSubscriptionCosts();
   const websiteStats = getWebsiteStats();
 
   // Load content reminders
@@ -853,20 +898,36 @@ const Dashboard: React.FC = () => {
               <FiDollarSign className="text-green-500 mr-2" />
               <h3 className="text-white font-medium">Subscriptions</h3>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-gray-400 text-sm">Monthly</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(monthlyCost)}</p>
+                <p className={`text-white text-lg font-bold ${isOverBudget ? 'text-red-500' : ''}`}>
+                  {formatCurrency(personalMonthlyCost)}
+                </p>
               </div>
               <div>
                 <p className="text-gray-400 text-sm">Yearly</p>
-                <p className="text-white text-xl font-bold">{formatCurrency(yearlyCost)}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-400 text-sm">Total Subscriptions</p>
-                <p className="text-white text-xl font-bold">{totalSubscriptions}</p>
+                <p className="text-white text-lg font-bold">{formatCurrency(personalYearlyCost)}</p>
               </div>
             </div>
+             <div className="mt-2 pt-2 border-t border-gray-700 text-sm">
+               {monthlyBudget > 0 && (
+                 <p className={`text-gray-400 ${isOverBudget ? 'text-red-500' : ''}`}>
+                   Budget: {formatCurrency(monthlyBudget)}/mo
+                   {isOverBudget && (
+                     <span className="text-xs text-red-400 ml-1">
+                       (+{formatCurrency(budgetDifference)})
+                     </span>
+                   )}
+                 </p>
+               )}
+               {businessMonthlyCost > 0 && (
+                  <p className={`text-blue-400 ${monthlyBudget > 0 ? 'mt-1' : ''}`}>
+                    + Business: {formatCurrency(businessMonthlyCost)}/mo
+                  </p>
+               )}
+               <p className={`text-gray-400 ${monthlyBudget > 0 || businessMonthlyCost > 0 ? 'mt-1' : ''}`}>Total: {totalSubscriptions} subscriptions</p>
+             </div>
           </div>
           
           {/* Website Stats */}
@@ -875,20 +936,25 @@ const Dashboard: React.FC = () => {
               <FiGlobe className="text-blue-500 mr-2" />
               <h3 className="text-white font-medium">Websites</h3>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-gray-400 text-sm">Active</p>
                 <p className="text-white text-xl font-bold">{websiteStats.active}</p>
               </div>
               <div>
-                <p className="text-gray-400 text-sm">Ideas</p>
+                <p className="text-gray-400 text-sm">Side Ideas</p>
                 <p className="text-white text-xl font-bold">{websiteStats.ideas}</p>
               </div>
-              <div className="col-span-2">
-                <p className="text-gray-400 text-sm">Total Websites</p>
-                <p className="text-white text-xl font-bold">{websiteStats.total}</p>
+              <div>
+                 <p className="text-gray-400 text-sm">Domains</p>
+                 <p className="text-white text-xl font-bold">{websiteStats.domains}</p>
+              </div>
+              <div>
+                 <p className="text-gray-400 text-sm">Graveyard</p>
+                 <p className="text-white text-xl font-bold">{websiteStats.archived}</p>
               </div>
             </div>
+             <p className="text-gray-400 text-sm mt-2 pt-2 border-t border-gray-700">Total Websites: {websiteStats.total}</p>
           </div>
           
           {/* Time Stats */}
