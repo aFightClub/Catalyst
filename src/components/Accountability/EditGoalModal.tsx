@@ -15,6 +15,7 @@ interface Goal {
   isCompleted: boolean;
   lastChecked: string;
   projectId?: string;
+  voice?: string;
 }
 
 interface Project {
@@ -30,32 +31,34 @@ interface EditGoalModalProps {
 }
 
 const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, projects }) => {
-  const [title, setTitle] = useState(goal.title);
-  const [desiredGoal, setDesiredGoal] = useState(goal.desiredGoal);
-  const [startState, setStartState] = useState(goal.startState);
-  const [currentState, setCurrentState] = useState(goal.currentState);
-  const [endState, setEndState] = useState(goal.endState);
-  const [frequency, setFrequency] = useState(goal.frequency);
-  const [endDate, setEndDate] = useState(goal.endDate.split('T')[0]);
-  const [projectId, setProjectId] = useState(goal.projectId || '');
+  const [localTitle, setLocalTitle] = useState(goal.title);
+  const [localDesiredGoal, setLocalDesiredGoal] = useState(goal.desiredGoal);
+  const [localStartState, setLocalStartState] = useState(goal.startState);
+  const [localCurrentState, setLocalCurrentState] = useState(goal.currentState);
+  const [localEndState, setLocalEndState] = useState(goal.endState);
+  const [localFrequency, setLocalFrequency] = useState<Goal['frequency']>(goal.frequency);
+  const [localEndDate, setLocalEndDate] = useState(goal.endDate.split('T')[0]);
+  const [localProjectId, setLocalProjectId] = useState(goal.projectId || '');
+  const [localVoice, setLocalVoice] = useState(goal.voice || '');
 
   const handleSave = () => {
     // Validate all fields
-    if (!title.trim() || !desiredGoal.trim() || !startState.trim() || 
-        !currentState.trim() || !endState.trim() || !endDate) {
+    if (!localTitle.trim() || !localDesiredGoal.trim() || !localStartState.trim() || 
+        !localCurrentState.trim() || !localEndState.trim() || !localEndDate) {
       alert('Please fill out all required fields');
       return;
     }
 
     const updates: Partial<Goal> = {
-      title: title.trim(),
-      desiredGoal: desiredGoal.trim(),
-      startState: startState.trim(),
-      currentState: currentState.trim(),
-      endState: endState.trim(),
-      frequency,
-      projectId: projectId || undefined,
-      endDate: new Date(endDate).toISOString(),
+      title: localTitle.trim(),
+      desiredGoal: localDesiredGoal.trim(),
+      startState: localStartState.trim(),
+      currentState: localCurrentState.trim(),
+      endState: localEndState.trim(),
+      frequency: localFrequency,
+      projectId: localProjectId || undefined,
+      endDate: new Date(localEndDate).toISOString(),
+      voice: localVoice.trim() || undefined
     };
 
     onSave(goal.id, updates);
@@ -85,8 +88,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
             <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Title</label>
             <input
               type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
               className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -94,8 +97,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
           <div>
             <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Desired Goal</label>
             <textarea
-              value={desiredGoal}
-              onChange={(e) => setDesiredGoal(e.target.value)}
+              value={localDesiredGoal}
+              onChange={(e) => setLocalDesiredGoal(e.target.value)}
               className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={3}
             ></textarea>
@@ -105,8 +108,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
             <div>
               <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Start State</label>
               <textarea
-                value={startState}
-                onChange={(e) => setStartState(e.target.value)}
+                value={localStartState}
+                onChange={(e) => setLocalStartState(e.target.value)}
                 className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={2}
               ></textarea>
@@ -115,8 +118,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
             <div>
               <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Current State</label>
               <textarea
-                value={currentState}
-                onChange={(e) => setCurrentState(e.target.value)}
+                value={localCurrentState}
+                onChange={(e) => setLocalCurrentState(e.target.value)}
                 className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={2}
               ></textarea>
@@ -125,8 +128,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
             <div>
               <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">End State</label>
               <textarea
-                value={endState}
-                onChange={(e) => setEndState(e.target.value)}
+                value={localEndState}
+                onChange={(e) => setLocalEndState(e.target.value)}
                 className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={2}
               ></textarea>
@@ -137,8 +140,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
             <div>
               <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Frequency</label>
               <select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value as Goal['frequency'])}
+                value={localFrequency}
+                onChange={(e) => setLocalFrequency(e.target.value as Goal['frequency'])}
                 className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="minute">Every Minute (testing)</option>
@@ -153,8 +156,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
               <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Target End Date</label>
               <input
                 type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                value={localEndDate}
+                onChange={(e) => setLocalEndDate(e.target.value)}
                 className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -162,8 +165,8 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
             <div>
               <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300">Project</label>
               <select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                value={localProjectId}
+                onChange={(e) => setLocalProjectId(e.target.value)}
                 className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">None</option>
@@ -174,6 +177,17 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, onClose, onSave, pr
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Voice/Tone (Optional)</label>
+            <textarea
+              className="mt-1 block w-full shadow-sm sm:text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white p-2"
+              rows={2}
+              value={localVoice}
+              onChange={(e) => setLocalVoice(e.target.value)}
+              placeholder="Describe the tone the AI should use..."
+            />
           </div>
         </div>
 

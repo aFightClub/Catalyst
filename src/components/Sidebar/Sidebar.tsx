@@ -3,9 +3,10 @@ import {
   FiHome, FiMessageSquare, FiEdit, FiCheckSquare, FiImage, 
   FiGlobe, FiDollarSign, FiClock, FiSettings, FiPlus, 
   FiPackage, FiTrash2, FiChrome, FiCalendar, FiChevronLeft, FiChevronRight,
-  FiTarget
+  FiTarget, FiLayers, FiEdit2, FiCheck, FiX, FiEdit3, FiZap
 } from 'react-icons/fi';
 import { Workspace, Tab } from '../../types';
+import { useAccountability } from '../../contexts/AccountabilityContext';
 
 // Hardcoded version as a last resort
 const defaultVersion = '0.0.3';
@@ -59,6 +60,37 @@ interface SidebarProps {
   setEditName: (name: string) => void;
 }
 
+// Helper function to check if a goal needs check-in
+const isGoalDueForCheckin = (goal: any) => {
+  if (goal.isCompleted) return false;
+  
+  const now = new Date();
+  const lastChecked = goal.lastChecked ? new Date(goal.lastChecked) : new Date(0);
+  
+  let timeThreshold = 0;
+  
+  switch (goal.frequency) {
+    case 'minute':
+      timeThreshold = 1 * 60 * 1000; // 1 minute
+      break;
+    case 'hourly':
+      timeThreshold = 60 * 60 * 1000; // 1 hour
+      break;
+    case 'daily':
+      timeThreshold = 24 * 60 * 60 * 1000; // 24 hours
+      break;
+    case 'weekly':
+      timeThreshold = 7 * 24 * 60 * 60 * 1000; // 7 days
+      break;
+    case 'monthly':
+      // For monthly, check if we're in a new month
+      return (lastChecked.getMonth() !== now.getMonth()) || 
+             (lastChecked.getFullYear() !== now.getFullYear());
+  }
+  
+  return (now.getTime() - lastChecked.getTime()) >= timeThreshold;
+};
+
 const Sidebar: React.FC<SidebarProps> = ({
   workspaces,
   activeWorkspaceId,
@@ -106,7 +138,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   setEditName
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
+  const { goals } = useAccountability();
   
+  // Calculate how many goals need check-ins
+  const goalsNeedingCheckin = goals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal)).length;
 
   return (
     <aside 
@@ -542,8 +577,24 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full p-2 rounded-lg ${showAccountability ? 'bg-gray-800' : ''} hover:bg-gray-300 dark:hover:bg-gray-800 flex items-center ${isMinimized ? 'justify-center' : 'justify-start pl-4 space-x-3'}`}
           style={{ '-webkit-app-region': 'no-drag' } as React.CSSProperties}
         >
-          <FiTarget className="w-6 h-6" />
-          {!isMinimized && <span>Accountability</span>}
+          <div className="relative">
+            <FiTarget className="w-6 h-6" />
+            {goalsNeedingCheckin > 0 && (
+              <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
+                {goalsNeedingCheckin}
+              </div>
+            )}
+          </div>
+          {!isMinimized && (
+            <div className="flex-1 flex items-center justify-between">
+              <span>Accountability</span>
+              {goalsNeedingCheckin > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">
+                  {goalsNeedingCheckin}
+                </span>
+              )}
+            </div>
+          )}
         </button>
 
         <button 

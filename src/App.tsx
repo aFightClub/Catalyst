@@ -1,5 +1,5 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react'
-import { FiLoader, FiCode } from 'react-icons/fi'
+import { FiLoader, FiCode, FiClock } from 'react-icons/fi'
 import { applyPluginsToWebview } from './plugins'
 import { pluginManager } from './services/pluginManager'
 import { storeService } from './services/storeService'
@@ -40,9 +40,34 @@ interface Toast {
 // Add imports for the Accountability system
 import { useAccountability } from './contexts/AccountabilityContext';
 import GatekeeperChat from './components/Accountability/GatekeeperChat';
-import GlobalGatekeeperChat from './components/Accountability/GlobalGatekeeperChat';
+// Remove GlobalGatekeeperChat import since we're going to render directly
+// import GlobalGatekeeperChat from './components/Accountability/GlobalGatekeeperChat';
 
 export default function App() {
+  // Get accountability context for direct rendering
+  const { 
+    showGatekeeperChat, 
+    activeGoal, 
+    closeGatekeeperChat, 
+    updateGoal,
+    apiKey,
+    selectedModel,
+    projects,
+    userContext,
+    goals,
+    openGatekeeperForGoal,
+    forceReloadGoals // Add this
+  } = useAccountability();
+
+  // Add effect for debug logging
+  useEffect(() => {
+    console.log("App: Mounted with GatekeeperChat rendering directly in App component");
+    
+    return () => {
+      console.log("App: Unmounting");
+    };
+  }, []);
+  
   // Initialize store and migrate data from localStorage on first render
   const isInitialized = useRef(false);
   
@@ -1507,8 +1532,8 @@ export default function App() {
                                document.querySelector('textarea[name="${action.target}"]') ||
                                document.querySelector('textarea[id="${action.target}"]') ||
                                document.querySelector('textarea[placeholder="${action.target}"]') ||
-                               document.querySelector('[contenteditable="true"][id="${action.target}"]') ||
-                               document.querySelector('[contenteditable="true"]${action.target.startsWith('.') ? action.target : ''}');
+                               document.querySelector('[contenteditable="true"][id="${action.target || ''}"]') ||
+                               document.querySelector('[contenteditable="true"]${action.target?.startsWith('.') ? action.target : ''}');
                     }
                     
                     if (element) {
@@ -1706,9 +1731,9 @@ export default function App() {
       
       console.log(`Workflow ${workflow.name} completed successfully`);
       addToast(`Workflow "${workflow.name}" completed successfully`, 'success');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error executing workflow:', error);
-      addToast(`Error executing workflow: ${error.message || 'Unknown error'}`, 'error');
+      addToast(`Error executing workflow: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
   };
   
@@ -2110,10 +2135,576 @@ export default function App() {
     });
   };
 
+  // Create global debug function to test Gatekeeper directly
+  useEffect(() => {
+    (window as any).debugOpenGatekeeper = (goalId?: string) => {
+      // Try multiple methods to get the gatekeeper working
+      console.log("DEBUG: Attempting to open gatekeeper with goal ID:", goalId);
+      
+      // First try using context directly if available
+      try {
+        // Method 1: Try to access context through devtools
+        // @ts-ignore - Ignoring TS error for debugging purposes
+        const contextProvider = document.querySelector('#root')?.__REACT_CONTEXT_DEVTOOLS?.stores?.AccountabilityContext?.context?._currentValue;
+        
+        if (contextProvider && contextProvider.openGatekeeperForGoal) {
+          console.log("DEBUG: Directly calling openGatekeeperForGoal with:", goalId);
+          if (goalId) {
+            contextProvider.openGatekeeperForGoal(goalId);
+          } else {
+            // If no goal ID, try to get a goal from the context
+            console.log("DEBUG: No goal ID provided, trying first available goal");
+            // If context has goals, use the first one
+            if (contextProvider.goals && contextProvider.goals.length > 0) {
+              const firstGoal = contextProvider.goals[0];
+              console.log(`DEBUG: Using first goal: ${firstGoal.title} (${firstGoal.id})`);
+              contextProvider.openGatekeeperForGoal(firstGoal.id);
+            } else {
+              console.log("DEBUG: Context has no goals, trying force function");
+              // Try using the force function
+              if ((window as any).debugForceShowGatekeeper) {
+                (window as any).debugForceShowGatekeeper();
+              }
+            }
+          }
+          return true;
+        } else {
+          console.log("DEBUG: Context provider function not found, trying global function");
+        }
+      } catch (error) {
+        console.error("DEBUG: Error accessing context provider:", error);
+      }
+      
+      // Method 2: Try using the global function
+      try {
+        if ((window as any).openGatekeeperForGoal) {
+          console.log("DEBUG: Using global openGatekeeperForGoal function");
+          if (goalId) {
+            (window as any).openGatekeeperForGoal(goalId);
+          } else {
+            console.log("DEBUG: No goal ID provided, trying force function");
+            if ((window as any).debugForceShowGatekeeper) {
+              (window as any).debugForceShowGatekeeper();
+            }
+          }
+          return true;
+        } else {
+          console.log("DEBUG: Global openGatekeeperForGoal function not found");
+        }
+      } catch (error) {
+        console.error("DEBUG: Error using global function:", error);
+      }
+      
+      console.error("DEBUG: Could not find any method to open gatekeeper");
+      return false;
+    };
+  }, []);
+
+  // Add effect for debug logging of GatekeeperChat
+  useEffect(() => {
+    console.log("App: GatekeeperChat status:", {
+      showGatekeeperChat,
+      hasActiveGoal: !!activeGoal,
+      goalTitle: activeGoal?.title
+    });
+    
+    // Set up a global debug function
+    (window as any).debugGatekeeperStatus = () => {
+      return {
+        showGatekeeperChat,
+        activeGoal: activeGoal ? {
+          id: activeGoal.id,
+          title: activeGoal.title,
+          isCompleted: activeGoal.isCompleted,
+          frequency: activeGoal.frequency,
+          lastChecked: activeGoal.lastChecked
+        } : null,
+        apiKey: apiKey ? "Set" : "Not set",
+        goalCount: (goals || []).length
+      };
+    };
+    
+   
+    
+    // Add a function to find and display the first goal that needs a check-in
+    (window as any).checkInFirstDueGoal = () => {
+      if (!goals || goals.length === 0) {
+        console.log("No goals available to check");
+        return false;
+      }
+      
+      const now = new Date();
+      
+      // Find the first goal that needs a check-in
+      for (const goal of goals) {
+        if (goal.isCompleted) continue;
+        
+        const lastChecked = goal.lastChecked ? new Date(goal.lastChecked) : new Date(0);
+        let checkInterval = 0;
+        
+        switch (goal.frequency) {
+          case 'minute':
+            checkInterval = 60 * 1000; // 1 minute
+            break;
+          case 'hourly':
+            checkInterval = 60 * 60 * 1000; // 1 hour
+            break;
+          case 'daily':
+            checkInterval = 24 * 60 * 60 * 1000; // 1 day
+            break;
+          case 'weekly':
+            checkInterval = 7 * 24 * 60 * 60 * 1000; // 1 week
+            break;
+          case 'monthly':
+            // Approximate a month as 30 days
+            checkInterval = 30 * 24 * 60 * 60 * 1000;
+            break;
+        }
+        
+        const timeSinceLastCheck = now.getTime() - lastChecked.getTime();
+        
+        if (timeSinceLastCheck >= checkInterval) {
+          console.log(`Goal "${goal.title}" needs a check-in (last checked ${Math.floor(timeSinceLastCheck/1000/60)} minutes ago)`);
+          console.log("Opening GatekeeperChat for this goal");
+          openGatekeeperForGoal(goal.id);
+          return true;
+        }
+      }
+      
+      console.log("No goals currently need a check-in");
+      return false;
+    };
+  }, [showGatekeeperChat, activeGoal, goals, apiKey]);
+
+  // Add effect for logging when active goal changes
+  useEffect(() => {
+    if (activeGoal) {
+      console.log("Active goal changed:", {
+        id: activeGoal.id,
+        title: activeGoal.title,
+        isCompleted: activeGoal.isCompleted,
+        showingChat: showGatekeeperChat
+      });
+    }
+  }, [activeGoal]);
+
+  // Add a function to force reload goals and trigger gatekeeper
+  const debugForceReloadAndShowGatekeeper = async () => {
+    console.log("App: Force reloading goals and showing gatekeeper");
+    
+    try {
+      // Reload goals from storage
+      if (typeof forceReloadGoals === 'function') {
+        const reloadedGoals = await forceReloadGoals();
+        console.log(`App: Reloaded ${reloadedGoals.length} goals from storage`);
+        
+        if (reloadedGoals.length > 0) {
+          // Open gatekeeper for first goal
+          const firstGoal = reloadedGoals[0];
+          console.log(`App: Opening gatekeeper for goal: ${firstGoal.title}`);
+          openGatekeeperForGoal(firstGoal.id);
+          return;
+        }
+      }
+      
+      console.error("App: No goals found after reload or forceReloadGoals not available");
+    } catch (error) {
+      console.error("App: Error forcing reload", error);
+    }
+  };
+
+  // Debug logging for GatekeeperChat render condition
+  {(() => {
+    console.log("App: GatekeeperChat render condition:", {
+      showGatekeeperChat,
+      hasActiveGoal: !!activeGoal,
+      goalTitle: activeGoal?.title,
+      goalId: activeGoal?.id,
+      goalCount: goals?.length || 0,
+      contextInitialized: !!forceReloadGoals // Check if context is initialized
+    });
+    
+    // If goals are empty but we have the context functions, try to force load
+    if (goals?.length === 0 && typeof forceReloadGoals === 'function') {
+      console.log("App: No goals in context but forceReloadGoals available. Triggering reload...");
+      forceReloadGoals().then(loadedGoals => {
+        console.log(`App: Force reloaded ${loadedGoals.length} goals`);
+      });
+    }
+    
+    return null;
+  })()}
+
+  // Add a useEffect to directly check localStorage for goals if context fails
+  useEffect(() => {
+    if (goals?.length === 0 && typeof forceReloadGoals === 'function') {
+      console.log("App: Goals context empty, attempting to load directly from localStorage");
+      
+      // Try direct localStorage access
+      const STORAGE_KEY = 'accountability_goals';
+      const savedGoals = localStorage.getItem(STORAGE_KEY);
+      
+      if (savedGoals) {
+        try {
+          const parsedGoals = JSON.parse(savedGoals);
+          if (Array.isArray(parsedGoals) && parsedGoals.length > 0) {
+            console.log(`App: Found ${parsedGoals.length} goals directly in localStorage. Forcing context reload.`);
+            
+            // Force context to reload goals
+            forceReloadGoals().then(reloadedGoals => {
+              console.log(`App: Force reload complete, now have ${reloadedGoals.length} goals in context`);
+            });
+          } else {
+            console.log("App: No goals found in localStorage direct check");
+          }
+        } catch (error) {
+          console.error("App: Error parsing localStorage goals", error);
+        }
+      } else {
+        console.log("App: No goals found in localStorage");
+      }
+    }
+  }, [goals?.length, forceReloadGoals]);
+
+  // Add state for direct goal management in App.tsx
+  const [directLocalGoals, setDirectLocalGoals] = useState<any[]>([]);
+  // Modify state to track goal and if it's a scheduled check-in
+  const [directActiveGoalInfo, setDirectActiveGoalInfo] = useState<{ goal: any | null, isScheduled: boolean }>({ goal: null, isScheduled: false });
+  const [directShowGatekeeper, setDirectShowGatekeeper] = useState(false);
+
+  // Load goals directly from localStorage
+  useEffect(() => {
+    console.log("App: Loading goals directly from localStorage");
+    const STORAGE_KEY = 'accountability_goals';
+    
+    try {
+      const savedGoals = localStorage.getItem(STORAGE_KEY);
+      if (savedGoals) {
+        const parsedGoals = JSON.parse(savedGoals);
+        if (Array.isArray(parsedGoals) && parsedGoals.length > 0) {
+          console.log(`App: Successfully loaded ${parsedGoals.length} goals directly from localStorage`);
+          setDirectLocalGoals(parsedGoals);
+        } else {
+          console.log("App: No goals found in localStorage or invalid format");
+        }
+      } else {
+        console.log("App: No goals found in localStorage");
+      }
+    } catch (error) {
+      console.error("App: Error loading goals from localStorage", error);
+    }
+  }, []);
+
+  // Function to directly show the gatekeeper for a specific goal
+  const directShowGatekeeperForGoal = (goalId: string, isScheduled: boolean = false) => {
+    console.log(`App: Directly showing gatekeeper for goal ID: ${goalId}, Scheduled: ${isScheduled}`);
+    
+    const goal = directLocalGoals.find(g => g.id === goalId);
+    if (goal) {
+      console.log(`App: Found goal directly: ${goal.title}`);
+      // Set both the goal and the scheduled flag
+      setDirectActiveGoalInfo({ goal: goal, isScheduled: isScheduled });
+      setDirectShowGatekeeper(true);
+    } else {
+      console.error(`App: Goal with ID ${goalId} not found in direct local goals`);
+    }
+  };
+
+  // Function to close the direct gatekeeper
+  const directCloseGatekeeper = () => {
+    console.log("App: Directly closing gatekeeper");
+    setDirectShowGatekeeper(false);
+    // Reset the goal info state
+    setDirectActiveGoalInfo({ goal: null, isScheduled: false });
+  };
+
+  // Function to update a goal directly
+  const directUpdateGoal = (goalId: string, updates: any) => {
+    console.log(`App: Directly updating goal ${goalId}`, updates);
+    
+    // Update in local state
+    setDirectLocalGoals(prevGoals => {
+      const updatedGoals = prevGoals.map(goal => 
+        goal.id === goalId ? { ...goal, ...updates } : goal
+      );
+      
+      // Save back to localStorage
+      localStorage.setItem('accountability_goals', JSON.stringify(updatedGoals));
+      
+      // Also save to store service if available
+      if (typeof storeService.saveAccountabilityGoals === 'function') {
+        storeService.saveAccountabilityGoals(updatedGoals)
+          .catch(err => console.error("Error saving updated goals to store service", err));
+      }
+      
+      return updatedGoals;
+    });
+    
+    // Update active goal if it's the one being updated
+    if (directActiveGoalInfo.goal && directActiveGoalInfo.goal.id === goalId) {
+      // Update the goal within the active goal info state
+      setDirectActiveGoalInfo(prev => ({ ...prev, goal: { ...prev.goal, ...updates } }));
+    }
+  };
+
+  // Add a button to trigger the direct gatekeeper
+  useEffect(() => {
+    // Expose a function to open the direct gatekeeper from anywhere
+    (window as any).directOpenGatekeeperForGoal = directShowGatekeeperForGoal;
+    
+    // Expose a function to show the first available goal
+    (window as any).directShowFirstGoal = () => {
+      if (directLocalGoals.length > 0) {
+        directShowGatekeeperForGoal(directLocalGoals[0].id);
+        return true;
+      }
+      return false;
+    };
+  }, [directLocalGoals]);
+
+  // Replace the GatekeeperChat rendering section
+  // ... (removed old rendering logic)
+
+  // NEW: Direct GatekeeperChat implementation - Updated to use directActiveGoalInfo
+  {directShowGatekeeper && directActiveGoalInfo.goal && directActiveGoalInfo.goal.id && directActiveGoalInfo.goal.title && (
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[99999] backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          directCloseGatekeeper();
+        }
+      }}
+    >
+      <div className="relative max-w-2xl w-full">
+        <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-t-lg font-medium shadow-lg flex items-center">
+          <FiClock className="mr-2" />
+          Goal Check-in Required
+        </div>
+        
+        <GatekeeperChat
+          // Pass the goal object
+          goal={directActiveGoalInfo.goal}
+          onClose={directCloseGatekeeper}
+          onUpdateGoal={directUpdateGoal}
+          apiKey={apiKey || localStorage.getItem('openai_api_key') || ''}
+          selectedModel={selectedModel || localStorage.getItem('openai_model') || 'gpt-4o'}
+          projects={projects} // Still pass projects from context here, assuming they might be needed eventually
+          userContext={userContext}
+          // Pass the isScheduled flag as a prop
+          isScheduledCheckin={directActiveGoalInfo.isScheduled}
+        />
+        
+        <div style={{ display: 'none' }} id="gatekeeper-chat-debug" data-goal-id={directActiveGoalInfo.goal.id}>
+          Direct gatekeeper active for goal: {directActiveGoalInfo.goal.title}
+        </div>
+      </div>
+    </div>
+  )}
+
+  // ... (keep isGoalDueForCheckin function) ...
+
+  // Add a useEffect to check for goals that need attention - Update call
+  useEffect(() => {
+    if (directLocalGoals.length === 0) return;
+    
+    console.log(`App: Checking ${directLocalGoals.length} goals for check-in needs`);
+    const goalsNeedingAttention = directLocalGoals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal));
+    
+    if (goalsNeedingAttention.length > 0) {
+      console.log(`App: Found ${goalsNeedingAttention.length} goals needing attention`);
+      if (!directShowGatekeeper) {
+        const goalToShow = goalsNeedingAttention[0];
+        console.log(`App: Auto-showing gatekeeper for goal: ${goalToShow.title}`);
+        // Pass true for the isScheduled flag
+        directShowGatekeeperForGoal(goalToShow.id, true);
+      }
+    }
+  }, [directLocalGoals, directShowGatekeeper]);
+
+  // Add a periodic check for goals that need attention - Update call
+  useEffect(() => {
+    if (directLocalGoals.length === 0) return;
+    
+    console.log('App: Setting up periodic goal check interval');
+    const checkGoalsInterval = setInterval(() => {
+      if (directShowGatekeeper) return;
+      
+      console.log('App: Running periodic goal check');
+      const goalsNeedingAttention = directLocalGoals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal));
+      
+      if (goalsNeedingAttention.length > 0) {
+        const goalToShow = goalsNeedingAttention[0];
+        console.log(`App: Auto-showing gatekeeper for goal: ${goalToShow.title}`);
+        // Pass true for the isScheduled flag
+        directShowGatekeeperForGoal(goalToShow.id, true);
+      }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(checkGoalsInterval);
+  }, [directLocalGoals, directShowGatekeeper]);
+
+  // Add a function to check if a goal needs attention based on frequency (Copied from Accountability.tsx)
+  const isGoalDueForCheckin = (goal: any) => {
+    if (!goal || goal.isCompleted) return false;
+    
+    const now = new Date();
+    const lastChecked = goal.lastChecked ? new Date(goal.lastChecked) : null;
+    if (!lastChecked) return true; // Never checked
+    
+    let timeThreshold = 0;
+    
+    switch (goal.frequency) {
+      case 'minute':
+        timeThreshold = 1 * 60 * 1000; // 1 minute
+        break;
+      case 'hourly':
+        timeThreshold = 60 * 60 * 1000; // 1 hour
+        break;
+      case 'daily':
+        timeThreshold = 24 * 60 * 60 * 1000; // 24 hours
+        break;
+      case 'weekly':
+        timeThreshold = 7 * 24 * 60 * 60 * 1000; // 7 days
+        break;
+      case 'monthly':
+        // For monthly, check if we're in a new month
+        return (lastChecked.getMonth() !== now.getMonth()) || 
+               (lastChecked.getFullYear() !== now.getFullYear());
+    }
+    
+    return (now.getTime() - lastChecked.getTime()) >= timeThreshold;
+  };
+
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      {/* Add GlobalGatekeeperChat at the top level so it works on all screens */}
-      <GlobalGatekeeperChat />
+      {/* Debug indicator for goals needing check-in */}
+      {process.env.NODE_ENV === 'development' && goals && goals.length > 0 && (
+        <div className="fixed bottom-4 left-4 bg-blue-900 text-white text-xs rounded-lg p-2 shadow-lg z-50">
+          <div className="hover:bg-blue-800 p-1 rounded mb-1">
+            <div>Goals: {goals.length}</div>
+            <div>Need check-in: {goals.filter(g => !g.isCompleted && ((new Date().getTime() - new Date(g.lastChecked).getTime()) >= 60 * 1000)).length}</div>
+            <div>Gatekeeper: {showGatekeeperChat ? 'Showing' : 'Hidden'}</div>
+            <div>Direct goals: {directLocalGoals.length}</div>
+          </div>
+          
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            <button 
+              onClick={() => (window as any).forceShowGatekeeperChat()}
+              className="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-center"
+            >
+              Show Any Goal
+            </button>
+            
+            <button 
+              onClick={() => (window as any).checkInFirstDueGoal()}
+              className="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-center"
+            >
+              Check-in Due Goal
+            </button>
+            
+            <button 
+              onClick={() => {
+                console.log('App: Manual check for goals that need attention');
+                
+                if (directLocalGoals.length === 0) {
+                  console.log('App: No goals available to check');
+                  return;
+                }
+                
+                // Find goals that need attention
+                const goalsNeedingAttention = directLocalGoals.filter(goal => 
+                  !goal.isCompleted && isGoalDueForCheckin(goal)
+                );
+                
+                if (goalsNeedingAttention.length > 0) {
+                  console.log(`App: Found ${goalsNeedingAttention.length} goals needing attention`);
+                  const goalToShow = goalsNeedingAttention[0];
+                  console.log(`App: Showing gatekeeper for goal: ${goalToShow.title}`);
+                  directShowGatekeeperForGoal(goalToShow.id);
+                } else {
+                  console.log('App: No goals need attention right now');
+                }
+              }}
+              className="bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-center col-span-2"
+            >
+              Check Due Goals
+            </button>
+          </div>
+        </div>
+      )}
+    
+      
+     
+      
+      {/* ORIGINAL GatekeeperChat - HIDDEN */}
+      {false && showGatekeeperChat && activeGoal && activeGoal?.id && activeGoal?.title && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[99999] backdrop-blur-sm"
+          onClick={(e) => {
+            // Close when clicking overlay (but not the chat itself)
+            if (e.target === e.currentTarget) {
+              closeGatekeeperChat();
+            }
+          }}
+        >
+          <div className="relative max-w-2xl w-full">
+            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-t-lg font-medium shadow-lg flex items-center">
+              <FiClock className="mr-2" />
+              Goal Check-in Required
+            </div>
+            
+            <GatekeeperChat
+              goal={activeGoal as any}
+              onClose={closeGatekeeperChat}
+              onUpdateGoal={updateGoal}
+              apiKey={apiKey || localStorage.getItem('openai_api_key') || ''}
+              selectedModel={selectedModel}
+              projects={projects}
+              userContext={userContext}
+            />
+            
+            <div style={{ display: 'none' }} id="gatekeeper-chat-debug" data-goal-id={activeGoal?.id}>
+              Gatekeeper active for goal: {activeGoal?.title}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* NEW: Direct GatekeeperChat implementation */}
+      {directShowGatekeeper && directActiveGoalInfo.goal && directActiveGoalInfo.goal.id && directActiveGoalInfo.goal.title && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[99999] backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              directCloseGatekeeper();
+            }
+          }}
+        >
+          <div className="relative max-w-2xl w-full">
+            <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-t-lg font-medium shadow-lg flex items-center">
+              <FiClock className="mr-2" />
+              Goal Check-in Required
+            </div>
+            
+            <GatekeeperChat
+              // Pass the goal object
+              goal={directActiveGoalInfo.goal}
+              onClose={directCloseGatekeeper}
+              onUpdateGoal={directUpdateGoal}
+              apiKey={apiKey || localStorage.getItem('openai_api_key') || ''}
+              selectedModel={selectedModel || localStorage.getItem('openai_model') || 'gpt-4o'}
+              projects={projects} // Still pass projects from context here, assuming they might be needed eventually
+              userContext={userContext}
+              // Pass the isScheduled flag as a prop
+              isScheduledCheckin={directActiveGoalInfo.isScheduled}
+            />
+            
+            <div style={{ display: 'none' }} id="gatekeeper-chat-debug" data-goal-id={directActiveGoalInfo.goal.id}>
+              Direct gatekeeper active for goal: {directActiveGoalInfo.goal.title}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Sidebar */}
       <Sidebar 
@@ -2128,6 +2719,7 @@ export default function App() {
         addWorkspace={addWorkspace}
         addTab={addTab}
         editingWorkspaceId={editingWorkspaceId}
+        // @ts-ignore - Component requires this prop
         setEditingWorkspaceId={setEditingWorkspaceId}
         editName={editName}
         setActiveTabToFirst={setActiveTabId}
@@ -2213,6 +2805,7 @@ export default function App() {
               setWorkflowModalMode={setWorkflowModalMode}
               setShowLayoutDropdown={setShowLayoutDropdown}
               showLayoutDropdown={showLayoutDropdown}
+              // @ts-ignore - Component requires this prop
               openWebviewDevTools={openWebviewDevTools}
             />
 

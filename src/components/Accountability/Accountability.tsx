@@ -18,6 +18,7 @@ interface Goal {
   isCompleted: boolean;
   lastChecked: string;
   projectId?: string;
+  voice?: string;
 }
 
 interface Project {
@@ -31,23 +32,37 @@ const STORAGE_KEYS = {
   ACCOUNTABILITY_GOALS: 'accountability_goals'
 };
 
+// Define default projects locally (copied from Tasks.tsx for direct use)
+const DEFAULT_PROJECTS_LOCAL: Project[] = [
+  { id: 'default', name: 'General' },
+  { id: 'work', name: 'Work' },
+  { id: 'personal', name: 'Personal' }
+];
+
 // Create a global variable to store the background check interval ID
 let backgroundCheckIntervalId: number | null = null;
 
 const Accountability: React.FC = () => {
   // Use the accountability context for shared state
+  const contextValue = useAccountability();
   const { 
     openGatekeeperForGoal, 
     closeGatekeeperChat: contextCloseGatekeeperChat,
     updateGoal: contextUpdateGoal,
-    apiKey,
-    selectedModel
-  } = useAccountability();
+    selectedModel,
+    forceReloadGoals,
+    userContext,
+    goals: contextGoals,
+  } = contextValue;
   
+  // Log the projects received from context on each render
+  console.log('Accountability Component Render: Full context value:', contextValue);
+
   // Remove the showGatekeeperChat state variable since it's managed by context
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showAddGoalModal, setShowAddGoalModal] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  // Remove local showGatekeeperChat state - we'll use the context version
   const [newGoalTitle, setNewGoalTitle] = useState('');
   const [newGoalDescription, setNewGoalDescription] = useState('');
   const [newGoalStartState, setNewGoalStartState] = useState('');
@@ -56,7 +71,6 @@ const Accountability: React.FC = () => {
   const [newGoalFrequency, setNewGoalFrequency] = useState<Goal['frequency']>('daily');
   const [newGoalEndDate, setNewGoalEndDate] = useState('');
   const [newGoalProjectId, setNewGoalProjectId] = useState<string>('');
-  const [projects, setProjects] = useState<Project[]>([]);
   const [newGoalPrompt, setNewGoalPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -64,19 +78,46 @@ const Accountability: React.FC = () => {
   const [activeCheckInGoal, setActiveCheckInGoal] = useState<Goal | null>(null);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  // Add a queue to track goals that need check-ins
+  const [goalCheckQueue, setGoalCheckQueue] = useState<Goal[]>([]);
+  // Flag to indicate a check-in is active
+  const [isCheckingGoal, setIsCheckingGoal] = useState(false);
+  const [localProjects, setLocalProjects] = useState<Project[]>([]);
+  const [localApiKey, setLocalApiKey] = useState<string>('');
+  const [newGoalVoice, setNewGoalVoice] = useState<string>('');
 
   // Load API key and goals from localStorage on component mount
   useEffect(() => {
-    // Load API key
-    const savedKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-    
-    // No need to set the API key locally since it's in context
+    // Load API key directly, similar to AIChat
+    const loadApiKeyDirectly = async () => {
+      let foundKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+      console.log("Accountability: Checked localStorage directly for API key:", foundKey ? "Found" : "Not found");
 
-    // Load selected model
-    const savedModel = localStorage.getItem(STORAGE_KEYS.MODEL);
-    
-    // No need to set model locally
-    
+      if (!foundKey) {
+        try {
+          const storedKeys = await storeService.getApiKeys();
+          if (storedKeys && storedKeys.openai) {
+            console.log("Accountability: Found API key in storeService");
+            foundKey = storedKeys.openai;
+            // Save to localStorage for consistency
+            localStorage.setItem(STORAGE_KEYS.API_KEY, foundKey);
+          }
+        } catch (err) {
+          console.error("Accountability: Error loading API keys from storeService", err);
+        }
+      }
+
+      if (foundKey) {
+        console.log("Accountability: Setting localApiKey state");
+        setLocalApiKey(foundKey);
+      } else {
+        console.warn("Accountability: API key not found in localStorage or storeService.");
+        setLocalApiKey(''); // Ensure it's empty if not found
+      }
+    };
+
+    loadApiKeyDirectly();
+
     // Try to load goals from storeService first, then fallback to localStorage
     const loadGoals = async () => {
       try {
@@ -119,27 +160,34 @@ const Accountability: React.FC = () => {
     
     loadGoals();
 
-    // Load projects from storeService
-    const loadProjects = async () => {
+    // Store loaded projects in local state if needed
+    // Removed this section as we now load projects directly
+    /*
+    if (projects.length > 0) {
+      setLocalProjects(projects);
+    }
+    */
+  }, []);
+
+  // NEW: Load projects directly into local state
+  useEffect(() => {
+    const loadLocalProjects = async () => {
       try {
+        console.log("Accountability: Loading projects directly via storeService...");
         const storedProjects = await storeService.getProjects();
         if (Array.isArray(storedProjects) && storedProjects.length > 0) {
-          setProjects(storedProjects.map(project => ({
-            id: project.id,
-            name: project.name
-          })));
-          if (storedProjects.length > 0) {
-            setSelectedProjectId(storedProjects[0].id);
-          }
+          console.log(`Accountability: Loaded ${storedProjects.length} projects directly.`);
+          setLocalProjects(storedProjects);
         } else {
-          console.log("No projects found");
+          console.warn("Accountability: No projects found directly, using local defaults.");
+          setLocalProjects(DEFAULT_PROJECTS_LOCAL);
         }
       } catch (error) {
-        console.error('Failed to load projects:', error);
+        console.error("Accountability: Error loading projects directly:", error);
+        setLocalProjects(DEFAULT_PROJECTS_LOCAL); // Fallback on error
       }
     };
-    
-    loadProjects();
+    loadLocalProjects();
   }, []);
 
   // Save goals to localStorage whenever they change
@@ -172,6 +220,7 @@ const Accountability: React.FC = () => {
   useEffect(() => {
     const checkGoalsForFollowUp = () => {
       const now = new Date();
+      const goalsNeedingCheckin: Goal[] = [];
       
       goals.forEach(goal => {
         if (goal.isCompleted) return;
@@ -202,17 +251,19 @@ const Accountability: React.FC = () => {
         }
         
         if (shouldCheck) {
-          // Here we would trigger the Electron window with the Gatekeeper
-          // For this demo we'll just console log, but in a real implementation
-          // we would use Electron IPC to open a new window
           console.log(`Time to check in on goal: ${goal.title}`);
-          
-          // In a real implementation with Electron, we would trigger the window:
-          // openGatekeeperWindow(goal);
-          // For now, we'll just update the lastChecked time
-          updateGoalLastChecked(goal.id);
+          goalsNeedingCheckin.push(goal);
         }
       });
+      
+      // Add goals to check queue if they're not already in it
+      if (goalsNeedingCheckin.length > 0) {
+        setGoalCheckQueue(prevQueue => {
+          const existingIds = new Set(prevQueue.map(g => g.id));
+          const newGoals = goalsNeedingCheckin.filter(g => !existingIds.has(g.id));
+          return [...prevQueue, ...newGoals];
+        });
+      }
     };
     
     // Check every minute
@@ -223,6 +274,32 @@ const Accountability: React.FC = () => {
     
     return () => clearInterval(intervalId);
   }, [goals]);
+
+  // Handle the goal check queue
+  useEffect(() => {
+    // If a check is already active or the queue is empty, do nothing
+    if (isCheckingGoal || goalCheckQueue.length === 0) return;
+    
+    // Get the next goal from the queue
+    const nextGoal = goalCheckQueue[0];
+    console.log(`Opening check-in for queued goal: ${nextGoal.title}`);
+    
+    // Mark that we're checking a goal
+    setIsCheckingGoal(true);
+    
+    // Open the GatekeeperChat for this goal
+    openGatekeeperChat(nextGoal);
+    
+    // Remove this goal from the queue
+    setGoalCheckQueue(prevQueue => prevQueue.slice(1));
+  }, [goalCheckQueue, isCheckingGoal]);
+
+  // Reset the checking flag when GatekeeperChat is closed
+  useEffect(() => {
+    if (!isCheckingGoal) {
+      setSelectedGoal(null);
+    }
+  }, [isCheckingGoal]);
 
   // Set up the background checking when the component mounts
   useEffect(() => {
@@ -404,8 +481,11 @@ const Accountability: React.FC = () => {
     
     if (!newGoalPrompt.trim()) return;
     
+    // *** DEBUG: Log API key at the time of use ***
+    console.log('Accountability handleSubmit: Checking localApiKey right before use:', localApiKey);
+    
     // Ensure we have a working API key by checking localStorage directly if context key is missing
-    let workingApiKey = apiKey;
+    let workingApiKey = localApiKey;
     if (!workingApiKey) {
       const localStorageKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
       if (localStorageKey) {
@@ -444,11 +524,13 @@ const Accountability: React.FC = () => {
         endDate: processedGoal.endDate,
         isCompleted: false,
         lastChecked: new Date().toISOString(),
-        projectId: selectedProjectId || undefined
+        projectId: selectedProjectId || undefined,
+        voice: newGoalVoice.trim() || undefined
       };
       
       setGoals(prevGoals => [...prevGoals, newGoal]);
       setNewGoalPrompt('');
+      setNewGoalVoice('');
     } catch (err) {
       console.error('Error processing goal with AI', err);
       setError('Failed to process your goal. Please try again.');
@@ -460,7 +542,7 @@ const Accountability: React.FC = () => {
 
   const processGoalWithAI = async (prompt: string, overrideApiKey?: string) => {
     // Use override API key if provided, otherwise use from context
-    const workingApiKey = overrideApiKey || apiKey;
+    const workingApiKey = overrideApiKey || localApiKey;
     
     console.log("processGoalWithAI: Using API key:", workingApiKey ? `${workingApiKey.substring(0, 5)}...` : "not set");
     
@@ -480,6 +562,7 @@ const Accountability: React.FC = () => {
       5. The end state (what success looks like)
       6. The appropriate check-in frequency (minute, hourly, daily, weekly, or monthly)
       7. A reasonable end date (in ISO string format)
+      8. Optionally, suggest a tone of voice (e.g., "encouraging", "direct", "friendly")
       
       Format your response as a JSON object with these fields: 
       { 
@@ -489,7 +572,8 @@ const Accountability: React.FC = () => {
         "currentState": "string", 
         "endState": "string", 
         "frequency": "minute|hourly|daily|weekly|monthly", 
-        "endDate": "ISO date string" 
+        "endDate": "ISO date string",
+        "suggestedVoice": "string (optional)"
       }`;
 
       // API call to OpenAI
@@ -526,7 +610,8 @@ const Accountability: React.FC = () => {
         endState: goalData.endState,
         frequency: goalData.frequency,
         startDate: new Date().toISOString(),
-        endDate: goalData.endDate
+        endDate: goalData.endDate,
+        suggestedVoice: goalData.suggestedVoice
       };
     } catch (error) {
       console.error('Error in OpenAI call:', error);
@@ -645,11 +730,66 @@ const Accountability: React.FC = () => {
   };
 
   const openGatekeeperChat = (goal: Goal) => {
-    openGatekeeperForGoal(goal.id);
+    console.log(`Opening gatekeeper chat for goal: ${goal.title} (${goal.id})`);
+    
+    // Use the direct approach which bypasses the context issues
+    if (typeof (window as any).directOpenGatekeeperForGoal === 'function') {
+      console.log(`Using direct approach to open gatekeeper for goal ID: ${goal.id}`);
+      (window as any).directOpenGatekeeperForGoal(goal.id);
+      return;
+    }
+    
+    // If direct approach is not available, fall back to context approach
+    console.log(`Falling back to context approach for goal ID: ${goal.id}`);
+    
+    // Use the context function directly instead of setting local state
+    if (openGatekeeperForGoal) {
+      console.log(`Calling context.openGatekeeperForGoal with ID: ${goal.id}`);
+      
+      // Debug log to compare local goals with context goals
+      console.log('Local component goals:', goals.length);
+      console.log('Context goals from context object:', contextGoals.length);
+      
+      // Check if goal exists in context already
+      const goalExistsInContext = contextGoals.some(g => g.id === goal.id);
+      
+      if (!goalExistsInContext) {
+        console.log('Goal not found in context, synchronizing to store first...');
+        
+        // First save all goals to ensure the context has access to them
+        const syncAndOpen = async () => {
+          try {
+            // Save all goals to store
+            console.log(`Saving ${goals.length} goals to store...`);
+            await storeService.saveAccountabilityGoals(goals);
+            
+            // Force context to reload goals
+            console.log('Forcing context to reload goals...');
+            const reloadedGoals = await forceReloadGoals();
+            console.log(`Context reloaded ${reloadedGoals.length} goals`);
+            
+            // Now try to open the gatekeeper
+            openGatekeeperForGoal(goal.id);
+          } catch (error) {
+            console.error('Error syncing goals to context:', error);
+            // Try opening anyway as a fallback
+            openGatekeeperForGoal(goal.id);
+          }
+        };
+        
+        syncAndOpen();
+      } else {
+        // Goal exists in context, proceed normally
+        console.log('Goal found in context, opening gatekeeper directly...');
+        openGatekeeperForGoal(goal.id);
+      }
+    } else {
+      console.error("openGatekeeperForGoal function not available in context!");
+    }
   };
 
   const closeGatekeeperChat = () => {
-    setActiveCheckInGoal(null);
+    setSelectedGoal(null);
     contextCloseGatekeeperChat(); // Call the context version
   };
 
@@ -669,18 +809,123 @@ const Accountability: React.FC = () => {
 
   // Check for API key when component mounts
   useEffect(() => {
-    console.log("Accountability component: API key from context:", apiKey ? `${apiKey.substring(0, 5)}...` : "not set");
+    // This useEffect can be removed or adapted if needed for other context values
+    // console.log("Accountability component: localApiKey state:", localApiKey ? `${localApiKey.substring(0, 5)}...` : "not set");
+  }, [localApiKey]); // <-- Update dependency if kept
+
+  // Add a visual indicator for goals needing check-ins
+  const isGoalDueForCheckin = (goal: Goal) => {
+    if (goal.isCompleted) return false;
     
-    // If API key is missing from context but exists in localStorage, synchronize it
-    if (!apiKey) {
-      const STORAGE_KEY = 'openai_api_key';
-      const savedKey = localStorage.getItem(STORAGE_KEY);
-      if (savedKey) {
-        console.log("Accountability: Found API key in localStorage, syncing...");
-        // This is just for logging - the context should handle the actual sync
-      }
+    const now = new Date();
+    const lastChecked = goal.lastChecked ? new Date(goal.lastChecked) : null;
+    if (!lastChecked) return true; // Never checked
+    
+    let timeThreshold = 0;
+    
+    switch (goal.frequency) {
+      case 'minute':
+        timeThreshold = 1 * 60 * 1000; // 1 minute
+        break;
+      case 'hourly':
+        timeThreshold = 60 * 60 * 1000; // 1 hour
+        break;
+      case 'daily':
+        timeThreshold = 24 * 60 * 60 * 1000; // 24 hours
+        break;
+      case 'weekly':
+        timeThreshold = 7 * 24 * 60 * 60 * 1000; // 7 days
+        break;
+      case 'monthly':
+        // For monthly, check if we're in a new month
+        return (lastChecked.getMonth() !== now.getMonth()) || 
+               (lastChecked.getFullYear() !== now.getFullYear());
     }
-  }, [apiKey]);
+    
+    return (now.getTime() - lastChecked.getTime()) >= timeThreshold;
+  };
+
+  // Add a debug function to force reload goals and try to open the gatekeeper
+  const forceReloadAndOpenGatekeeper = async () => {
+    setIsProcessing(true);
+    setError(null);
+    
+    try {
+      // First check the local component goals
+      if (goals.length > 0) {
+        console.log(`Using component goals: ${goals.length} available`);
+        
+        // First ensure the goals are synchronized to the store
+        console.log("Ensuring goals are synchronized to store...");
+        await storeService.saveAccountabilityGoals(goals);
+        
+        // Now force reload to make sure the context has them
+        console.log("Forcing reload of goals from storage...");
+        const reloadedGoals = await forceReloadGoals();
+        console.log(`Reloaded ${reloadedGoals.length} goals into context`);
+        
+        // If we have goals after reload, use the first one
+        if (reloadedGoals.length > 0) {
+          const firstGoal = reloadedGoals[0];
+          console.log(`Attempting to open gatekeeper for goal: ${firstGoal.title} (${firstGoal.id})`);
+          openGatekeeperForGoal(firstGoal.id);
+        } else if (goals.length > 0) {
+          // If no context goals but we have component goals, try using the first component goal directly
+          console.log("No goals found in context after reload, trying first component goal directly");
+          const firstComponentGoal = goals[0];
+          console.log(`Direct component goal: ${firstComponentGoal.title} (${firstComponentGoal.id})`);
+          
+          // Try to save this specific goal and then open it
+          await storeService.saveAccountabilityGoals([firstComponentGoal]);
+          await forceReloadGoals(); // Reload again to ensure context has this goal
+          openGatekeeperForGoal(firstComponentGoal.id);
+        } else {
+          console.error("No goals found in component or context after reload");
+          setError("No goals found after reload");
+        }
+      } else {
+        console.error("No goals available in component to use");
+        setError("No goals available to debug");
+      }
+    } catch (error) {
+      console.error("Error reloading goals:", error);
+      setError("Error reloading goals");
+    } finally {
+      // Set isProcessing to false when we're done, whether successful or not
+      setIsProcessing(false);
+    }
+  };
+
+  // Add this useEffect after the goals loading useEffect
+  useEffect(() => {
+    // If we have goals in the component but not in the context, synchronize them
+    if (goals.length > 0 && contextGoals.length === 0) {
+      console.log(`Accountability: Syncing ${goals.length} goals from component to context via storeService`);
+      
+      // Save to storeService to make them available to the context
+      const syncGoalsToStore = async () => {
+        try {
+          // Save to both storage mechanisms for maximum compatibility
+          localStorage.setItem(STORAGE_KEYS.ACCOUNTABILITY_GOALS, JSON.stringify(goals));
+          
+          if (typeof storeService.saveAccountabilityGoals === 'function') {
+            await storeService.saveAccountabilityGoals(goals);
+            
+            // After saving, force a reload in the context to ensure it has the goals
+            if (forceReloadGoals) {
+              console.log('Accountability: Forcing context to reload goals after sync');
+              const reloadedGoals = await forceReloadGoals();
+              console.log(`Accountability: Context reloaded ${reloadedGoals.length} goals`);
+            }
+          }
+        } catch (error) {
+          console.error('Accountability: Error syncing goals to store:', error);
+        }
+      };
+      
+      syncGoalsToStore();
+    }
+  }, [goals, contextGoals, forceReloadGoals]);
 
   return (
     <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -693,6 +938,85 @@ const Accountability: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-3xl mx-auto">
+          {/* Goals that need check-ins */}
+          {goals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal)).length > 0 && (
+            <div className="bg-red-50 dark:bg-red-900 border-l-4 border-red-500 p-4 rounded-md mb-8">
+              <h2 className="text-lg font-semibold text-red-700 dark:text-red-300 flex items-center mb-3">
+                <FiClock className="mr-2" />
+                Goals Needing Check-in
+              </h2>
+              
+              <div className="space-y-2">
+                {goals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal)).map(goal => (
+                  <div 
+                    key={`checkin-${goal.id}`} 
+                    className="bg-white dark:bg-gray-800 p-3 rounded-md flex justify-between items-center shadow-sm"
+                  >
+                    <span className="font-medium">{goal.title}</span>
+                    <button
+                      onClick={() => openGatekeeperChat(goal)}
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm flex items-center"
+                    >
+                      <FiMessageSquare className="mr-1" />
+                      Check-in Now
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Goals with upcoming deadlines */}
+          {goals.filter(goal => {
+            if (goal.isCompleted || !goal.endDate) return false;
+            const deadline = new Date(goal.endDate);
+            const now = new Date();
+            const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+            return hoursRemaining > 0 && hoursRemaining <= 48;
+          }).length > 0 && (
+            <div className="bg-yellow-50 dark:bg-yellow-900 border-l-4 border-yellow-500 p-4 rounded-md mb-8">
+              <h2 className="text-lg font-semibold text-yellow-700 dark:text-yellow-300 flex items-center mb-3">
+                <FiCalendar className="mr-2" />
+                Goals Due Soon
+              </h2>
+              
+              <div className="space-y-2">
+                {goals.filter(goal => {
+                  if (goal.isCompleted || !goal.endDate) return false;
+                  const deadline = new Date(goal.endDate);
+                  const now = new Date();
+                  const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+                  return hoursRemaining > 0 && hoursRemaining <= 48;
+                }).map(goal => {
+                  const deadline = new Date(goal.endDate);
+                  const now = new Date();
+                  const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+                  
+                  return (
+                    <div 
+                      key={`deadline-${goal.id}`} 
+                      className="bg-white dark:bg-gray-800 p-3 rounded-md flex justify-between items-center shadow-sm"
+                    >
+                      <div>
+                        <span className="font-medium">{goal.title}</span>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Due in {Math.round(hoursRemaining)} hours ({deadline.toLocaleDateString()})
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => openGatekeeperChat(goal)}
+                        className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md text-sm flex items-center"
+                      >
+                        <FiMessageSquare className="mr-1" />
+                        Update
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
           {/* Add New Goal Form */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8">
             <h2 className="text-xl font-semibold mb-4">Add New Goal</h2>
@@ -723,7 +1047,7 @@ const Accountability: React.FC = () => {
                   disabled={isSubmitting}
                 >
                   <option value="">None</option>
-                  {projects.map(project => (
+                  {localProjects.map(project => (
                     <option key={project.id} value={project.id}>
                       {project.name}
                     </option>
@@ -731,6 +1055,22 @@ const Accountability: React.FC = () => {
                 </select>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Link this goal to a project for task management
+                </p>
+              </div>
+              
+              {/* Goal Voice Input */}
+              <div className="mb-4">
+                <label className="block mb-2 font-medium">Goal Voice/Tone (Optional)</label>
+                <textarea
+                  className="w-full px-3 py-2 text-gray-800 dark:text-white bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                  value={newGoalVoice}
+                  onChange={(e) => setNewGoalVoice(e.target.value)}
+                  placeholder="Describe the tone the AI should use (e.g., encouraging, firm, friendly)"
+                  disabled={isSubmitting}
+                ></textarea>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Guide the AI's personality when checking in on this goal.
                 </p>
               </div>
               
@@ -772,110 +1112,127 @@ const Accountability: React.FC = () => {
                 <p className="text-gray-500 dark:text-gray-400">You haven't created any goals yet.</p>
               </div>
             ) : (
-              goals.map(goal => (
-                <div 
-                  key={goal.id}
-                  className={`bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 ${
-                    goal.isCompleted 
-                      ? 'border-green-500' 
-                      : 'border-blue-500'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-lg font-semibold">{goal.title}</h3>
-                    
-                    <div className="flex space-x-2">
-                      {!goal.isCompleted && (
+              goals.map(goal => {
+                const needsCheckin = isGoalDueForCheckin(goal);
+                
+                return (
+                  <div 
+                    key={goal.id}
+                    className={`bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 ${
+                      goal.isCompleted 
+                        ? 'border-green-500' 
+                        : needsCheckin 
+                          ? 'border-red-500' 
+                          : 'border-blue-500'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-semibold flex items-center">
+                        {goal.title}
+                        {!goal.isCompleted && needsCheckin && (
+                          <span className="ml-2 bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded dark:bg-red-900 dark:text-red-300">
+                            Check-in needed
+                          </span>
+                        )}
+                      </h3>
+                      
+                      <div className="flex space-x-2">
+                        {!goal.isCompleted && (
+                          <button
+                            onClick={() => openGatekeeperChat(goal)}
+                            className={`p-2 rounded-full ${
+                              needsCheckin 
+                                ? 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 animate-pulse' 
+                                : 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                            }`}
+                            title="Check-in for this goal"
+                          >
+                            <FiMessageSquare className="w-4 h-4" />
+                          </button>
+                        )}
+                        
                         <button
-                          onClick={() => openGatekeeperChat(goal)}
-                          className="p-2 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300"
-                          title="Check-in for this goal"
+                          onClick={() => openEditGoalModal(goal)}
+                          className="p-2 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300"
+                          title="Edit goal"
                         >
-                          <FiMessageSquare className="w-4 h-4" />
+                          <FiEdit2 className="w-4 h-4" />
                         </button>
+                        
+                        <button
+                          onClick={() => updateGoalStatus(goal.id, !goal.isCompleted)}
+                          className={`p-2 rounded-full ${
+                            goal.isCompleted 
+                              ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300' 
+                              : 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300'
+                          }`}
+                          title={goal.isCompleted ? "Mark as not completed" : "Mark as completed"}
+                        >
+                          <FiCheck className="w-4 h-4" />
+                        </button>
+                        
+                        <button
+                          onClick={() => deleteGoal(goal.id)}
+                          className="p-2 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300"
+                          title="Delete goal"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3 mb-4">
+                      <div>
+                        <div className="font-medium">Desired Goal:</div>
+                        <p className="text-gray-700 dark:text-gray-300">{goal.desiredGoal}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <div className="font-medium">Start State:</div>
+                          <p className="text-gray-700 dark:text-gray-300">{goal.startState}</p>
+                        </div>
+                        
+                        <div>
+                          <div className="font-medium">Current State:</div>
+                          <p className="text-gray-700 dark:text-gray-300">{goal.currentState}</p>
+                        </div>
+                        
+                        <div>
+                          <div className="font-medium">End State:</div>
+                          <p className="text-gray-700 dark:text-gray-300">{goal.endState}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      <div className="flex items-center">
+                        <FiClock className="mr-1" /> 
+                        Frequency: {goal.frequency.charAt(0).toUpperCase() + goal.frequency.slice(1)}
+                      </div>
+                      
+                      <div className="flex items-center">
+                        <FiCalendar className="mr-1" /> 
+                        {formatDate(goal.startDate)} - {formatDate(goal.endDate)}
+                      </div>
+                      
+                      {goal.projectId && (
+                        <div className="flex items-center">
+                          <FiFolder className="mr-1" /> 
+                          Project: {localProjects.find(p => p.id === goal.projectId)?.name || 'Unknown'}
+                        </div>
                       )}
                       
-                      <button
-                        onClick={() => openEditGoalModal(goal)}
-                        className="p-2 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300"
-                        title="Edit goal"
-                      >
-                        <FiEdit2 className="w-4 h-4" />
-                      </button>
-                      
-                      <button
-                        onClick={() => updateGoalStatus(goal.id, !goal.isCompleted)}
-                        className={`p-2 rounded-full ${
-                          goal.isCompleted 
-                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300' 
-                            : 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300'
-                        }`}
-                        title={goal.isCompleted ? "Mark as not completed" : "Mark as completed"}
-                      >
-                        <FiCheck className="w-4 h-4" />
-                      </button>
-                      
-                      <button
-                        onClick={() => deleteGoal(goal.id)}
-                        className="p-2 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300"
-                        title="Delete goal"
-                      >
-                        <FiTrash2 className="w-4 h-4" />
-                      </button>
+                      {goal.isCompleted && (
+                        <div className="flex items-center text-green-600 dark:text-green-400">
+                          <FiCheck className="mr-1" /> 
+                          Completed
+                        </div>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="space-y-3 mb-4">
-                    <div>
-                      <div className="font-medium">Desired Goal:</div>
-                      <p className="text-gray-700 dark:text-gray-300">{goal.desiredGoal}</p>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <div className="font-medium">Start State:</div>
-                        <p className="text-gray-700 dark:text-gray-300">{goal.startState}</p>
-                      </div>
-                      
-                      <div>
-                        <div className="font-medium">Current State:</div>
-                        <p className="text-gray-700 dark:text-gray-300">{goal.currentState}</p>
-                      </div>
-                      
-                      <div>
-                        <div className="font-medium">End State:</div>
-                        <p className="text-gray-700 dark:text-gray-300">{goal.endState}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    <div className="flex items-center">
-                      <FiClock className="mr-1" /> 
-                      Frequency: {goal.frequency.charAt(0).toUpperCase() + goal.frequency.slice(1)}
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <FiCalendar className="mr-1" /> 
-                      {formatDate(goal.startDate)} - {formatDate(goal.endDate)}
-                    </div>
-                    
-                    {goal.projectId && (
-                      <div className="flex items-center">
-                        <FiFolder className="mr-1" /> 
-                        Project: {projects.find(p => p.id === goal.projectId)?.name || 'Unknown'}
-                      </div>
-                    )}
-                    
-                    {goal.isCompleted && (
-                      <div className="flex items-center text-green-600 dark:text-green-400">
-                        <FiCheck className="mr-1" /> 
-                        Completed
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -887,9 +1244,10 @@ const Accountability: React.FC = () => {
           goal={editingGoal}
           onClose={closeEditGoalModal}
           onSave={updateGoal}
-          projects={projects}
+          projects={localProjects}
         />
       )}
+
     </div>
   );
 };

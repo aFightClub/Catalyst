@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiSend, FiX, FiList, FiCheck, FiClock, FiCalendar } from 'react-icons/fi';
+import { FiSend, FiX, FiList, FiCheck, FiClock, FiCalendar, FiMessageSquare } from 'react-icons/fi';
 import { storeService } from '../../services/storeService';
 
 interface Goal {
@@ -15,6 +15,7 @@ interface Goal {
   isCompleted: boolean;
   lastChecked: string;
   projectId?: string; // Optional project ID
+  voice?: string; // Optional voice/tone setting
 }
 
 enum TaskStatus {
@@ -80,9 +81,10 @@ interface GatekeeperChatProps {
   selectedModel: string;
   projects: Project[]; // Add projects prop
   userContext?: UserContext; // Add optional userContext prop
+  isScheduledCheckin?: boolean; // Add the new optional prop
 }
 
-const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdateGoal, apiKey, selectedModel, projects, userContext }) => {
+const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdateGoal, apiKey, selectedModel, projects, userContext, isScheduledCheckin }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -90,7 +92,9 @@ const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdate
   const [relatedTasks, setRelatedTasks] = useState<Task[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [relatedEvents, setRelatedEvents] = useState<CalendarEvent[]>([]);
+  const [activeTab, setActiveTab] = useState<'chat' | 'tasks' | 'events'>('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitializingRef = useRef<boolean>(false); // Ref to prevent concurrent initializations
 
   // Load tasks associated with the goal's project
   useEffect(() => {
@@ -140,27 +144,198 @@ const GatekeeperChat: React.FC<GatekeeperChatProps> = ({ goal, onClose, onUpdate
           });
           
           setRelatedEvents(goalRelatedEvents);
+          console.log(`GatekeeperChat: Loaded ${goalRelatedEvents.length} related events.`);
+        } else {
+          setRelatedEvents([]); // Clear events if none found
         }
       } catch (error) {
-        console.error('Error loading calendar events:', error);
+        console.error('GatekeeperChat: Error loading calendar events:', error);
+        setRelatedEvents([]); // Ensure events are cleared on error too
       }
     };
     
     loadCalendarEvents();
   }, [goal.title, goal.projectId]);
 
-  // Generate initial welcome message from the Gatekeeper
+  // Load chat history or generate welcome message
   useEffect(() => {
-    const initialMessage = generateWelcomeMessage(goal, relatedTasks, relatedEvents);
-    setMessages([
-      {
-        id: Date.now().toString(),
-        sender: 'gatekeeper',
-        text: initialMessage,
-        timestamp: new Date()
+    if (!goal || !goal.id) {
+      setMessages([]); // Clear messages if goal is invalid
+      return;
+    }
+
+    console.log(`[Effect Start] Goal ID: ${goal.id}, Scheduled: ${isScheduledCheckin}, Lock Status: ${isInitializingRef.current}`);
+
+    // Prevent re-entry if initialization is already in progress
+    if (isInitializingRef.current) {
+      console.log("GatekeeperChat: Initialization already in progress, skipping effect run.");
+      return;
+    }
+
+    // Acquire the lock
+    isInitializingRef.current = true;
+    console.log(`[Lock Acquired] isInitializingRef.current = ${isInitializingRef.current}`);
+
+    console.log(`GatekeeperChat: Initializing for goal ${goal.id}. Scheduled: ${isScheduledCheckin}`);
+    setMessages([]); // Clear previous messages on goal change
+    setIsLoading(true);
+
+    const initializeChat = async () => {
+      let loadedHistory: Message[] = [];
+      let loadedTasks: Task[] = [];
+      let loadedEvents: CalendarEvent[] = [];
+
+      try {
+        // 1. Load History
+        const historyKey = `goal_chat_history_${goal.id}`;
+        const savedHistory = localStorage.getItem(historyKey);
+        if (savedHistory) {
+          try {
+            const parsedHistory = JSON.parse(savedHistory) as Message[];
+            if (parsedHistory.length > 0) {
+              loadedHistory = parsedHistory.map(message => ({
+                ...message,
+                timestamp: message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)
+              }));
+              console.log(`GatekeeperChat: Loaded ${loadedHistory.length} messages from history.`);
+            }
+          } catch (err) {
+            console.error("GatekeeperChat: Error parsing history:", err);
+          }
+        }
+
+        // 2. Load Related Tasks (incorporating logic from the separate task useEffect)
+        if (goal.projectId) {
+          try {
+            const allTasks = await storeService.getTasks();
+            if (Array.isArray(allTasks)) {
+              loadedTasks = allTasks.filter(task =>
+                task.projectId === goal.projectId &&
+                (task.status === TaskStatus.BACKLOG || task.status === TaskStatus.DOING)
+              );
+              setRelatedTasks(loadedTasks); // Update state for the Tasks tab
+              console.log(`GatekeeperChat: Loaded ${loadedTasks.length} related tasks.`);
+            }
+          } catch (error) {
+            console.error('GatekeeperChat: Error loading tasks:', error);
+          }
+        } else {
+          setRelatedTasks([]); // Clear tasks if no project ID
+        }
+
+        // 3. Load Related Events (incorporating logic from the separate event useEffect)
+        try {
+          const storedEvents = localStorage.getItem('calendar_events');
+          if (storedEvents) {
+            const allEvents = JSON.parse(storedEvents) as CalendarEvent[];
+            loadedEvents = allEvents.filter(event => {
+              const titleMatch = event.title.toLowerCase().includes(goal.title.toLowerCase());
+              const projectMatch = goal.projectId && event.projectId === goal.projectId;
+              return titleMatch || projectMatch;
+            });
+            setRelatedEvents(loadedEvents); // Update state for the Events tab
+            console.log(`GatekeeperChat: Loaded ${loadedEvents.length} related events.`);
+          } else {
+            setRelatedEvents([]); // Clear events if none found
+          }
+        } catch (error) {
+          console.error('GatekeeperChat: Error loading calendar events:', error);
+          setRelatedEvents([]); // Ensure events are cleared on error too
+        }
+
+        // 4. Decide on action based on history and check-in status
+
+        if (loadedHistory.length > 0) {
+          // HISTORY EXISTS
+          console.log("GatekeeperChat: Setting history messages.");
+          setMessages(loadedHistory);
+
+          if (isScheduledCheckin) {
+            // Scheduled Check-in + History Exists: Generate ONE follow-up
+            console.log("GatekeeperChat: Scheduled check-in on loaded history, generating ONE follow-up message...");
+            try {
+              // Pass loaded tasks/events to generateInitialAiMessage
+              console.log("[API Call Point] History + Scheduled: Calling generateInitialAiMessage...");
+              const checkinMessageText = await generateInitialAiMessage(loadedTasks, loadedEvents);
+              setMessages(prev => [
+                ...prev,
+                { id: Date.now().toString() + '-followup', sender: 'gatekeeper', text: checkinMessageText, timestamp: new Date() }
+              ]);
+              console.log("GatekeeperChat: Follow-up message added.");
+            } catch (genError) {
+              console.error("GatekeeperChat: Error generating scheduled follow-up message:", genError);
+              setMessages(prev => [
+                ...prev,
+                { id: Date.now().toString() + '-followup-error', sender: 'gatekeeper', text: "Just checking in! How are things progressing?", timestamp: new Date() }
+              ]);
+            }
+          } else {
+            // Manual Open + History Exists: Do nothing more
+            console.log("GatekeeperChat: Manual open with history, no additional message needed.");
+          }
+
+        } else {
+          // NO HISTORY
+          console.log("GatekeeperChat: No history found, generating initial AI message...");
+          try {
+            // Pass loaded tasks/events to generateInitialAiMessage
+            console.log("[API Call Point] No History: Calling generateInitialAiMessage...");
+            const initialMessageText = await generateInitialAiMessage(loadedTasks, loadedEvents);
+            setMessages([
+              { id: Date.now().toString(), sender: 'gatekeeper', text: initialMessageText, timestamp: new Date() }
+            ]);
+            console.log("GatekeeperChat: Initial message set.");
+          } catch (genError) {
+            console.error('GatekeeperChat: Error generating initial AI message:', genError);
+            const staticWelcome = generateWelcomeMessage(goal, loadedTasks, loadedEvents); // Use loaded tasks/events
+            setMessages([
+              { id: Date.now().toString() + '-error', sender: 'gatekeeper', text: staticWelcome, timestamp: new Date() }
+            ]);
+          }
+        }
+
+      } catch (error) {
+        // Fallback for major errors during loading sequence
+        console.error('GatekeeperChat: Error during chat initialization:', error);
+        const staticWelcome = generateWelcomeMessage(goal, [], []); // Use empty arrays on major error
+        setMessages([
+          { id: Date.now().toString() + '-error', sender: 'gatekeeper', text: staticWelcome, timestamp: new Date() }
+        ]);
+      } finally {
+        // Ensure loading is turned off after all initialization steps
+        console.log("GatekeeperChat: Initialization complete.");
+        setIsLoading(false);
+        // Release the lock
+        isInitializingRef.current = false;
+        console.log(`[Lock Released] isInitializingRef.current = ${isInitializingRef.current}`);
       }
-    ]);
-  }, [goal, relatedTasks, relatedEvents]);
+    };
+
+    console.log("[Calling initializeChat]");
+    initializeChat();
+
+  }, [goal.id, isScheduledCheckin]); // Depend only on goal ID and check-in status
+
+  // Save chat history to localStorage keyed by goal ID
+  const saveChatHistory = () => {
+    if (!goal) return;
+    
+    try {
+      // Save messages except the initial welcome message
+      const historyKey = `goal_chat_history_${goal.id}`;
+      localStorage.setItem(historyKey, JSON.stringify(messages));
+      console.log(`Saved chat history for goal ${goal.id}`);
+    } catch (error) {
+      console.error('Error saving chat history:', error);
+    }
+  };
+
+  // Save messages whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveChatHistory();
+    }
+  }, [messages]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -201,6 +376,99 @@ You have ${daysLeft} days left until your target completion date.${tasksSection}
 How are you progressing on this goal? Any updates you'd like to share? I can help manage your tasks and calendar events related to this goal.`;
   };
 
+  // Generate initial AI-powered welcome/check-in message
+  const generateInitialAiMessage = async (tasksForPrompt?: Task[], eventsForPrompt?: CalendarEvent[]): Promise<string> => {
+    // Use provided tasks/events if available, otherwise use state (less reliable due to potential timing)
+    const currentRelatedTasks = tasksForPrompt ?? relatedTasks;
+    const currentRelatedEvents = eventsForPrompt ?? relatedEvents;
+
+    let workingApiKey = apiKey;
+    if (!workingApiKey) {
+      const localStorageKey = localStorage.getItem('openai_api_key');
+      if (localStorageKey) workingApiKey = localStorageKey;
+    }
+
+    if (!workingApiKey) {
+      console.warn("GatekeeperChat: No API key for initial message, using static welcome.");
+      return generateWelcomeMessage(goal, currentRelatedTasks, currentRelatedEvents); // Fallback with current data
+    }
+
+    const now = new Date();
+    const endDate = new Date(goal.endDate);
+    const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    const systemMessage = `You are an AI Accountability Gatekeeper initiating a check-in for a user's goal.
+Goal: "${goal.title}"
+Desired Outcome: ${goal.desiredGoal}
+Current State: "${goal.currentState}"
+End State: "${goal.endState}"
+Deadline: ${endDate.toLocaleDateString()} (${daysLeft > 0 ? daysLeft + ' days left' : 'Deadline passed!'})
+Check-in Frequency: ${goal.frequency}
++${goal.voice ? `Preferred tone for this goal: ${goal.voice}` : ''}
+
+${userContext?.name ? `User's Name: ${userContext.name}` : ''}
+${userContext?.company ? `User's Company: ${userContext.company}` : ''}
+${userContext?.voice ? `User's Preferred Style: ${userContext.voice}` : ''}
+
+${goal.projectId ? `Project: ${projects.find(p => p.id === goal.projectId)?.name || 'Unknown'}` : ''}
+${currentRelatedTasks.length > 0 ?
+  `Related Tasks (${currentRelatedTasks.length}):\n${currentRelatedTasks.map((task, i) => `${i+1}. ${task.title} (Status: ${task.status})`).join('\n')}`
+  : 'No related tasks.'}
+${currentRelatedEvents.length > 0 ?
+  `Related Events (${currentRelatedEvents.length}):\n${currentRelatedEvents.map((event, i) => `${i+1}. ${event.title} (${new Date(event.date).toLocaleDateString()}${event.time ? ' at ' + event.time : ''})`).join('\n')}`
+  : 'No related events.'}
+
+Generate a concise, engaging opening message to check in with the user. 
+- Address them by name if known.
+- Acknowledge the goal and the time remaining (or if it's overdue).
+- Briefly mention the current state or related tasks/events if relevant.
+- Ask an open-ended question to prompt an update (e.g., "How's progress?", "Any updates?", "What's the latest?").
+- Keep the tone generally encouraging but adjust urgency based on the deadline (e.g., more direct if the deadline is close or passed).
+- Maintain the user's preferred communication style if provided.
+- Do NOT ask if they want help setting up tasks/events in this initial message.
+- Respond ONLY with the text for the chat message, nothing else.`;
+
+    try {
+      console.log("GatekeeperChat: Generating initial AI message...");
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${workingApiKey}`
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: 'Generate the initial check-in message.' }
+          ],
+          temperature: 0.75,
+          max_tokens: 150
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to generate initial message');
+      }
+
+      const data = await response.json();
+      const aiReply = data.choices[0]?.message?.content?.trim();
+      
+      if (!aiReply) {
+          throw new Error("AI response was empty.");
+      }
+
+      console.log("GatekeeperChat: AI initial message generated successfully.");
+      return aiReply;
+
+    } catch (error) {
+      console.error('Error generating initial AI message:', error);
+      // Fallback to static welcome message on error
+      return generateWelcomeMessage(goal, currentRelatedTasks, currentRelatedEvents);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
     
@@ -224,7 +492,7 @@ How are you progressing on this goal? Any updates you'd like to share? I can hel
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         sender: 'gatekeeper',
-        text: gatekeeperResponse.reply,
+        text: gatekeeperResponse.reply || "Got it! Processing your update.",
         timestamp: new Date()
       }]);
       
@@ -432,7 +700,8 @@ How are you progressing on this goal? Any updates you'd like to share? I can hel
       ${userContext?.name ? `The user's name is ${userContext.name}.` : ''}
       ${userContext?.company ? `They work at ${userContext.company}.` : ''}
       ${userContext?.backStory ? `Background about the user: ${userContext.backStory}` : ''}
-      ${userContext?.voice ? `Preferred communication style: ${userContext.voice}` : ''}
+      ${userContext?.voice ? `General preferred communication style: ${userContext.voice}` : ''}
+      ${goal.voice ? `Specific tone for this goal: ${goal.voice}` : ''}
       
       Current goal details:
       - Desired goal: ${goal.desiredGoal}
@@ -466,7 +735,7 @@ How are you progressing on this goal? Any updates you'd like to share? I can hel
       4. If you need to create or update tasks related to this goal
       5. If you need to create, update, or delete calendar events/reminders for this goal
       
-      When speaking to the user, address them by name if you know it, and maintain the preferred communication style.
+      When speaking to the user, address them by name if you know it. Maintain the preferred communication style (from User Context) and also incorporate the specific tone for this goal if provided.
       
       You can perform any of the following actions:
       
@@ -650,138 +919,188 @@ How are you progressing on this goal? Any updates you'd like to share? I can hel
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl h-[600px] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
-            Goal Check-in: {goal.title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <FiX className="w-5 h-5" />
-          </button>
-        </div>
-        
-        {/* Progress Section - Tasks and Calendar */}
-        <div className="border-b border-gray-200 dark:border-gray-700 p-3">
-          {/* Tasks Section */}
-          {goal.projectId && relatedTasks.length > 0 && (
-            <div className="mb-3">
-              <div className="flex items-center mb-2">
-                <FiList className="mr-2 text-indigo-500" />
-                <h3 className="text-sm font-medium text-gray-800 dark:text-gray-300">Related Tasks</h3>
-              </div>
-              <div className="text-sm space-y-1 max-h-[100px] overflow-y-auto">
-                {relatedTasks.map(task => (
-                  <div key={task.id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <div className="flex items-center">
-                      <div 
-                        className={`w-2 h-2 rounded-full mr-2 ${
-                          task.status === TaskStatus.DOING ? 'bg-blue-500' : 'bg-gray-400'
-                        }`}
-                      ></div>
-                      <span className="text-gray-800 dark:text-gray-200">{task.title}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        task.status === TaskStatus.BACKLOG ? 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200' :
-                        task.status === TaskStatus.DOING ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' :
-                        'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                      }`}>
-                        {task.status === TaskStatus.BACKLOG ? 'Backlog' : 
-                         task.status === TaskStatus.DOING ? 'In Progress' : 'Done'}
-                      </span>
+    <div id="gatekeeper-chat" className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl h-[600px] flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+          {goal.title}
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        >
+          <FiX className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <button
+          className={`flex-1 py-2 px-4 text-sm font-medium text-center flex items-center justify-center ${
+            activeTab === 'chat'
+              ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+          onClick={() => setActiveTab('chat')}
+        >
+          <FiMessageSquare className="mr-2 w-4 h-4" /> Chat
+        </button>
+        <button
+          className={`flex-1 py-2 px-4 text-sm font-medium text-center flex items-center justify-center ${
+            activeTab === 'tasks'
+              ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+          onClick={() => setActiveTab('tasks')}
+          disabled={!goal.projectId || relatedTasks.length === 0} // Disable if no project or tasks
+        >
+          <FiList className="mr-2 w-4 h-4" /> Tasks ({relatedTasks.length})
+        </button>
+        <button
+          className={`flex-1 py-2 px-4 text-sm font-medium text-center flex items-center justify-center ${
+            activeTab === 'events'
+              ? 'border-b-2 border-purple-600 text-purple-600 dark:text-purple-400 dark:border-purple-400'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+          onClick={() => setActiveTab('events')}
+          disabled={relatedEvents.length === 0} // Disable if no events
+        >
+          <FiCalendar className="mr-2 w-4 h-4" /> Events ({relatedEvents.length})
+        </button>
+      </div>
+
+      {/* Conditional Content Area */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Chat Tab Content */}
+        {activeTab === 'chat' && (
+          <div className="h-full flex flex-col">
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map(message => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] p-3 rounded-lg ${
+                      message.sender === 'user'
+                        ? 'bg-blue-600 text-white rounded-br-none'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none'
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap">{message.text}</div>
+                    <div className={`text-xs mt-1 ${
+                      message.sender === 'user' ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'
+                    }`}>
+                      {typeof message.timestamp === 'string'
+                        ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Calendar Events Section */}
-          {relatedEvents.length > 0 && (
-            <div>
-              <div className="flex items-center mb-2">
-                <FiCalendar className="mr-2 text-purple-500" />
-                <h3 className="text-sm font-medium text-gray-800 dark:text-gray-300">Related Events</h3>
-              </div>
-              <div className="text-sm space-y-1 max-h-[100px] overflow-y-auto">
-                {relatedEvents.map(event => {
-                  const eventDate = new Date(event.date);
-                  return (
-                    <div key={event.id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <div className="flex items-center">
-                        <div 
-                          className="w-2 h-2 rounded-full mr-2"
-                          style={{ backgroundColor: event.color }}
-                        ></div>
-                        <span className="text-gray-800 dark:text-gray-200">{event.title}</span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {eventDate.toLocaleDateString()} {event.time && `at ${event.time}`}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map(message => (
-            <div
-              key={message.id}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] p-3 rounded-lg ${
-                  message.sender === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none'
-                }`}
-              >
-                <div className="whitespace-pre-wrap">{message.text}</div>
-                <div className={`text-xs mt-1 ${
-                  message.sender === 'user' ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
+              ))}
+              {/* Typing Indicator */}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] p-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-bl-none italic">
+                    Gatekeeper is typing...
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            
+            {/* Input Area */}
+            <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+              <div className="flex items-center space-x-2">
+                <textarea
+                  className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-800 dark:text-white"
+                  placeholder="Type your update here..."
+                  rows={2}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={isLoading || !inputMessage.trim()}
+                  className={`p-2 rounded-md ${
+                    isLoading || !inputMessage.trim()
+                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  <FiSend className="w-5 h-5" />
+                </button>
               </div>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        
-        {/* Input Area */}
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center space-x-2">
-            <textarea
-              className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-800 dark:text-white"
-              placeholder="Type your update here..."
-              rows={2}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isLoading}
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={isLoading || !inputMessage.trim()}
-              className={`p-2 rounded-md ${
-                isLoading || !inputMessage.trim()
-                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              <FiSend className="w-5 h-5" />
-            </button>
           </div>
-        </div>
+        )}
+
+        {/* Tasks Tab Content */}
+        {activeTab === 'tasks' && (
+          <div className="p-4 space-y-3">
+            <h3 className="text-base font-medium text-gray-800 dark:text-gray-300 mb-3">
+              Related Tasks for Project "{projects.find(p => p.id === goal.projectId)?.name || 'Unknown'}"
+            </h3>
+            {relatedTasks.length > 0 ? (
+              relatedTasks.map(task => (
+                <div key={task.id} className="flex items-center justify-between p-3 rounded bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center">
+                    <div 
+                      className={`w-3 h-3 rounded-full mr-3 ${
+                        task.status === TaskStatus.DOING ? 'bg-blue-500' : 'bg-gray-400'
+                      }`}
+                    ></div>
+                    <span className="text-gray-800 dark:text-gray-200">{task.title}</span>
+                  </div>
+                  <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
+                      task.status === TaskStatus.BACKLOG ? 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200' :
+                      task.status === TaskStatus.DOING ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' :
+                      'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                    }`}>
+                      {task.status === TaskStatus.BACKLOG ? 'Backlog' : 
+                       task.status === TaskStatus.DOING ? 'In Progress' : 'Done'}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No related tasks found for this goal's project.</p>
+            )}
+          </div>
+        )}
+
+        {/* Events Tab Content */}
+        {activeTab === 'events' && (
+          <div className="p-4 space-y-3">
+             <h3 className="text-base font-medium text-gray-800 dark:text-gray-300 mb-3">Related Calendar Events</h3>
+            {relatedEvents.length > 0 ? (
+              relatedEvents.map(event => {
+                const eventDate = new Date(event.date);
+                return (
+                  <div key={event.id} className="flex items-center justify-between p-3 rounded bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center">
+                       <div 
+                        className="w-3 h-3 rounded-full mr-3"
+                        style={{ backgroundColor: event.color }}
+                      ></div>
+                      <span className="text-gray-800 dark:text-gray-200">{event.title}</span>
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {eventDate.toLocaleDateString()} {event.time && `at ${event.time}`}
+                      {event.type === 'milestone' && (
+                        <span className="ml-2 text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">Milestone</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+               <p className="text-sm text-gray-500 dark:text-gray-400">No related calendar events found for this goal.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
