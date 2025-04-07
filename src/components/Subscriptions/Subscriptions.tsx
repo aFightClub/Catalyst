@@ -427,18 +427,18 @@ const Subscriptions: React.FC = () => {
     if (linkedSites.length === 0) return null;
     
     return (
-      <div className="mt-3 pt-3 border-t border-gray-700">
-        <h4 className="text-sm font-medium mb-2 flex items-center">
-          <FiLink className="mr-1" /> Websites
+      <div className="pt-2 border-t border-gray-700/50">
+        <h4 className="text-xs font-medium mb-2 flex items-center text-gray-400">
+          <FiLink className="mr-1" size={12} /> Connected Websites
         </h4>
-        <div className="space-y-1">
+        <div className="flex flex-wrap gap-2">
           {linkedSites.map(siteId => {
             const website = getWebsiteById(siteId);
             if (!website) return null;
             
             return (
-              <div key={siteId} className="flex items-center">
-                <span className="text-sm text-indigo-400 truncate">{website.name}</span>
+              <div key={siteId} className="text-xs bg-gray-700/60 px-2 py-1 rounded">
+                <span className="text-indigo-400 truncate">{website.name}</span>
               </div>
             );
           })}
@@ -972,28 +972,27 @@ const Subscriptions: React.FC = () => {
               
               {websites.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Linked Websites</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center">
+                    <FiLink className="mr-2" size={16} />
+                    Linked Websites
+                  </label>
                   <div className="bg-gray-700 p-3 rounded-md max-h-40 overflow-y-auto">
-                    {websites.length === 0 ? (
-                      <p className="text-sm text-gray-400">No websites available. Add websites in the Websites tab.</p>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {websites.map(website => (
-                          <div key={website.id} className="flex items-center">
-                            <input
-                              type="checkbox"
-                              id={`new-website-${website.id}`}
-                              checked={newSubscription.linkedWebsites?.includes(website.id) || false}
-                              onChange={(e) => handleWebsiteSelection(website.id, e.target.checked)}
-                              className="mr-2"
-                            />
-                            <label htmlFor={`new-website-${website.id}`} className="text-sm">
-                              {website.name}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {websites.map(website => (
+                        <div key={website.id} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id={`new-website-${website.id}`}
+                            checked={newSubscription.linkedWebsites?.includes(website.id) || false}
+                            onChange={(e) => handleWebsiteSelection(website.id, e.target.checked)}
+                            className="mr-2"
+                          />
+                          <label htmlFor={`new-website-${website.id}`} className="text-sm">
+                            {website.name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Select websites powered by this subscription</p>
                 </div>
@@ -1148,7 +1147,10 @@ const Subscriptions: React.FC = () => {
               
               {websites.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Linked Websites</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center">
+                    <FiLink className="mr-2" size={16} />
+                    Linked Websites
+                  </label>
                   <div className="bg-gray-700 p-3 rounded-md max-h-40 overflow-y-auto">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {websites.map(website => (
@@ -1167,6 +1169,7 @@ const Subscriptions: React.FC = () => {
                       ))}
                     </div>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Select websites powered by this subscription</p>
                 </div>
               )}
               
@@ -1263,62 +1266,72 @@ const Subscriptions: React.FC = () => {
                     className="bg-gray-800 rounded-lg p-4 hover:bg-gray-750 cursor-pointer transition-colors duration-200"
                     onClick={() => startEditing(sub.id)}
                   >
-                    <div>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-semibold flex items-center">
-                            {sub.favicon && (
-                              <img 
-                                src={sub.favicon} 
-                                alt="" 
-                                className="w-4 h-4 mr-2"
-                                onError={(e) => {
-                                  // Hide broken favicon images
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }} 
-                              />
-                            )}
-                            {sub.name}
-                          </h3>
-                          {sub.url && (
-                            <a 
-                              href={sub.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-indigo-400 hover:underline text-sm"
-                              onClick={(e) => e.stopPropagation()} // Prevent triggering the card's onClick
-                            >
-                              {sub.url}
-                            </a>
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1 flex-1 min-w-0 pr-3">
+                        <h3 className="text-lg font-semibold flex items-center">
+                          {sub.favicon && (
+                            <img 
+                              src={sub.favicon} 
+                              alt="" 
+                              className="w-5 h-5 mr-2 flex-shrink-0"
+                              onError={(e) => {
+                                // Hide broken favicon images
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }} 
+                            />
                           )}
-                        </div>
-                        <div className="flex flex-col items-end">
-                          <span className="font-bold text-lg">
-                            ${sub.price}
-                            <span className="text-sm text-gray-400 ml-1">
-                              /{sub.billingCycle === 'monthly' ? 'mo' : 'yr'}
-                            </span>
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {sub.billingCycle === 'monthly' 
-                              ? `$${(sub.price * 12).toFixed(2)}/year`
-                              : `$${(sub.price / 12).toFixed(2)}/month`}
-                          </span>
-                          {sub.isBusinessExpense && (
-                            <span className="text-xs text-blue-400 mt-1">Business Expense</span>
-                          )}
+                          <span className="truncate">{sub.name}</span>
+                        </h3>
+                        {sub.url && (
+                          <a 
+                            href={sub.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-indigo-400 hover:underline text-sm truncate block"
+                            onClick={(e) => e.stopPropagation()} // Prevent triggering the card's onClick
+                          >
+                            {sub.url.replace(/^https?:\/\//, '')}
+                          </a>
+                        )}
+                        <div className="text-xs text-gray-500">
+                          {sub.category}
                         </div>
                       </div>
                       
-                      
+                      <div className="flex flex-col items-end">
+                        <div className="flex items-center">
+                          <span className="font-bold text-lg">${sub.price}</span>
+                          <span className="text-sm text-gray-400 ml-1">
+                            /{sub.billingCycle === 'monthly' ? 'mo' : 'yr'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          ${sub.billingCycle === 'monthly' 
+                            ? (sub.price * 12).toFixed(2)
+                            : (sub.price / 12).toFixed(2)}
+                          /{sub.billingCycle === 'monthly' ? 'year' : 'month'}
+                        </span>
+                        {sub.isBusinessExpense && (
+                          <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded-full mt-1">
+                            Business Expense
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-3 space-y-3">
                       {sub.notes && (
-                        <div className="mt-3 text-sm bg-gray-700 p-2 rounded">
+                        <div className="text-sm bg-gray-700/50 p-2 rounded">
                           {sub.notes}
                         </div>
                       )}
                       
-                      {/* Linked websites section */}
                       {renderWebsiteSection(sub)}
+                      
+                      <div className="text-xs text-gray-500 flex items-center pt-1">
+                        <FiCalendar className="mr-1 text-gray-500" size={12} />
+                        Started: {new Date(sub.startDate).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
                 ))}

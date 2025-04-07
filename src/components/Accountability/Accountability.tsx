@@ -735,7 +735,8 @@ const Accountability: React.FC = () => {
     // Use the direct approach which bypasses the context issues
     if (typeof (window as any).directOpenGatekeeperForGoal === 'function') {
       console.log(`Using direct approach to open gatekeeper for goal ID: ${goal.id}`);
-      (window as any).directOpenGatekeeperForGoal(goal.id);
+      // Pass the goal ID, false for isScheduled, and the full goal object
+      (window as any).directOpenGatekeeperForGoal(goal.id, false, goal); 
       return;
     }
     

@@ -50,6 +50,11 @@ interface CalendarEvent {
   recurrenceEndDate?: string; // ISO string, optional end date for recurring events
   isSubscription?: boolean;
   subscription?: Subscription;
+  rawDateParts?: {
+    year: number;
+    month: number;
+    day: number;
+  };
 }
 
 interface ContentReminder {
@@ -571,7 +576,14 @@ const Dashboard: React.FC = () => {
   };
   
   const getEventsForDate = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+    // Format the target date using consistent UTC methods to prevent timezone shifts
+    const targetYear = date.getFullYear();
+    const targetMonth = date.getMonth();
+    const targetDay = date.getDate();
+    
+    // Create dateString in a timezone-safe way, keeping local date values
+    const dateString = new Date(Date.UTC(targetYear, targetMonth, targetDay, 12, 0, 0))
+      .toISOString().split('T')[0];
     
     // First get regular calendar events
     const regularEvents = calendarEvents.filter(event => {
@@ -585,14 +597,13 @@ const Dashboard: React.FC = () => {
       // Check for recurring events
       if (event.isRecurring) {
         const eventOriginalDate = new Date(event.date);
-        const targetDate = new Date(date);
         
         // Check if target date is after the original date
-        if (targetDate >= eventOriginalDate) {
+        if (date >= eventOriginalDate) {
           // Check if target date is before recurrence end date (if set)
           if (event.recurrenceEndDate) {
             const endDate = new Date(event.recurrenceEndDate);
-            if (targetDate > endDate) return false;
+            if (date > endDate) return false;
           }
           
           // Calculate based on recurrence type
@@ -600,10 +611,10 @@ const Dashboard: React.FC = () => {
             return true;
           } else if (event.recurrenceType === 'weekly') {
             // Same day of week
-            return targetDate.getDay() === eventOriginalDate.getDay();
+            return date.getDay() === eventOriginalDate.getDay();
           } else if (event.recurrenceType === 'monthly') {
             // Same day of month
-            return targetDate.getDate() === eventOriginalDate.getDate();
+            return date.getDate() === eventOriginalDate.getDate();
           }
         }
       }
@@ -615,22 +626,30 @@ const Dashboard: React.FC = () => {
     const subscriptionEvents = subscriptions.filter(sub => {
       if (!sub.startDate) return false;
       
-      // Make sure we're working with a proper date object for the start date
-      const startDate = new Date(sub.startDate);
-      
-      // Get just the date part for initial comparison (first occurrence)
-      const subStartDateStr = startDate.toISOString().split('T')[0];
-      
-      // First occurrence - exact date match
-      if (subStartDateStr === dateString) return true;
-      
-      // For recurring monthly billing - match the day of month
-      const currentDate = new Date(date);
-      
-      // Only show for dates after the start date
-      if (currentDate > startDate) {
-        // If same day of month (e.g., every 15th), show it
-        return currentDate.getDate() === startDate.getDate();
+      try {
+        // Parse the subscription start date in a timezone-safe way
+        // First get the date parts from the ISO string
+        const [subYear, subMonth, subDay] = sub.startDate.split('T')[0].split('-').map(Number);
+        
+        // This is the actual billing day we need to match against
+        const billingDay = subDay;
+        
+        // Check for exact date match (first occurrence)
+        if (targetYear === subYear && targetMonth === subMonth - 1 && targetDay === billingDay) {
+          return true;
+        }
+        
+        // For recurring - match the day of month regardless of year/month
+        // Only if target date is after the start date
+        const subDate = new Date(subYear, subMonth - 1, subDay);
+        
+        if (date >= subDate) {
+          // Compare calendar day directly to billing day - this avoids all timezone issues
+          return targetDay === billingDay;
+        }
+      } catch (error) {
+        console.error(`Error processing subscription date for ${sub.name}:`, error);
+        return false;
       }
       
       return false;
@@ -729,9 +748,40 @@ const Dashboard: React.FC = () => {
     const targetRect = target.getBoundingClientRect();
     
     if (rect) {
-      // Position directly adjacent to the dot
-      const top = targetRect.top - rect.top - 5;
-      const left = targetRect.left - rect.left + targetRect.width + 5;
+      // Calculate initial position directly adjacent to the dot
+      let top = targetRect.top - rect.top - 5;
+      let left = targetRect.left - rect.left + targetRect.width + 5;
+      
+      // Get viewport dimensions
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Get tooltip dimensions (approximate as we don't have the real tooltip yet)
+      const tooltipWidth = 280; // Approximate width of our tooltip
+      const tooltipHeight = 180; // Approximate height of our tooltip
+      
+      // Adjust position if tooltip would go off-screen to the right
+      if (targetRect.left + tooltipWidth > viewportWidth) {
+        // Place it to the left of the target instead
+        left = targetRect.left - rect.left - tooltipWidth - 5;
+      }
+      
+      // If it would still go off left edge, center it
+      if (left < 0) {
+        left = Math.max(5, (targetRect.left + targetRect.right) / 2 - rect.left - tooltipWidth / 2);
+      }
+      
+      // Adjust position if tooltip would go off-screen at the bottom
+      if (targetRect.top + tooltipHeight > viewportHeight) {
+        // Place it above the target
+        top = targetRect.top - rect.top - tooltipHeight - 5;
+      }
+      
+      // If it would still go off top edge, position it at top with small margin
+      if (top < 0) {
+        top = 5;
+      }
+
       
       setTooltipPosition({ top, left });
       setHoveredEvent(event.id);
@@ -910,7 +960,7 @@ const Dashboard: React.FC = () => {
     setNewReminderNotes('');
   };
 
-  // Add a function to handle subscription hover events
+  // Fix the subscription hover handler to correctly handle the date from the calendar cell
   const handleSubscriptionMouseEnter = (subscription: Subscription, e: React.MouseEvent<HTMLDivElement>) => {
     const rect = calendarRef.current?.getBoundingClientRect();
     // Get the target element (the dot)
@@ -918,9 +968,39 @@ const Dashboard: React.FC = () => {
     const targetRect = target.getBoundingClientRect();
     
     if (rect) {
-      // Position directly adjacent to the dot
-      const top = targetRect.top - rect.top - 5;
-      const left = targetRect.left - rect.left + targetRect.width + 5;
+      // Calculate initial position directly adjacent to the dot
+      let top = targetRect.top - rect.top - 5;
+      let left = targetRect.left - rect.left + targetRect.width + 5;
+      
+      // Get viewport dimensions
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Get tooltip dimensions (approximate as we don't have the real tooltip yet)
+      const tooltipWidth = 280; // Approximate width of our tooltip
+      const tooltipHeight = 180; // Approximate height of our tooltip
+      
+      // Adjust position if tooltip would go off-screen to the right
+      if (targetRect.left + tooltipWidth > viewportWidth) {
+        // Place it to the left of the target instead
+        left = targetRect.left - rect.left - tooltipWidth - 5;
+      }
+      
+      // If it would still go off left edge, center it
+      if (left < 0) {
+        left = Math.max(5, (targetRect.left + targetRect.right) / 2 - rect.left - tooltipWidth / 2);
+      }
+      
+      // Adjust position if tooltip would go off-screen at the bottom
+      if (targetRect.top + tooltipHeight > viewportHeight) {
+        // Place it above the target
+        top = targetRect.top - rect.top - tooltipHeight - 5;
+      }
+      
+      // If it would still go off top edge, position it at top with small margin
+      if (top < 0) {
+        top = 5;
+      }
       
       setTooltipPosition({ top, left });
       
@@ -930,17 +1010,35 @@ const Dashboard: React.FC = () => {
 
       // Get the date that was hovered (from parent cell)
       const dateCell = target.closest('[data-date]');
-      const dateStr = dateCell?.getAttribute('data-date') || subscription.startDate;
+      
+      if (!dateCell || !dateCell.getAttribute('data-date')) {
+        console.error('Could not find date cell for subscription hover');
+        return;
+      }
+      
+      // Get the exact date from the calendar cell that was hovered
+      const exactHoveredDateStr = dateCell.getAttribute('data-date')!;
+      
+      // Create a proper date object with local timezone handling
+      // Use noon (12:00) to prevent any timezone issues
+      const dateParts = exactHoveredDateStr.split('-').map(Number);
+      const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 12, 0, 0);
       
       // Store the subscription in calendarEvents temporarily
       const fakeEvent: CalendarEvent = {
         id: fakeEventId,
         title: subscription.name,
-        date: dateStr, // Use the actual date of the cell
+        date: localDate.toISOString(), // Use ISO string of the correct local date
         type: 'event',
         color: '#10B981', // Green
         isSubscription: true,
-        subscription
+        subscription,
+        // Store the raw date parts to ensure we display the correct date
+        rawDateParts: {
+          year: dateParts[0],
+          month: dateParts[1], 
+          day: dateParts[2]
+        }
       };
       
       // Add the fake event to the events array temporarily
@@ -951,6 +1049,35 @@ const Dashboard: React.FC = () => {
       });
     }
   };
+
+  // Add a useEffect that refreshes subscriptions when the dashboard becomes visible
+  // This ensures that any changes to subscription start dates are reflected in the calendar
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    const refreshSubscriptionData = async () => {
+      try {
+        // Get fresh subscription data to ensure we have the latest start dates
+        const storedSubscriptions = await storeService.getSubscriptions();
+        if (storedSubscriptions && Array.isArray(storedSubscriptions)) {
+          setSubscriptions(storedSubscriptions);
+        }
+      } catch (error) {
+        console.error('Failed to refresh subscription data:', error);
+      }
+    };
+    
+    // Initial refresh when dashboard is loaded
+    refreshSubscriptionData();
+    
+    // Set up a periodic check to keep subscriptions in sync while dashboard is open
+    // This runs every 30 seconds to catch any changes made in other components
+    interval = setInterval(refreshSubscriptionData, 30000);
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-gray-900 overflow-auto">
@@ -1235,13 +1362,35 @@ const Dashboard: React.FC = () => {
                 : null;
               
               // Format date for display - ensure we're displaying the correct date
-              const eventDate = new Date(event.date);
-              const formattedDate = eventDate.toLocaleDateString('en-US', { 
-                weekday: 'short', 
-                month: 'short', 
-                day: 'numeric',
-                year: 'numeric'
-              });
+              let formattedDate = '';
+              
+              if (isSubscription && 'rawDateParts' in event) {
+                // Use the raw date parts directly to format the date (avoids timezone issues)
+                const { year, month, day } = (event as any).rawDateParts;
+                const dateObj = new Date(year, month - 1, day, 12, 0, 0);
+                formattedDate = dateObj.toLocaleDateString('en-US', { 
+                  weekday: 'short', 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric'
+                });
+              } else {
+                // Regular events - handle as before but with noon time
+                const eventDate = new Date(event.date);
+                const localDate = new Date(
+                  eventDate.getFullYear(),
+                  eventDate.getMonth(),
+                  eventDate.getDate(),
+                  12, 0, 0
+                );
+                
+                formattedDate = localDate.toLocaleDateString('en-US', { 
+                  weekday: 'short', 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric'
+                });
+              }
               
               // Format recurrence info
               let recurrenceInfo = '';
@@ -1261,10 +1410,11 @@ const Dashboard: React.FC = () => {
               
               return (
                 <div 
-                  className="absolute z-10 bg-gray-900 border border-gray-700 rounded-md shadow-lg p-4 text-white w-64 transition-opacity duration-200 cursor-help"
+                  className="absolute z-10 bg-gray-900 border border-gray-700 rounded-md shadow-lg p-4 text-white max-w-xs transition-opacity duration-200 cursor-help"
                   style={{ 
-                    top: `${tooltipPosition.top - 30}px`, 
+                    top: `${tooltipPosition.top - 40}px`, 
                     left: `${tooltipPosition.left - 40}px`,
+                    width: '260px',
                   }}
                 >
                   <div className="flex items-center mb-2">
@@ -1274,7 +1424,6 @@ const Dashboard: React.FC = () => {
                         alt=""
                         className="w-4 h-4 mr-2" 
                         onError={(e) => {
-                          // If favicon fails to load, show a green dot instead
                           (e.target as HTMLImageElement).style.display = 'none';
                         }}
                       />
@@ -1284,14 +1433,14 @@ const Dashboard: React.FC = () => {
                         style={{ backgroundColor: isSubscription ? '#10B981' : event.color }}
                       />
                     )}
-                    <span className="font-semibold text-base">{event.title}</span>
+                    <span className="font-semibold text-base truncate">{event.title}</span>
                   </div>
                   <div className="text-gray-400 ml-6 mb-2 text-sm">
                     {isSubscription ? 'Subscription' : event.type === 'milestone' ? 'Milestone' : 'Event'}
                   </div>
                   <div className="flex items-center text-gray-300 mt-3 text-sm">
                     <FiCalendar className="mr-2 text-gray-500 flex-shrink-0" size={16} />
-                    <div className="flex flex-col">
+                    <div className="flex flex-col w-full">
                       <span>{formattedDate}</span>
                       {!isSubscription && event.time && <span className="text-gray-400">{event.time}</span>}
                       {recurrenceInfo && <span className="text-gray-400 italic">{recurrenceInfo}</span>}

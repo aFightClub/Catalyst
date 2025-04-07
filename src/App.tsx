@@ -623,6 +623,8 @@ export default function App() {
           })
         );
       });
+
+    
     }, 0);
   };
   
@@ -2396,17 +2398,28 @@ export default function App() {
   }, []);
 
   // Function to directly show the gatekeeper for a specific goal
-  const directShowGatekeeperForGoal = (goalId: string, isScheduled: boolean = false) => {
-    console.log(`App: Directly showing gatekeeper for goal ID: ${goalId}, Scheduled: ${isScheduled}`);
+  // Modify to accept an optional goal object
+  const directShowGatekeeperForGoal = (goalId: string, isScheduled: boolean = false, goalObject?: any) => { 
+    console.log(`App: Attempting directShowGatekeeperForGoal. ID: ${goalId}, Scheduled: ${isScheduled}, Object provided: ${!!goalObject}`);
     
-    const goal = directLocalGoals.find(g => g.id === goalId);
-    if (goal) {
-      console.log(`App: Found goal directly: ${goal.title}`);
-      // Set both the goal and the scheduled flag
-      setDirectActiveGoalInfo({ goal: goal, isScheduled: isScheduled });
+    let goalToUse: any | null = null;
+
+    if (goalObject && goalObject.id === goalId) {
+      // If a valid goal object is provided, use it directly
+      console.log(`App: Using provided goal object for ID ${goalId}`);
+      goalToUse = goalObject;
+    } else {
+      // Otherwise, try to find it in the local state (for interval checks, etc.)
+      console.log(`App: No valid object provided, searching directLocalGoals. Current IDs:`, JSON.stringify(directLocalGoals.map(g => g.id)));
+      goalToUse = directLocalGoals.find(g => g.id === goalId);
+    }
+
+    if (goalToUse) {
+      console.log(`App: Found goal to use: ${goalToUse.title}`);
+      setDirectActiveGoalInfo({ goal: goalToUse, isScheduled: isScheduled });
       setDirectShowGatekeeper(true);
     } else {
-      console.error(`App: Goal with ID ${goalId} not found in direct local goals`);
+      console.error(`App: Goal with ID ${goalId} could not be found or used.`);
     }
   };
 
@@ -2450,17 +2463,22 @@ export default function App() {
   // Add a button to trigger the direct gatekeeper
   useEffect(() => {
     // Expose a function to open the direct gatekeeper from anywhere
-    (window as any).directOpenGatekeeperForGoal = directShowGatekeeperForGoal;
+    // Update the exposed function signature to accept the object
+    (window as any).directOpenGatekeeperForGoal = (goalId: string, isScheduled: boolean = false, goalObject?: any) => {
+      directShowGatekeeperForGoal(goalId, isScheduled, goalObject);
+    }; 
     
-    // Expose a function to show the first available goal
+    // Expose a function to show the first available goal (finds it locally)
     (window as any).directShowFirstGoal = () => {
       if (directLocalGoals.length > 0) {
-        directShowGatekeeperForGoal(directLocalGoals[0].id);
+        // Find the goal locally first
+        const firstGoal = directLocalGoals[0];
+        directShowGatekeeperForGoal(firstGoal.id, false, firstGoal); 
         return true;
       }
       return false;
     };
-  }, [directLocalGoals]);
+  }, [directLocalGoals]); // Update dependency if needed based on directLocalGoals usage
 
   // Replace the GatekeeperChat rendering section
   // ... (removed old rendering logic)
@@ -2507,41 +2525,56 @@ export default function App() {
   useEffect(() => {
     if (directLocalGoals.length === 0) return;
     
-    console.log(`App: Checking ${directLocalGoals.length} goals for check-in needs`);
+    // Log goals before filtering
+    console.log(`App (useEffect Check): Checking ${directLocalGoals.length} goals for attention. IDs:`, JSON.stringify(directLocalGoals.map(g => g.id))); 
     const goalsNeedingAttention = directLocalGoals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal));
     
     if (goalsNeedingAttention.length > 0) {
-      console.log(`App: Found ${goalsNeedingAttention.length} goals needing attention`);
+      console.log(`App (useEffect Check): Found ${goalsNeedingAttention.length} goals needing attention`);
       if (!directShowGatekeeper) {
         const goalToShow = goalsNeedingAttention[0];
-        console.log(`App: Auto-showing gatekeeper for goal: ${goalToShow.title}`);
-        // Pass true for the isScheduled flag
-        directShowGatekeeperForGoal(goalToShow.id, true);
+        // Log the specific ID being passed
+        console.log(`App (useEffect Check): Auto-showing gatekeeper for goal: ${goalToShow.title} (ID: ${goalToShow.id})`); 
+        // Pass only ID and scheduled flag here, as we don't have the object readily
+        directShowGatekeeperForGoal(goalToShow.id, true); 
       }
     }
-  }, [directLocalGoals, directShowGatekeeper]);
+  }, [directLocalGoals, directShowGatekeeper]); // Dependencies seem correct
 
   // Add a periodic check for goals that need attention - Update call
   useEffect(() => {
-    if (directLocalGoals.length === 0) return;
+    if (directLocalGoals.length === 0) {
+      console.log('App (Interval Check): No direct goals loaded, interval check skipped.');
+      // No return needed here, interval setup happens below
+    }
     
     console.log('App: Setting up periodic goal check interval');
     const checkGoalsInterval = setInterval(() => {
-      if (directShowGatekeeper) return;
+      if (directShowGatekeeper) return; // Don't check if already showing
+      if (directLocalGoals.length === 0) return; // Don't check if no goals loaded
       
-      console.log('App: Running periodic goal check');
+      // Log goals before filtering inside interval
+      console.log(`App (Interval Check): Running periodic check on ${directLocalGoals.length} goals. IDs:`, JSON.stringify(directLocalGoals.map(g => g.id))); 
       const goalsNeedingAttention = directLocalGoals.filter(goal => !goal.isCompleted && isGoalDueForCheckin(goal));
       
       if (goalsNeedingAttention.length > 0) {
         const goalToShow = goalsNeedingAttention[0];
-        console.log(`App: Auto-showing gatekeeper for goal: ${goalToShow.title}`);
-        // Pass true for the isScheduled flag
-        directShowGatekeeperForGoal(goalToShow.id, true);
+        // Log the specific ID being passed
+        console.log(`App (Interval Check): Auto-showing gatekeeper for goal: ${goalToShow.title} (ID: ${goalToShow.id})`); 
+        // Pass only ID and scheduled flag here
+        directShowGatekeeperForGoal(goalToShow.id, true); 
+      } else {
+        console.log('App (Interval Check): No goals need attention currently.');
       }
     }, 60000); // Check every minute
     
-    return () => clearInterval(checkGoalsInterval);
-  }, [directLocalGoals, directShowGatekeeper]);
+    // Cleanup interval on unmount or when dependencies change
+    return () => {
+      console.log('App: Clearing periodic goal check interval.');
+      clearInterval(checkGoalsInterval);
+    };
+    // Rerun interval setup if directLocalGoals changes (e.g., loaded initially or updated)
+  }, [directLocalGoals, directShowGatekeeper]); 
 
   // Add a function to check if a goal needs attention based on frequency (Copied from Accountability.tsx)
   const isGoalDueForCheckin = (goal: any) => {
